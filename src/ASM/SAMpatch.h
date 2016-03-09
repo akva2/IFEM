@@ -18,6 +18,7 @@
 #include "MPC.h"
 
 class ASMbase;
+class DOFVectorOps;
 
 
 /*!
@@ -30,7 +31,7 @@ class SAMpatch : public SAM
 {
 public:
   //! \brief Empty default constructor.
-  SAMpatch() {}
+  SAMpatch(DOFVectorOps* ops=nullptr) : SAM(ops) {}
   //! \brief Empty destructor.
   virtual ~SAMpatch() {}
 
@@ -45,6 +46,8 @@ public:
   bool updateConstraintEqs(const std::vector<ASMbase*>& model,
                            const Vector* prevSol = 0);
 
+  //! \brief Returns the patch vector.
+  const std::vector<ASMbase*> getPatches() const { return patch; }
 protected:
   //! \brief Initializes the nodal arrays \a MINEX, \a MADOF and \a MSC.
   bool initNodeDofs(const std::vector<ASMbase*>& model);
@@ -61,6 +64,8 @@ private:
   //! \brief Recursive helper method used by \a updateConstraintEqs.
   void updateConstraintEqMaster(const MPC::DOF& master,
                                 Real& offset, int& ipeq, Real scale = 1.0);
+
+  std::vector<ASMbase*> patch; //!< The spline patches
 };
 
 #endif

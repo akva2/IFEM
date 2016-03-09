@@ -17,8 +17,8 @@
 #include "SparseMatrix.h"
 #ifdef HAS_PETSC
 #include "PETScMatrix.h"
-#include "LinSolParams.h"
 #endif
+#include "LinSolParams.h"
 
 
 SystemVector* SystemVector::create (const ProcessAdm& adm, Type vectorType)
@@ -136,3 +136,11 @@ StdVector SystemMatrix::operator/(const StdVector& b)
   return results;
 }
 
+
+DOFVectorOps* DOFVectorOps::Create(SystemMatrix::Type solver, const ProcessAdm& adm)
+{
+  if (solver == SystemMatrix::PETSC)
+    return new PETScDOFVectorOps(adm);
+
+  return nullptr;
+}
