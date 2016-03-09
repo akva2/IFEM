@@ -15,11 +15,7 @@
 #include "SIMoptions.h"
 #include "ASMs2DC1.h"
 #include "ASMunstruct.h"
-#ifdef HAS_PETSC
-#include "SAMpatchPara.h"
-#else
 #include "SAMpatch.h"
-#endif
 #include "IntegrandBase.h"
 #include "AlgEqSystem.h"
 #include "LinSolParams.h"
@@ -177,6 +173,8 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
         for (int j = first; j <= last && j > -1; j++)
           myPatches.push_back(j);
       }
+      for (int i = first; i <= last; ++i)
+        adm.dd.setPatchOwner(i, proc);
     }
 
     // If equal number of blocks per processor
@@ -184,6 +182,8 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
       for (int j = 1; j <= proc; j++)
         myPatches.push_back(adm.getProcId()*proc+j);
       nGlPatches = adm.getNoProcs()*proc;
+      for (int i = 1; i <= nGlPatches; ++i)
+        adm.dd.setPatchOwner(i, (i-1) / proc);
     }
   }
 
@@ -815,14 +815,6 @@ bool SIMbase::createFEMmodel (char resetNumb)
   if (nGlPatches == 0 && (!adm.isParallel() || adm.getNoProcs() == 1))
     nGlPatches = myModel.size();
 
-#ifdef HAS_PETSC
-  // When PETSc is used, we need to retain all DOFs in the equation system.
-  // The fixed DOFs (if any) will receive a homogeneous constraint instead.
-  ASMbase::fixHomogeneousDirichlet = opt.solver != SystemMatrix::PETSC;
-#else
-  ASMbase::fixHomogeneousDirichlet = true;
-#endif
-
   return true;
 }
 
@@ -1058,16 +1050,15 @@ bool SIMbase::preprocess (const IntVec& ignored, bool fixDup)
 
   // Initialize data structures for the algebraic system
   if (mySam) delete mySam;
-#ifdef HAS_PETSC
-  if (opt.solver == SystemMatrix::PETSC)
-    mySam = new SAMpatchPara(*g2l,adm);
-  else
-    mySam = new SAMpatch();
-#else
-  mySam = new SAMpatch();
-#endif
+  mySam = new SAMpatch(DOFVectorOps::Create((SystemMatrix::Type)opt.solver, adm));
   if (!static_cast<SAMpatch*>(mySam)->init(myModel,ngnod))
     return false;
+
+  if (!adm.dd.setup(adm,*this))
+  {
+    std::cerr <<"\n *** SIMbase::preprocess(): Error establishing domain decomposition." << std::endl;
+    return false;
+  }
 
   if (!myProblem)
   {
@@ -1075,17 +1066,6 @@ bool SIMbase::preprocess (const IntVec& ignored, bool fixDup)
               << this->getName() <<"-simulator."<< std::endl;
     return false;
   }
-
-  if (opt.solver == SystemMatrix::PETSC)
-    for (mit = myModel.begin(); mit != myModel.end() && myProblem; ++mit)
-      if ((*mit)->end_BC() != (*mit)->begin_BC())
-      {
-        std::cerr <<"\n *** SIMbase::preprocess: Patch "<< (*mit)->idx+1
-                  <<"  has boundary condition codes (eliminated DOFs).\n"
-                  <<"       This is not supported when PETSc is used,"
-                  <<" the input file must be corrected."<< std::endl;
-        return false;
-      }
 
   // Now perform the sub-class specific final preprocessing, if any
   return this->preprocessB() && ierr == 0;
@@ -1520,11 +1500,7 @@ bool SIMbase::updateDirichlet (double time, const Vector* prevSol)
 {
   if (prevSol)
     for (size_t i = 0; i < myModel.size(); i++)
-#ifdef PARALLEL_PETSC
-      if (!myModel[i]->updateDirichlet(myScalars,myVectors,time,g2l))
-#else
       if (!myModel[i]->updateDirichlet(myScalars,myVectors,time))
-#endif
 	return false;
 
   if (mySam)
@@ -2003,11 +1979,6 @@ Vec4 SIMbase::getNodeCoord (int inod) const
 
 bool SIMbase::isFixed (int inod, int dof) const
 {
-#ifdef HAS_PETSC
-  SAMpatchPara* pSam = dynamic_cast<SAMpatchPara*>(mySam);
-  if (pSam) return pSam->isDirichlet(inod,dof);
-#endif
-
   size_t node = 0;
   for (PatchVec::const_iterator it = myModel.begin(); it != myModel.end(); ++it)
     if ((node = (*it)->getNodeIndex(inod,true)))

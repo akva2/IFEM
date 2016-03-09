@@ -20,7 +20,6 @@
 #include "SparseMatrix.h"
 #ifdef HAS_PETSC
 #include "PETScMatrix.h"
-#include "PETScBlockMatrix.h"
 #endif
 #include "LinSolParams.h"
 
@@ -77,14 +76,8 @@ SystemMatrix* SystemMatrix::create (const ProcessAdm& padm, Type matrixType,
                                     LinAlg::LinearSystemType ltype)
 {
 #ifdef HAS_PETSC
-  if (matrixType == PETSC) {
-    if (spar.getNoBlocks() > 1)
-      return new PETScBlockMatrix(padm,spar);
-    else
-      return new PETScMatrix(padm,spar,ltype);
-  }
-  else if (matrixType == PETSCBLOCK)
-    return new PETScBlockMatrix(padm,spar);
+  if (matrixType == PETSC)
+    return new PETScMatrix(padm,spar,ltype);
 #endif
 #ifdef HAS_ISTL
   if (matrixType == ISTL)
@@ -100,7 +93,7 @@ SystemMatrix* SystemMatrix::create (const ProcessAdm& padm, Type matrixType,
                                     int num_thread_SLU)
 {
 #ifndef HAS_PETSC
-  if (matrixType == PETSC || matrixType == PETSCBLOCK) {
+  if (matrixType == PETSC) {
     std::cerr <<"SystemMatrix::create: PETSc not compiled in, bailing out..."
               << std::endl;
     exit(1);
@@ -121,7 +114,6 @@ SystemMatrix* SystemMatrix::create (const ProcessAdm& padm, Type matrixType,
 #endif
 #ifdef HAS_PETSC
     case PETSC :      return new PETScMatrix(padm,defaultPar,ltype);
-    case PETSCBLOCK : return new PETScBlockMatrix(padm,defaultPar);
 #endif
     default:
       std::cerr <<"SystemMatrix::create: Unsupported matrix type "
@@ -157,3 +149,11 @@ StdVector SystemMatrix::operator/(const StdVector& b)
   return results;
 }
 
+
+DOFVectorOps* DOFVectorOps::Create(SystemMatrix::Type solver, const ProcessAdm& adm)
+{
+  if (solver == SystemMatrix::PETSC)
+    return new PETScDOFVectorOps(adm);
+
+  return nullptr;
+}

@@ -30,7 +30,7 @@ class SystemVector
 {
 public:
   //! \brief The available system vector formats.
-  enum Type { STD = 0, PETSC = 1, PETSCBLOCK = 2, ISTL = 3 };
+  enum Type { STD = 0, PETSC = 1, ISTL = 2 };
 
   //! \brief Static method creating a vector of the given type.
   static SystemVector* create(const ProcessAdm& padm, Type vectorType = STD);
@@ -203,7 +203,7 @@ class SystemMatrix
 public:
   //! \brief The available system matrix formats.
   enum Type { DENSE = 0, SPR = 1, SPARSE = 2, SAMG = 3,
-              PETSC = 4, PETSCBLOCK = 5, ISTL = 6 };
+              PETSC = 4, ISTL = 5 };
 
   //! \brief Static method creating a matrix of the given type.
   static SystemMatrix* create(const ProcessAdm& padm, Type matrixType,
@@ -334,5 +334,40 @@ protected:
   }
 };
 
+
+/*!
+ \brief Abstract interface for DOF vector operations.
+*/
+class DOFVectorOps {
+  public:
+    //! \brief Create a DOFVectorOps of the appropriate type.
+    static DOFVectorOps* Create(SystemMatrix::Type solver, const ProcessAdm& adm);
+
+    //! \brief Empty destructor
+    virtual ~DOFVectorOps() {}
+
+    //! \brief Computes the dot-product of two vectors.
+    //! \param[in] x First vector in dot-product
+    //! \param[in] y Second vector in dot-product
+    //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+    //! \return Value of dot-product
+    //!
+    //! \details Both vectors are defined over all nodes in the patch, i.e.
+    //! for parallel vectors the ghost entries are also included.
+    virtual Real dot(const Vector& x, const Vector& y, char dofType, const SAM& sam) const = 0;
+
+    //! \brief Computes the L2-norm of a vector.
+    //! \param[in] x Vector for norm computation
+    //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+    //! \return Value of L2-norm
+    //!
+    //! \details The vector is defined over all nodes in the patch, i.e.
+    //! for parallel vectors the ghost entries are also included.
+    virtual Real normL2(const Vector& x, char dofType, const SAM& sam) const = 0;
+
+    //! \brief Computes the inf-norm of a vector.
+    //! \param value The local value of the info-norm
+    virtual Real normInf(Real value) const = 0;
+};
 
 #endif
