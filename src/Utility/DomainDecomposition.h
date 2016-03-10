@@ -41,6 +41,8 @@ public:
 
   std::vector<Interface> ghostConnections; //!< Connections to other processes.
 
+  int getNoSpaceDim() const { return nsd; }
+
   //! \brief Setup domain decomposition
   bool setup(const ProcessAdm& adm, const SIMbase& sim);
 
@@ -135,6 +137,7 @@ private:
   int maxDof; //!< Last DOF we own
   int minNode; //!< First node we own
   int maxNode; //!< Last node we own
+  int nsd; //!< Number of spatial dimensions
 };
 
 #endif

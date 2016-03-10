@@ -206,18 +206,19 @@ static Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*
 {
   Prec& pre = static_cast<Prec&>(prec);
 
-  if (solParams.getMethod() == "bcgs")
-    return new Dune::BiCGSTABSolver<ISTLMatrix::Vec>(op, pre, solParams.getRelTolerance(),
-                                                     solParams.getMaxIterations(),2);
-  else if (solParams.getMethod() == "cg")
-    return new Dune::CGSolver<ISTLMatrix::Vec>(op, pre, solParams.getRelTolerance(),
-                                               solParams.getMaxIterations(),1);
-  else if (solParams.getMethod() == "minres")
-    return new Dune::MINRESSolver<ISTLMatrix::Vec>(op, pre, solParams.getRelTolerance(),
-                                                   solParams.getMaxIterations(),1);
-  else if (solParams.getMethod() == "gmres")
-    return new Dune::RestartedGMResSolver<ISTLMatrix::Vec>(op, pre, solParams.getRelTolerance(), 100,
-                                                           solParams.getMaxIterations(),1);
+  std::string type = solParams.getStringValue("type");
+  double rtol = solParams.getDoubleValue("rtol");
+  int maxits = solParams.getIntValue("maxits");
+  const int verbosity = 2;
+  if (type == "bcgs")
+    return new Dune::BiCGSTABSolver<ISTLMatrix::Vec>(op, pre, rtol, maxits, verbosity);
+  else if (type == "cg")
+    return new Dune::CGSolver<ISTLMatrix::Vec>(op, pre, rtol, maxits, verbosity);
+  else if (type == "minres")
+    return new Dune::MINRESSolver<ISTLMatrix::Vec>(op, pre, rtol, maxits, verbosity);
+  else if (type == "gmres")
+    return new Dune::RestartedGMResSolver<ISTLMatrix::Vec>(op, pre, rtol, solParams.getIntValue("gmres_restart_iterations"),
+                                                           maxits, verbosity);
 
   return nullptr;
 }
@@ -226,36 +227,36 @@ static Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*
 void ISTLMatrix::setupSolver()
 {
   if (!pre) {
-    if (solParams.getBlock(0).prec == "ilu") {
-      if (solParams.getBlock(0).ilu_fill_level == 0) {
+    std::string prec = solParams.getBlock(0).getStringValue("pc");
+    if (prec == "ilu") {
+      if (solParams.getBlock(0).getIntValue("ilu_fill_level") == 0) {
         pre.reset(new Dune::SeqILU0<Mat,Vec,Vec>(A, 1.0));
         solver.reset(setupWithPreType<Dune::SeqILU0<Mat,Vec,Vec>>(solParams, op, *pre));
       } else {
-        pre.reset(new Dune::SeqILUn<Mat,Vec,Vec>(A, solParams.getBlock(0).ilu_fill_level, 1.0));
+        pre.reset(new Dune::SeqILUn<Mat,Vec,Vec>(A, solParams.getBlock(0).getIntValue("ilu_fill_level"), 1.0));
         solver.reset(setupWithPreType<Dune::SeqILUn<Mat,Vec,Vec>>(solParams, op, *pre));
       }
-    } else if (solParams.getBlock(0).prec == "sor") {
+    } else if (prec == "sor") {
       pre.reset(new Dune::SeqSOR<Mat,Vec,Vec>(A, 1, 1.0));
       solver.reset(setupWithPreType<Dune::SeqSOR<Mat,Vec,Vec>>(solParams, op, *pre));
-    } else if (solParams.getBlock(0).prec == "ssor") {
+    } else if (prec == "ssor") {
       pre.reset(new Dune::SeqSOR<Mat,Vec,Vec>(A, 1, 1.0));
       solver.reset(setupWithPreType<Dune::SeqSSOR<Mat,Vec,Vec>>(solParams, op, *pre));
-    } else if (solParams.getBlock(0).prec == "jacobi") {
+    } else if (prec == "jacobi") {
       pre.reset(new Dune::SeqJac<Mat,Vec,Vec>(A, 1, 1.0));
       solver.reset(setupWithPreType<Dune::SeqJac<Mat,Vec,Vec>>(solParams, op, *pre));
-    } else if (solParams.getBlock(0).prec == "gs") {
+    } else if (prec == "gs") {
       pre.reset(new Dune::SeqGS<Mat,Vec,Vec>(A, 1, 1.0));
       solver.reset(setupWithPreType<Dune::SeqGS<Mat,Vec,Vec>>(solParams, op, *pre));
     }
-    else if (solParams.getBlock(0).prec == "asm" ||
-            solParams.getBlock(0).prec == "asmlu") {
-      size_t nx = solParams.getBlock(0).subdomains[0];
+    else if (prec == "asm" || prec == "asmlu") {
+      size_t nx = solParams.getBlock(0).getIntValue("nx");
       nx = std::max(1ul, nx);
-      size_t ny = solParams.getBlock(0).subdomains[1];
+      size_t ny = solParams.getBlock(0).getIntValue("ny");
       ny = std::max(1ul, ny);
-      size_t nz = solParams.getBlock(0).subdomains[2];
+      size_t nz = solParams.getBlock(0).getIntValue("nz");
       nz = std::max(1ul, nz);
-      int overlap = solParams.getBlock(0).overlap;
+      int overlap = solParams.getBlock(0).getIntValue("overlap");
 
       if (!samp)
         return;
@@ -280,10 +281,11 @@ void ISTLMatrix::setupSolver()
           }
         }
       }
-      if (solParams.getBlock(0).prec == "asmlu") {
+      if (prec == "asmlu") {
         Dune::SeqOverlappingSchwarz<Mat, Vec, Dune::AdditiveSchwarzMode, Dune::SuperLU<Mat>>::subdomain_vector ddofs(locSubdDofs.size());
         for (size_t i = 0; i < locSubdDofs.size(); ++i)
-          ddofs[i].insert(locSubdDofs[i].begin(), locSubdDofs[i].end());
+          for (const auto& it : locSubdDofs[i])
+            ddofs[i].insert(it);
 
         pre.reset(new Dune::SeqOverlappingSchwarz<Mat, Vec, Dune::AdditiveSchwarzMode, Dune::SuperLU<Mat>>(A, ddofs));
         solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<Mat, Vec, Dune::AdditiveSchwarzMode, Dune::SuperLU<Mat>>>(solParams, op, *pre));
@@ -291,10 +293,17 @@ void ISTLMatrix::setupSolver()
         Dune::SeqOverlappingSchwarz<Mat, Vec>::subdomain_vector ddofs(locSubdDofs.size());
         for (size_t i = 0; i < locSubdDofs.size(); ++i)
           ddofs[i].insert(locSubdDofs[i].begin(), locSubdDofs[i].end());
+
+        for (auto& it : ddofs) {
+          for (auto& it2 : it)
+            std::cout << it2 << " ";
+          std::cout << std::endl;
+        }
+
         pre.reset(new Dune::SeqOverlappingSchwarz<Mat, Vec>(A, ddofs));
         solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<Mat, Vec>>(solParams, op, *pre));
       }
-    } else if (solParams.getBlock(0).prec == "amg") {
+    } else if (prec == "amg") {
       // The coupling metric used in the AMG
       typedef Dune::Amg::FirstDiagonal CouplingMetric;
       // The coupling criterion used in the AMG
@@ -305,6 +314,7 @@ void ISTLMatrix::setupSolver()
       typedef Dune::Amg::AMG<Operator, Vec, Dune::SeqSSOR<Mat,Vec,Vec>> AMG;
       AMG::SmootherArgs args;
       args.relaxationFactor = 1.0;
+      args.iterations = std::max(1, solParams.getBlock(0).getIntValue("multigrid_no_smooth"));
 
       pre.reset(new AMG(op, crit, args));
       solver.reset(setupWithPreType<AMG>(solParams, op, *pre));

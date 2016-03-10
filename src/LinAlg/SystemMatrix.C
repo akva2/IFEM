@@ -101,7 +101,7 @@ SystemMatrix* SystemMatrix::create (const ProcessAdm& padm, Type matrixType,
 #endif
 
   // Use default PETSc settings when no parameters are provided by user
-  static LinSolParams defaultPar(3);
+  static LinSolParams defaultPar;
 
   switch (matrixType)
     {

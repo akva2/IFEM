@@ -24,7 +24,7 @@
 void PETScSolParams::setParams(const LinSolParams& params,
                                KSP& ksp, PetscIntMat& locSubdDofs,
 			       PetscIntMat& subdDofs, PetscRealVec& coords,
-			       ISMat& dirIndexSet, int nsd) const
+			       ISMat& dirIndexSet, int nsd)
 {
   // Set linear solver method
   KSPSetType(ksp,params.getStringValue("type").c_str());
@@ -46,7 +46,7 @@ void PETScSolParams::setParams(const LinSolParams& params,
 #else
     PCGetOperators(pc,&mat,&Pmat);
 #endif
-    this->addDirSmoother(pc,Pmat,0,dirIndexSet);
+    addDirSmoother(pc,Pmat,params.getBlock(0),0,dirIndexSet);
   }
   else
     PCSetType(pc,prec.c_str());
@@ -65,22 +65,22 @@ void PETScSolParams::setParams(const LinSolParams& params,
   }
 
   if (!strncasecmp(prec.c_str(),"asm",3) || !strncasecmp(prec.c_str(),"gasm",4))
-    setupAdditiveSchwarz(pc, params.getBlock(0).settings.getIntValue(overlap), !strncasecmp(prec.c_str(),"asmlu",5),
+    setupAdditiveSchwarz(pc, params.getBlock(0).getIntValue("overlap"), !strncasecmp(prec.c_str(),"asmlu",5),
                          locSubdDofs, subdDofs, false);
   else if (!strncasecmp(prec.c_str(),"ml",2) || !strncasecmp(prec.c_str(),"gamg",4)) {
     if (!strncasecmp(prec.c_str(),"ml",2))
-      setMLOptions("", 0);
+      setMLOptions("", params.getBlock(0));
     else if (!strncasecmp(prec.c_str(),"gamg",4))
-      setGAMGOptions("", 0);
+      setGAMGOptions("", params.getBlock(0));
 
     PCSetFromOptions(pc);
     PCSetUp(pc);
 
     // Settings for coarse solver
-    if (!params.getBlock(0).settings.hasValue("ml_coarse_solver"))
-      setupCoarseSolver(pc, "", 0);
+    if (!params.getBlock(0).hasValue("ml_coarse_solver"))
+      setupCoarseSolver(pc, "", params.getBlock(0));
 
-    setupSmoothers(pc, 0, dirIndexSet, locSubdDofs, subdDofs);
+    setupSmoothers(pc, params, 0, dirIndexSet, locSubdDofs, subdDofs);
   }
   else {
     PCSetFromOptions(pc);
@@ -96,14 +96,14 @@ void PETScSolParams::setParams(const LinSolParams& params,
 }
 
 
-bool LinSolParams::addDirSmoother(PC pc, Mat P, const LinSolParams& params, int block,
-                                  ISMat& dirIndexSet) const
+bool PETScSolParams::addDirSmoother(PC pc, Mat P, const LinSolParams::BlockParams& block,
+                                    int iBlock, ISMat& dirIndexSet)
 {
   PCSetType(pc,"composite");
   PCCompositeSetType(pc,PC_COMPOSITE_MULTIPLICATIVE);
-  for (size_t k = 0;k < params.getBlock(block).dirSmoother.size();k++)
+  for (size_t k = 0;k < block.dirSmoother.size();k++)
     PCCompositeAddPC(pc,"shell");
-  for (size_t k = 0;k < params.getBlock(block).dirSmoother.size();k++) {
+  for (size_t k = 0;k < block.dirSmoother.size();k++) {
     PC dirpc;
     PCCompositeGetPC(pc,k,&dirpc);
     PCPerm *pcperm;
@@ -112,7 +112,7 @@ bool LinSolParams::addDirSmoother(PC pc, Mat P, const LinSolParams& params, int 
     PCShellSetContext(dirpc,pcperm);
     PCShellSetDestroy(dirpc,PCPermDestroy);
     PCShellSetName(dirpc,"dir");
-    PCPermSetUp(dirpc,&dirIndexSet[block][k],P,params..getBlock(block).dirSmoother[k].type.c_str());
+    PCPermSetUp(dirpc,&dirIndexSet[iBlock][k],P,block.dirSmoother[k].type.c_str());
   }
 
   return true;
@@ -130,17 +130,15 @@ static std::string AddPrefix(const std::string& prefix, const std::string& data)
 
 
 static void condSetup(const std::string& prefix, const std::string& petsc_option,
-                      const std::string& map_option, const ValueMap& map)
+                      const std::string& map_option, const SettingMap& map)
 {
   if (map.hasValue(map_option))
     PetscOptionsSetValue(AddPrefix(prefix,petsc_option).c_str(), map.getStringValue(map_option).c_str());
 }
 
 
-void LinSolParams::setMLOptions(const std::string& prefix, int block) const
+void PETScSolParams::setMLOptions(const std::string& prefix, const SettingMap& map)
 {
-  const ValueMap& map = params.getBlock(block).settings;
-
   condSetup(prefix, "pc_ml_maxNLevels", "multigrid_levels", map);
   condSetup(prefix, "pc_ml_maxCoarseSize", "ml_max_coarse_size", map);
   condSetup(prefix, "pc_ml_maxCoarsenScheme", "ml_coarsen_scheme", map);
@@ -159,7 +157,7 @@ void LinSolParams::setMLOptions(const std::string& prefix, int block) const
 }
 
 
-void LinSolParams::setGAMGOptions(const std::string& prefix, const ValueMap& map) const
+void PETScSolParams::setGAMGOptions(const std::string& prefix, const SettingMap& map)
 {
   condSetup(prefix, "pc_gamg_type", "gamg_type", map);
   condSetup(prefix, "pc_gamg_coarse_eq_limit", "gamg_coarse_eq_limit", map);
@@ -172,7 +170,7 @@ void LinSolParams::setGAMGOptions(const std::string& prefix, const ValueMap& map
 }
 
 
-void LinSolParams::setHypreOptions(const std::string& prefix, const ValueMap& map) const
+void PETScSolParams::setHypreOptions(const std::string& prefix, const SettingMap& map)
 {
   condSetup(prefix,"pc_hypre_type", "hypre_type", map);
   condSetup(prefix, "pc_hypre_boomeramg_max_levels", "multigrid_levels", map);
@@ -187,7 +185,7 @@ void LinSolParams::setHypreOptions(const std::string& prefix, const ValueMap& ma
 }
 
 
-void LinSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const ValueMap& map) const
+void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const SettingMap& map)
 {
   std::string coarseSolver = map.getStringValue("ml_coarse_solver");
   std::string coarsePackage = map.getStringValue("ml_coarse_package");
@@ -247,14 +245,15 @@ void LinSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const Va
 }
 
 
-void LinSolParams::setupSmoothers(PC& pc, const ValueMap& map, ISMat& dirIndexSet,
-                                  const PetscIntMat& locSubdDofs,
-                                  const PetscIntMat& subdDofs) const
+void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t iBlock,
+                                    ISMat& dirIndexSet,
+                                    const PetscIntMat& locSubdDofs,
+                                    const PetscIntMat& subdDofs)
 {
   PetscInt n;
   PCMGGetLevels(pc,&n);
 
-  std::string mgKSP = map.getStringValue("multigrid_ksp");
+  std::string mgKSP = params.getBlock(iBlock).getStringValue("multigrid_ksp");
 
   // Presmoother settings
   for (int i = 1;i < n;i++) {
@@ -268,31 +267,32 @@ void LinSolParams::setupSmoothers(PC& pc, const ValueMap& map, ISMat& dirIndexSe
     PCMGGetSmoother(pc,i,&preksp);
 
     // warn that richardson might break symmetry if the KSP is CG
-    if (block.mgKSP == "defrichardson" && method == KSPCG)
+    if (mgKSP == "defrichardson" && params.getStringValue("type") == KSPCG)
       std::cerr << "WARNING: Using multigrid with Richardson on sublevels.\n"
                 << "If you get divergence with KSP_DIVERGED_INDEFINITE_PC, try\n"
                 << "adding <mgksp>chebyshev</mgksp. Add <mgksp>richardson</mgksp>\n"
                 << "to quell this warning." << std::endl;
 
-    if (block.mgKSP == "richardson" || block.mgKSP == "defrichardson")
+    if (mgKSP == "richardson" || mgKSP == "defrichardson")
       KSPSetType(preksp,KSPRICHARDSON);
-    else if (block.mgKSP == "chebyshev")
+    else if (mgKSP == "chebyshev")
       KSPSetType(preksp,KSPCHEBYSHEV);
 
-    if ((i == n-1) && (!block.finesmoother.empty())) {
-      smoother = block.finesmoother;
-      noSmooth = block.noFineSmooth;
+    std::string finesmoother = params.getBlock(iBlock).getStringValue("multigrid_finesmoother");
+    if ((i == n-1) && !finesmoother.empty()) {
+      smoother = finesmoother;
+      noSmooth = params.getBlock(iBlock).getIntValue("multigrid_no_fine_smooth");
     }
     else {
-      smoother = block.presmoother;
-      noSmooth = block.noPreSmooth;
+      smoother = params.getBlock(iBlock).getStringValue("multigrid_smoother");
+      noSmooth = params.getBlock(iBlock).getIntValue("multigrid_no_smooth");;
     }
 
     KSPSetTolerances(preksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,noSmooth);
     KSPGetPC(preksp,&prepc);
 
     if (smoother == "asm" || smoother == "asmlu")
-      setupAdditiveSchwarz(prepc, block.overlap, smoother == "asmlu",
+      setupAdditiveSchwarz(prepc, params.getBlock(iBlock).getIntValue("overlap"), smoother == "asmlu",
                            locSubdDofs, subdDofs, true);
     else if (smoother == "compositedir" && (i==n-1)) {
       Mat mat;
@@ -304,20 +304,20 @@ void LinSolParams::setupSmoothers(PC& pc, const ValueMap& map, ISMat& dirIndexSe
       PCGetOperators(prepc,&mat,&Pmat);
 #endif
 
-      addDirSmoother(prepc,Pmat,iblock,dirIndexSet);
+      addDirSmoother(prepc,Pmat,params.getBlock(iBlock),iBlock,dirIndexSet);
     }
     else
       PCSetType(prepc,smoother.c_str());
 
-    PCFactorSetLevels(prepc,block.ilu_fill_level);
+    PCFactorSetLevels(prepc,params.getBlock(0).getIntValue("ilu_fill_level"));
     KSPSetUp(preksp);
   }
 }
 
 
-void LinSolParams::setupAdditiveSchwarz(PC& pc, int overlap, bool asmlu,
-                                        const PetscIntMat& locSubdDofs,
-                                        const PetscIntMat& subdDofs, bool smoother) const
+void PETScSolParams::setupAdditiveSchwarz(PC& pc, int overlap, bool asmlu,
+                                          const PetscIntMat& locSubdDofs,
+                                          const PetscIntMat& subdDofs, bool smoother)
 {
   PCSetType(pc, PCASM);
   if (!smoother)
@@ -355,4 +355,3 @@ void LinSolParams::setupAdditiveSchwarz(PC& pc, int overlap, bool asmlu,
     }
   }
 }
-#endif
