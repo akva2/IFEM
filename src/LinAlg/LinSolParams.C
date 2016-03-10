@@ -21,13 +21,60 @@
 #include <iterator>
 
 
-bool LinSolParams::read (std::istream& is, int nparam)
+void ParamMap::addValue(const std::string& key, const std::string& value)
 {
-  return false;
+  values.insert(std::make_pair(key, value));
 }
 
 
-bool LinSolParams::BlockParams::read(const TiXmlElement* elem)
+std::string ParamMap::getStringValue(const std::string& key) const
+{
+  auto it = values.find(key);
+  if (it != values.end())
+    return it->second;
+
+  return "";
+}
+
+
+int ParamMap::getIntValue(const std::string& key) const
+{
+  auto it = values.find(key);
+  if (it != values.end())
+    return atoi(it->second.c_str());
+ 
+  return -1;
+}
+
+
+int ParamMap::getDoubleValue(const std::string& key) const
+{
+  auto it = values.find(key);
+  if (it != values.end())
+    return atof(it->second.c_str());
+ 
+  return 0.0;
+}
+
+
+bool ParamMap::hasValue(const std::string& key) const
+{
+  return values.find(key) != values.end();
+}
+
+
+LinSolParams::LinSolParams()
+{
+  settings.addValue("type", "gmres");
+  settings.addValue("pc", "ilu");
+  settings.addValue("rtol", "1e-6");
+  settings.addValue("atol", "1e-20");
+  settings.addValue("dtol", "1e6");
+  settings.addValue("maxits", "1000");
+}
+
+
+bool LinSolParams::BlockParams::read(const TiXmlElement* elem, const std::string& prefix)
 {
   utl::getAttribute(elem, "basis", basis);
   utl::getAttribute(elem, "components", comps);
@@ -35,29 +82,26 @@ bool LinSolParams::BlockParams::read(const TiXmlElement* elem)
   const char* value;
   const TiXmlElement* child = elem->FirstChildElement();
   for (; child; child = child->NextSiblingElement())
-    if ((value = utl::getValue(child,"pc")))
-      prec = value;
-    else if ((value = utl::getValue(child,"package")))
-      package = value;
-    else if ((value = utl::getValue(child,"ilu_fill_level")))
-      ilu_fill_level = atoi(value);
-    else if ((value = utl::getValue(child,"mglevels")))
-      mglevel = atoi(value);
-    else if ((value = utl::getValue(child,"noPreSmooth")))
-      noPreSmooth = atoi(value);
-    else if ((value = utl::getValue(child,"noPostSmooth")))
-      noPostSmooth = atoi(value);
-    else if ((value = utl::getValue(child,"noFineSmooth")))
-      noFineSmooth = atoi(value);
-    else if ((value = utl::getValue(child,"presmoother")))
-      presmoother = value;
-    else if ((value = utl::getValue(child,"postsmoother")))
-      postsmoother = value;
-    else if ((value = utl::getValue(child,"finesmoother")))
-      finesmoother = value;
-    else if ((value = utl::getValue(child,"mgksp")))
-      mgKSP = value;
-    else if (!strcasecmp(child->Value(),"dirsmoother")) {
+    if (!strcasecmp(child.Value(), "multigrid")) {
+      if (utl::getAttribute(child, "smoother", value))
+        settings.addValue("multigrid_smoother", value);
+      if (utl::getAttribute(child, "pre_smoother", value))
+        settings.addValue("multigrid_pre_smoother", value);
+      if (utl::getAttribute(child, "post_smoother", value))
+        settings.addValue("multigrid_post_smoother", value);
+      if (utl::getAttribute(child, "levels", value))
+        settings.addValue("multigrid_levels", value);
+      if (utl::getAttribute(child, "no_smooth", value))
+        settings.addValue("multigrid_no_smooth", value);
+      if (utl::getAttribute(child, "no_pre_smooth", value))
+        settings.addValue("multigrid_no_pre_smooth", value);
+      if (utl::getAttribute(child, "no_post_smooth", value))
+        settings.addValue("multigrid_no_post_smooth", value);
+      if (utl::getAttribute(child, "finesmoother", value))
+        settings.addValue("multigrid_finesmoother", value);
+      if (utl::getAttribute(child, "ksp", value))
+        settings.addValue("multigrid_ksp", value);
+    } else if (!strcasecmp(child->Value(),"dirsmoother")) {
       size_t order;
       std::string type;
 
@@ -67,113 +111,13 @@ bool LinSolParams::BlockParams::read(const TiXmlElement* elem)
         return false;
 
       dirSmoother.push_back(DirSmoother(order, type));
+    } else { // generic value - add with tag name as key
+      std::string key = child.Value();
+      if (value = utl::getValue(child, key.c_str()))
+        settings.addValue(prefix+key, value);
     }
-    else if ((value = utl::getValue(child,"overlap")))
-      overlap = atoi(value);
-    else if ((value = utl::getValue(child,"nx")))
-      subdomains[0] = atoi(value);
-    else if ((value = utl::getValue(child,"ny")))
-      subdomains[1] = atoi(value);
-    else if ((value = utl::getValue(child,"nz")))
-      subdomains[2] = atoi(value);
-    else if (!strcasecmp(child->Value(),"gamg"))
-      gamg.read(child);
-    else if (!strcasecmp(child->Value(),"ml"))
-      ml.read(child);
-    else if (!strcasecmp(child->Value(),"hypre"))
-      hypre.read(child);
-    else if ((value = utl::getValue(child,"maxCoarseSize")))
-      maxCoarseSize = atoi(value);
-#ifdef HAS_PETSC
-    else if ((value = utl::getValue(child,"nullspace"))) {
-       if (!strcasecmp(value,"constant"))
-        nullspace = CONSTANT;
-      else if (!strcasecmp(value,"rigid_body"))
-        nullspace = RIGID_BODY;
-      else
-        nullspace = NONE;
-    }
-#endif
 
   return true;
-}
-
-
-void LinSolParams::BlockParams::GAMGSettings::read(const TiXmlElement* elem)
-{
-  const char* value;
-  const TiXmlElement* child = elem->FirstChildElement();
-  for (; child; child = child->NextSiblingElement())
-    if ((value = utl::getValue(child,"type")))
-      type = value;
-    else if ((value = utl::getValue(child,"repartition")))
-      repartition = atoi(value);
-    else if ((value = utl::getValue(child,"use_agg_smoother")))
-      useAggGasm = atoi(value);
-    else if ((value = utl::getValue(child,"proc_eq_limit")))
-      procEqLimit = atoi(value);
-    else if ((value = utl::getValue(child,"reuse_interpolation")))
-      reuseInterp = atoi(value);
-    else if ((value = utl::getValue(child,"threshold")))
-      threshold = atof(value);
-}
-
-
-void LinSolParams::BlockParams::MLSettings::read(const TiXmlElement* elem)
-{
-  const char* value;
-  const TiXmlElement* child = elem->FirstChildElement();
-  for (; child; child = child->NextSiblingElement())
-    if ((value = utl::getValue(child,"coarse_package")))
-      coarsePackage = value;
-    else if ((value = utl::getValue(child,"coarse_solver")))
-      coarseSolver = value;
-    else if ((value = utl::getValue(child,"coarsen_scheme")))
-      coarsenScheme = value;
-    else if ((value = utl::getValue(child,"symmetrize")))
-      symmetrize = atoi(value);
-    else if ((value = utl::getValue(child,"repartition")))
-      repartition = atoi(value);
-    else if ((value = utl::getValue(child,"block_scaling")))
-      blockScaling = atoi(value);
-    else if ((value = utl::getValue(child,"put_on_single_proc")))
-      putOnSingleProc = atoi(value);
-    else if ((value = utl::getValue(child,"reuse_interpolation")))
-      reuseInterp = atoi(value);
-    else if ((value = utl::getValue(child,"reusable")))
-      reusable = atoi(value);
-    else if ((value = utl::getValue(child,"keep_agg_info")))
-      keepAggInfo = atoi(value);
-    else if ((value = utl::getValue(child,"threshold")))
-      threshold = atof(value);
-    else if ((value = utl::getValue(child,"damping_factor")))
-      dampingFactor = atof(value);
-    else if ((value = utl::getValue(child,"repartition_ratio")))
-      repartitionRatio = atof(value);
-    else if ((value = utl::getValue(child,"aux")))
-      aux = atoi(value);
-    else if ((value = utl::getValue(child,"aux_threshold")))
-      auxThreshold = atof(value);
-}
-
-
-void LinSolParams::BlockParams::HypreSettings::read(const TiXmlElement* elem)
-{
-  const char* value;
-  const TiXmlElement* child = elem->FirstChildElement();
-  for (; child; child = child->NextSiblingElement())
-    if ((value = utl::getValue(child,"type")))
-      type = value;
-    else if ((value = utl::getValue(child,"no_agg_coarse")))
-      noAggCoarse = atoi(value);
-    else if ((value = utl::getValue(child,"no_path_agg_coarse")))
-      noPathAggCoarse = atof(value);
-    else if ((value = utl::getValue(child,"truncation")))
-      truncation = atof(value);
-    else if ((value = utl::getValue(child,"threshold")))
-      threshold = atof(value);
-    else if ((value = utl::getValue(child,"coarsen_scheme")))
-      coarsenScheme = value;
 }
 
 
@@ -218,13 +162,6 @@ bool LinSolParams::read (const TiXmlElement* elem)
   }
 
   return true;
-}
-
-
-bool LinSolParams::read (const char* filename)
-{
-  std::ifstream fs(filename);
-  return this->read(fs,1000);
 }
 
 

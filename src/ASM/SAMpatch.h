@@ -65,6 +65,7 @@ private:
   void updateConstraintEqMaster(const MPC::DOF& master,
                                 Real& offset, int& ipeq, Real scale = 1.0);
 
+protected:
   std::vector<ASMbase*> patch; //!< The spline patches
 };
 
