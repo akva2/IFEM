@@ -16,6 +16,8 @@
 #ifndef _PETSCSOLPARAMS_H
 #define _PETSCSOLPARAMS_H
 
+#if HAS_PETSC
+
 #include "LinSolParams.h"
 #include "PETScSupport.h"
 
@@ -35,15 +37,6 @@ typedef std::vector<ISVec>       ISMat;        //!< Index set matrix
 //! \brief Schur preconditioner methods
 enum SchurPrec { SIMPLE, MSIMPLER, PCD };
 
-class TiXmlElement;
-
-
-#ifdef HAS_PETSC
-  #define BLANK_IF_NO_PETSC(a) a
-#else
-  #define BLANK_IF_NO_PETSC(a) ""
-#endif
-
 
 /*!
   \brief Class for PETSc solver parameters.
@@ -55,50 +48,52 @@ class PETScSolParams
 {
 public:
   //! \brief Set linear solver parameters for KSP object
-  static void setParams(const LinSolParams& params
+  static void setParams(const LinSolParams& params,
                         KSP& ksp, PetscIntMat& locSubdDofs,
                         PetscIntMat& subdDofs, PetscRealVec& coords,
-                        ISMat& dirIndexSet, int nsd) const;
+                        ISMat& dirIndexSet, int nsd);
 
   //! \brief Set directional smoother
   //! \param[in] PC The preconditioner to add smoother for
   //! \param[in] P The preconditioner matrix
-  //! \param[in] block The index of the block to add smoother to
+  //! \param[in] params The block parameters
+  //! \param[in] iBlock The index of the block to add smoother to
   //! \param[in] dirIndexSet The index set for the smoother
-  static bool addDirSmoother(PC pc, Mat P, int block, ISMat& dirIndexSet) const;
+  static bool addDirSmoother(PC pc, Mat P, const LinSolParams::BlockParams& block,
+                             int iBlock, ISMat& dirIndexSet);
 
   //! \brief Set ML options
   //! \param[in] prefix The prefix of the block to set parameters for
-  //! \param[in] block The index of the block to set parameters for
-  static void setMLOptions(const std::string& prefix, int block) const;
+  //! \param[in] map The map of settings to use
+  static void setMLOptions(const std::string& prefix, const SettingMap& map);
 
   //! \brief Set GAMG options
   //! \param[in] prefix The prefix of the block to set parameters for
   //! \param[in] block The index of the block to set parameters for
-  static void setGAMGOptions(const std::string& prefix, size_t block) const;
+  static void setGAMGOptions(const std::string& prefix, const SettingMap& map);
 
   //! \brief Set Hypre options
   //! \param[in] prefix The prefix of the block to set parameters for
-  //! \param[in] block The index of the block to set parameters for
-  static void setHypreOptions(const LinSolParams& params,
-                              const std::string& prefix, size_t block) const;
+  //! \param[in] map The settings to apply
+  static void setHypreOptions(const std::string& prefix, const SettingMap& map);
 
   //! \brief Setup the coarse solver in a multigrid
   //! \param[in] PC The preconditioner to set coarse solver for
   //! \param[in] prefix The prefix of the block to set parameters for
-  //! \param[in] block The index of the block to set parameters for
-  static void setupCoarseSolver(PC& pc, const std::string& prefix, size_t block) const;
+  //! \param[in] map The settings to apply
+  static void setupCoarseSolver(PC& pc, const std::string& prefix, const SettingMap& map);
 
   //! \brief Setup the smoothers in a multigrid
   //! \param[in] PC The preconditioner to set coarse solver for
-  //! \param[in] block The index of the  block to set parameters for
+  //! \param[in] params The linear solver parameters
+  //! \param[in] iBlock The index of the  block to set parameters for
   //! \param[in] dirIndexSet The index set for direction smoothers
   //! \param[in] locSubdDofs Local subdomain DOFs for ASM preconditioners
   //! \param[in] subdDofs Subdomain DOFs for ASM preconditioners
   static void setupSmoothers(PC& pc, const LinSolParams& params, size_t iBlock,
                              ISMat& dirIndexSet,
                              const PetscIntMat& locSubdDofs,
-                             const PetscIntMat& subdDofs) const;
+                             const PetscIntMat& subdDofs);
 
   //! \brief Setup an additive Schwarz preconditioner
   //! \param[in] PC The preconditioner to set coarse solver for
@@ -109,7 +104,8 @@ public:
   //! \param[in] smoother True if this is a smoother in multigrid
   static void setupAdditiveSchwarz(PC& pc, int overlap, bool asmlu,
                                    const PetscIntMat& locSubdDofs,
-                                   const PetscIntMat& subdDofs, bool smoother) const;
+                                   const PetscIntMat& subdDofs, bool smoother);
 };
 
+#endif
 #endif

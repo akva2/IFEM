@@ -195,8 +195,8 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
     }
 
   if (adm.getProcId() < adm.getNoProcs()-1) {
-    adm.send(maxDof, adm.getProcId()+1);
     adm.send(maxNode, adm.getProcId()+1);
+    adm.send(maxDof, adm.getProcId()+1);
   }
 
   for (const auto& it : ghostConnections) {
@@ -374,6 +374,7 @@ int DomainDecomposition::getGlobalEq(int lEq) const
 
 bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
 {
+  nsd = sim.getNoSpaceDim();
   return calcGlobalNodeNumbers(adm, sim) && calcGlobalEqNumbers(adm, sim);
 }
 

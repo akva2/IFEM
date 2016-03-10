@@ -184,10 +184,10 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
   // Get number of equations in linear system
   const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
 
-  size_t nx = solParams.getBlock(0).subdomains[0];
-  size_t ny = solParams.getBlock(0).subdomains[1];
-  size_t nz = solParams.getBlock(0).subdomains[2];
-  int overlap = solParams.getBlock(0).overlap;
+  size_t nx = solParams.getBlock(0).getIntValue("nx");
+  size_t ny = solParams.getBlock(0).getIntValue("ny");
+  size_t nz = solParams.getBlock(0).getIntValue("nz");
+  int overlap = solParams.getBlock(0).getIntValue("overlap");
 
   if (nx+ny+nz > 0) {
     locSubdDofs.resize(nx*ny*samp->getPatches().size());
@@ -203,7 +203,7 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
         std::set<int> eqnSet;
         for (const auto& iEl : adm.dd[g]) {
           IntVec eqns;
-          sam.getElmEqns(eqns, iEl+1);
+          sam.getElmEqns(eqns, it->getElmID(iEl+1));
           for (auto& it : eqns)
             it--;
           eqnSet.insert(eqns.begin(), eqns.end());
@@ -211,6 +211,11 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
         std::copy_if(eqnSet.begin(), eqnSet.end(),
                      std::back_inserter(locSubdDofs[d]), [](const int& a) { return a > -1;});
       }
+    }
+    for (auto& it : locSubdDofs) {
+      for (auto& it2 : it)
+        std::cout << it2 << " ";
+      std::cout << std::endl;
     }
     subdDofs = locSubdDofs;
   }
@@ -393,8 +398,8 @@ bool PETScMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
 bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
 {
   // Reset linear solver
-  if (nLinSolves && solParams.getResetSolver())
-    if (nLinSolves%solParams.getResetSolver() == 0) {
+  if (nLinSolves && solParams.getIntValue("gmres_restart_iterations"))
+    if (nLinSolves%solParams.getIntValue("gmres_restart_iterations") == 0) {
       KSPDestroy(&ksp);
       KSPCreate(*adm.getCommunicator(),&ksp);
       setParams = true;
@@ -423,10 +428,10 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     return false;
   }
 
-  if (solParams.getMessageLevel() > 1) {
+  if (solParams.getIntValue("message_level") > 1) {
     PetscInt its;
     KSPGetIterationNumber(ksp,&its);
-    PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %D\n",solParams.getMethod().c_str(),its);
+    PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %D\n",solParams.getStringValue("type").c_str(),its);
   }
   nLinSolves++;
 
@@ -502,7 +507,7 @@ Real PETScMatrix::Linfnorm () const
 
 bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
 {
-  solParams.setParams(ksp,locSubdDofs,subdDofs,coords,dirIndexSet);
+  PETScSolParams::setParams(solParams,ksp,locSubdDofs,subdDofs,coords,dirIndexSet,adm.dd.getNoSpaceDim());
   return true;
 }
 

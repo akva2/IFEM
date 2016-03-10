@@ -16,15 +16,14 @@
 #ifndef _LINSOLPARAMS_H
 #define _LINSOLPARAMS_H
 
-#include "PETScSupport.h"
-
 #include <array>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
 
-class ParamMap {
+class SettingMap {
 public:
   void addValue(const std::string& key, const std::string& value);
   std::string getStringValue(const std::string& key) const;
@@ -36,31 +35,7 @@ private:
   std::map<std::string, std::string> values;
 };
 
-#ifdef HAS_PETSC
-
-typedef std::vector<int>         IntVec;       //!< Integer vector
-typedef std::vector<IntVec>      IntMat;       //!< Integer matrix
-typedef std::vector<std::string> StringVec;    //!< String vector
-typedef std::vector<StringVec>   StringMat;    //!< String matrix
-typedef std::vector<IS>          ISVec;        //!< Index set vector
-typedef std::vector<ISVec>       ISMat;        //!< Index set matrix
-
-//! \brief Null-space for matrix operator
-enum NullSpace { NONE, CONSTANT, RIGID_BODY };
-
-//! \brief Schur preconditioner methods
-enum SchurPrec { SIMPLE, MSIMPLER, PCD };
-
-#endif
-
 class TiXmlElement;
-
-
-#ifdef HAS_PETSC
-  #define BLANK_IF_NO_PETSC(a) a
-#else
-  #define BLANK_IF_NO_PETSC(a) ""
-#endif
 
 
 /*!
@@ -69,7 +44,7 @@ class TiXmlElement;
   and convergence criteria.
 */
 
-class LinSolParams
+class LinSolParams : public SettingMap
 {
 public:
   //! \brief Default constructor.
@@ -79,27 +54,27 @@ public:
   bool read(const TiXmlElement* elem);
 
   //! \brief Linear solver settings for a block of the linear system
-  struct BlockParams {
+  class BlockParams : public SettingMap {
+    public:
+      //! \brief Default constructor
+      BlockParams();
 
-    BlockParams();
-      basis(1), comps(0)
-    {}
+      //! \brief Settings for a directional smoother
+      class DirSmoother {
+        public:
+          int order; //!< Ordering of DOFs
+          std::string type; //!< Directional smoother types
 
-    //! \brief Settings for a directional smoother
-    struct DirSmoother {
-      int order; //!< Ordering of DOFs
-      std::string type; //!< Directional smoother types
+          DirSmoother(int o, const std::string& t) : order(o), type(t) {}
+      };
 
-      DirSmoother(int o, const std::string& t) : order(o), type(t) {}
-    };
+      //! \brief Read settings from XML block
+      //! \param[in] child XML block
+      bool read(const TiXmlElement* child, const std::string& prefix="");
 
-    //! \brief Read settings from XML block
-    //! \param[in] child XML block
-    bool read(const TiXmlElement* child, const std::string& prefix="");
-
-    size_t basis; //!< Basis for block
-    size_t comps; //!< Components from basis (1, 2, 3, 12, 13, 23, 123, ..., 0 = all)
-    ValueMap settings;
+      size_t basis; //!< Basis for block
+      size_t comps; //!< Components from basis (1, 2, 3, 12, 13, 23, 123, ..., 0 = all)
+      std::vector<DirSmoother> dirSmoother;
   };
 
   //! \brief Number of blocks in matrix system
@@ -110,7 +85,6 @@ public:
 
 private:
   std::vector<BlockParams> blocks; //!< Parameters for each block
-  ValueMap settings; //!< Generic settings
 };
 
 #endif
