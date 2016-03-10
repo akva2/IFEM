@@ -18,7 +18,11 @@
 #include "SIMenums.h"
 #include "ASMstruct.h"
 #include "Profiler.h"
-#include "SAM.h"
+#include "SAMpatch.h"
+#include "DomainDecomposition.h"
+#include <dune/istl/overlappingschwarz.hh>
+#include <dune/istl/superlu.hh>
+#include <dune/istl/paamg/amg.hh>
 
 
 ISTLVector::ISTLVector(const ProcessAdm& padm) : adm(padm)
@@ -142,6 +146,7 @@ void ISTLMatrix::initAssembly (const SAM& sam, bool b)
 
   std::vector<std::set<int>> dofc;
   sam.getDofCouplings(dofc);
+  samp = dynamic_cast<const SAMpatch*>(&sam);
 
   // Set correct number of rows and columns for matrix.
   size_t sum = 0;
@@ -203,7 +208,7 @@ static Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*
 
   if (solParams.getMethod() == "bcgs")
     return new Dune::BiCGSTABSolver<ISTLMatrix::Vec>(op, pre, solParams.getRelTolerance(),
-                                                     solParams.getMaxIterations(),1);
+                                                     solParams.getMaxIterations(),2);
   else if (solParams.getMethod() == "cg")
     return new Dune::CGSolver<ISTLMatrix::Vec>(op, pre, solParams.getRelTolerance(),
                                                solParams.getMaxIterations(),1);
@@ -223,10 +228,10 @@ void ISTLMatrix::setupSolver()
   if (!pre) {
     if (solParams.getBlock(0).prec == "ilu") {
       if (solParams.getBlock(0).ilu_fill_level == 0) {
-        pre.reset(new Dune::SeqILU0<Mat,Vec,Vec>(A, 0.9));
+        pre.reset(new Dune::SeqILU0<Mat,Vec,Vec>(A, 1.0));
         solver.reset(setupWithPreType<Dune::SeqILU0<Mat,Vec,Vec>>(solParams, op, *pre));
       } else {
-        pre.reset(new Dune::SeqILUn<Mat,Vec,Vec>(A, solParams.getBlock(0).ilu_fill_level, 0.9));
+        pre.reset(new Dune::SeqILUn<Mat,Vec,Vec>(A, solParams.getBlock(0).ilu_fill_level, 1.0));
         solver.reset(setupWithPreType<Dune::SeqILUn<Mat,Vec,Vec>>(solParams, op, *pre));
       }
     } else if (solParams.getBlock(0).prec == "sor") {
@@ -242,17 +247,79 @@ void ISTLMatrix::setupSolver()
       pre.reset(new Dune::SeqGS<Mat,Vec,Vec>(A, 1, 1.0));
       solver.reset(setupWithPreType<Dune::SeqGS<Mat,Vec,Vec>>(solParams, op, *pre));
     }
+    else if (solParams.getBlock(0).prec == "asm" ||
+            solParams.getBlock(0).prec == "asmlu") {
+      size_t nx = solParams.getBlock(0).subdomains[0];
+      nx = std::max(1ul, nx);
+      size_t ny = solParams.getBlock(0).subdomains[1];
+      ny = std::max(1ul, ny);
+      size_t nz = solParams.getBlock(0).subdomains[2];
+      nz = std::max(1ul, nz);
+      int overlap = solParams.getBlock(0).overlap;
+
+      if (!samp)
+        return;
+
+      std::vector<std::set<int>>  locSubdDofs(nx*ny*nz*samp->getPatches().size());
+      size_t d = 0;
+      for (const auto& it : samp->getPatches()) {
+        const ASMstruct* pch = dynamic_cast<const ASMstruct*>(it);
+        if (!pch)
+          break;
+        int n1, n2, n3;
+        pch->getNoStructElms(n1,n2,n3);
+        const_cast<DomainDecomposition&>(adm.dd).calcAppropriateGroups(n1, n2, n3, nx, ny, nz, overlap);
+        for (size_t g = 0; g < adm.dd.getNoSubdomains(); ++g, ++d) {
+          for (const auto& iEl : adm.dd[g]) {
+            IntVec eqns;
+            samp->getElmEqns(eqns, it->getElmID(iEl+1));
+            for (auto& it : eqns) {
+              if (it > 0)
+                locSubdDofs[d].insert(it-1);
+            }
+          }
+        }
+      }
+      if (solParams.getBlock(0).prec == "asmlu") {
+        Dune::SeqOverlappingSchwarz<Mat, Vec, Dune::AdditiveSchwarzMode, Dune::SuperLU<Mat>>::subdomain_vector ddofs(locSubdDofs.size());
+        for (size_t i = 0; i < locSubdDofs.size(); ++i)
+          ddofs[i].insert(locSubdDofs[i].begin(), locSubdDofs[i].end());
+
+        pre.reset(new Dune::SeqOverlappingSchwarz<Mat, Vec, Dune::AdditiveSchwarzMode, Dune::SuperLU<Mat>>(A, ddofs));
+        solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<Mat, Vec, Dune::AdditiveSchwarzMode, Dune::SuperLU<Mat>>>(solParams, op, *pre));
+      } else {
+        Dune::SeqOverlappingSchwarz<Mat, Vec>::subdomain_vector ddofs(locSubdDofs.size());
+        for (size_t i = 0; i < locSubdDofs.size(); ++i)
+          ddofs[i].insert(locSubdDofs[i].begin(), locSubdDofs[i].end());
+        pre.reset(new Dune::SeqOverlappingSchwarz<Mat, Vec>(A, ddofs));
+        solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<Mat, Vec>>(solParams, op, *pre));
+      }
+    } else if (solParams.getBlock(0).prec == "amg") {
+      // The coupling metric used in the AMG
+      typedef Dune::Amg::FirstDiagonal CouplingMetric;
+      // The coupling criterion used in the AMG
+      typedef Dune::Amg::SymmetricCriterion<Mat, CouplingMetric> CritBase;
+      // The coarsening criterion used in the AMG
+      typedef Dune::Amg::CoarsenCriterion<CritBase> Criterion;
+      Criterion crit;
+      typedef Dune::Amg::AMG<Operator, Vec, Dune::SeqSSOR<Mat,Vec,Vec>> AMG;
+      AMG::SmootherArgs args;
+      args.relaxationFactor = 1.0;
+
+      pre.reset(new AMG(op, crit, args));
+      solver.reset(setupWithPreType<AMG>(solParams, op, *pre));
+    }
   }
 }
 
 
 bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 {
-  ISTLVector* Bptr = dynamic_cast<ISTLVector*>(&B);
-  if (!Bptr)
-    return false;
-
   setupSolver();
+
+  ISTLVector* Bptr = dynamic_cast<ISTLVector*>(&B);
+  if (!Bptr || !solver)
+    return false;
 
   try {
     Dune::InverseOperatorResult r;
@@ -273,15 +340,15 @@ bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 
 bool ISTLMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
 {
+  setupSolver();
+
   const ISTLVector* Bptr = dynamic_cast<const ISTLVector*>(&b);
-  if (!Bptr)
+  if (!Bptr || ! solver)
     return false;
 
   ISTLVector* Xptr = dynamic_cast<ISTLVector*>(&x);
   if (!Xptr)
     return false;
-
-  setupSolver();
 
   try {
     Dune::InverseOperatorResult r;

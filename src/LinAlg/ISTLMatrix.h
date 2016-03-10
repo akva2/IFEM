@@ -24,6 +24,7 @@
 #include <memory>
 
 class LinSolParams;
+class SAMpatch;
 
 
 /*!
@@ -160,4 +161,5 @@ protected:
   bool                setParams;       //!< If linear solver parameters are set
   int                 nLinSolves;      //!< Number of linear solves
   LinAlg::LinearSystemType linsysType; //!< Linear system type
+  const SAMpatch* samp;
 };
