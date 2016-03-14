@@ -53,8 +53,8 @@ void PETScSolParams::setParams(const LinSolParams& params,
 
 #if PETSC_HAVE_HYPRE
   if (!strncasecmp(prec.c_str(),"hypre",5)) {
-    PCHYPRESetType(pc,blocks[0].hypre.type.c_str());
-    setHypreOptions("", 0);
+    PCHYPRESetType(pc,params.getBlock(0).getStringValue("hypre_type").c_str());
+    setHypreOptions("", params.getBlock(0));
   }
 #endif
 

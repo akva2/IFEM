@@ -35,8 +35,8 @@ public:
     int slave;  //!< Slave patch (global number).
     int midx;   //!< Index of boundary on master:
     int sidx;   //!< Index of boundary on slave.
-    bool reverse; //!< True if connection is reversed.
-    int dim;      //!< Dimension of boundary.
+    int orient; //!< Orientation.
+    int dim;    //!< Dimension of boundary.
   };
 
   std::vector<Interface> ghostConnections; //!< Connections to other processes.

@@ -209,7 +209,7 @@ bool SIM2D::parseGeometryTag (const TiXmlElement* elem)
                                   static_cast<ASMs2DC1*>(spch),sEdge,rever));
       }
       else
-        adm.dd.ghostConnections.push_back(DomainDecomposition::Interface{master, slave, mEdge, sEdge, rever, 1});
+        adm.dd.ghostConnections.push_back(DomainDecomposition::Interface{master, slave, mEdge, sEdge, rever?1:0, 1});
     }
 
     // Second pass for C1-continuous patches, to set up additional constraints

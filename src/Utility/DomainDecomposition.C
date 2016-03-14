@@ -179,7 +179,7 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
     IntVec glbNodes(lNodes.size());
     adm.receive(glbNodes, getPatchOwner(it.master));
     for (size_t i = 0; i < glbNodes.size(); ++i) {
-      int node = MLGN[lNodes[it.reverse?glbNodes.size()-1-i:i]-1];
+      int node = MLGN[lNodes[it.orient==1?glbNodes.size()-1-i:i]-1];
       old2new[node] = glbNodes[i];
     }
   }
@@ -296,7 +296,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
     for (size_t i = 0; i < glbEqs.size(); ++i) {
       if (locEqs[i] < 1)
         continue;
-      int leq = locEqs[it.reverse?glbEqs.size()-1-i:i];
+      int leq = locEqs[it.orient==1?glbEqs.size()-1-i:i];
       old2new[leq] = glbEqs[i];
     }
   }

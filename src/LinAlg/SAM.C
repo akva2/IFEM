@@ -866,6 +866,7 @@ Real SAM::normL2 (const Vector& x, char dofType) const
 
 Real SAM::normInf (const Vector& x, size_t& comp, char dofType) const
 {
+  Real retVal(0.0);
   if (x.empty() || comp < 1)
     return Real(0);
   else if (nodeType.empty())
@@ -873,25 +874,24 @@ Real SAM::normInf (const Vector& x, size_t& comp, char dofType) const
     // All nodes are of the same type with the same number of nodal DOFs
     int nndof = madof[1] - madof[0];
     if ((int)comp <= nndof)
-      return x.normInf(--comp,nndof);
+      retVal = x.normInf(--comp,nndof);
     else
       return Real(0);
+  } else {
+    // Consider only the dofType nodes
+    int i, k = comp-2;
+    for (i = 0; i < nnod; i++)
+      if (nodeType[i] == dofType)
+      {
+        int idof = madof[i] + k;
+        if (idof >= 0 && idof < madof[i+1]-1)
+          if (fabs(x[idof]) > retVal)
+          {
+            comp = i+1;
+            retVal = fabs(x[idof]);
+          }
+      }
   }
-
-  // Consider only the dofType nodes
-  int i, k = comp-2;
-  Real retVal = Real(0);
-  for (i = 0; i < nnod; i++)
-    if (nodeType[i] == dofType)
-    {
-      int idof = madof[i] + k;
-      if (idof >= 0 && idof < madof[i+1]-1)
-	if (fabs(x[idof]) > retVal)
-	{
-	  comp = i+1;
-	  retVal = fabs(x[idof]);
-	}
-    }
 
   if (dofOps)
     return dofOps->normInf(retVal);

@@ -1524,7 +1524,7 @@ bool ASMs3D::updateCoords (const Vector& displ)
 }
 
 
-void ASMs3D::getBoundaryNodes (int lIndex, IntVec& nodes) const
+void ASMs3D::getBoundaryNodes (int lIndex, IntVec& nodes, int basis) const
 {
   if (!svol) return; // silently ignore empty patches
 
