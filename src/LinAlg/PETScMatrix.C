@@ -12,7 +12,7 @@
 //==============================================================================
 
 #include "PETScMatrix.h"
-#ifdef HAS_PETSC
+#include "PETScSolParams.h"
 #include "LinSolParams.h"
 #include "LinAlgInit.h"
 #include "SAMpatch.h"
@@ -347,7 +347,6 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
     }
 
     if (adm.isParallel()) {
-#ifdef HAVE_MPI
       Vec solution;
       VecCreateSeqWithArray(PETSC_COMM_SELF, 1, adm.dd.getMLGEQ().size(), Bsptr->getPtr(), &solution);
       VecScatter ctx;
@@ -356,7 +355,6 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
       VecScatterEnd(ctx, Bptr->getVector(),solution,INSERT_VALUES,SCATTER_FORWARD);
       VecScatterDestroy(&ctx);
       VecDestroy(&solution);
-#endif
     } else {
       PetscScalar* data;
       VecGetArray(Bptr->getVector(), &data);
@@ -649,5 +647,3 @@ void PETScDOFVectorOps::setupIS(char dofType, const SAM& sam) const
   ISCreateGeneral(*adm.getCommunicator(), ldofs.size(), ldofs.data(), PETSC_COPY_VALUES, &dofIS[dofType].local);
   ISCreateGeneral(*adm.getCommunicator(), gdofs.size(), gdofs.data(), PETSC_COPY_VALUES, &dofIS[dofType].global);
 }
-
-#endif // HAS_PETSC
