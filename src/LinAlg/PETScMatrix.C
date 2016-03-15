@@ -13,7 +13,6 @@
 
 #include "PETScMatrix.h"
 #include "PETScSolParams.h"
-#ifdef HAS_PETSC
 #include "LinSolParams.h"
 #include "LinAlgInit.h"
 #include "SAMpatch.h"
@@ -213,11 +212,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
                      std::back_inserter(locSubdDofs[d]), [](const int& a) { return a > -1;});
       }
     }
-    for (auto& it : locSubdDofs) {
-      for (auto& it2 : it)
-        std::cout << it2 << " ";
-      std::cout << std::endl;
-    }
     subdDofs = locSubdDofs;
   }
 
@@ -353,7 +347,6 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
     }
 
     if (adm.isParallel()) {
-#ifdef PARALLEL_PETSC
       Vec solution;
       VecCreateSeqWithArray(PETSC_COMM_SELF, 1, adm.dd.getMLGEQ().size(), Bsptr->getPtr(), &solution);
       VecScatter ctx;
@@ -362,7 +355,6 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
       VecScatterEnd(ctx, Bptr->getVector(),solution,INSERT_VALUES,SCATTER_FORWARD);
       VecScatterDestroy(&ctx);
       VecDestroy(&solution);
-#endif
     } else {
       PetscScalar* data;
       VecGetArray(Bptr->getVector(), &data);
@@ -552,7 +544,6 @@ PETScDOFVectorOps::~PETScDOFVectorOps()
 
 Real PETScDOFVectorOps::dot (const Vector& x, const Vector& y, char dofType, const SAM& sam) const
 {
-#ifdef PARALLEL_PETSC
   if (adm.isParallel()) {
     if (dofIS.find(dofType) == dofIS.end())
       setupIS(dofType, sam);
@@ -583,7 +574,6 @@ Real PETScDOFVectorOps::dot (const Vector& x, const Vector& y, char dofType, con
 
     return d;
   }
-#endif
 
   return sam.dot(x, y, dofType);
 }
@@ -591,7 +581,6 @@ Real PETScDOFVectorOps::dot (const Vector& x, const Vector& y, char dofType, con
 
 Real PETScDOFVectorOps::normL2(const Vector& x, char dofType, const SAM& sam) const
 {
-#ifdef PARALLEL_PETSC
   if (adm.isParallel()) {
     if (dofIS.find(dofType) == dofIS.end())
       setupIS(dofType, sam);
@@ -619,7 +608,6 @@ Real PETScDOFVectorOps::normL2(const Vector& x, char dofType, const SAM& sam) co
 
     return d / sqrt(n);
   }
-#endif
 
   return sam.normL2(x, dofType);
 }
@@ -627,10 +615,8 @@ Real PETScDOFVectorOps::normL2(const Vector& x, char dofType, const SAM& sam) co
 
 Real PETScDOFVectorOps::normInf(Real value) const
 {
-#ifdef PARALLEL_PETSC
   if (adm.isParallel())
     value = adm.allReduce(value, MPI_MAX);
-#endif
 
   return value;
 }
@@ -655,5 +641,3 @@ void PETScDOFVectorOps::setupIS(char dofType, const SAM& sam) const
   ISCreateGeneral(*adm.getCommunicator(), ldofs.size(), ldofs.data(), PETSC_COPY_VALUES, &dofIS[dofType].local);
   ISCreateGeneral(*adm.getCommunicator(), gdofs.size(), gdofs.data(), PETSC_COPY_VALUES, &dofIS[dofType].global);
 }
-
-#endif // HAS_PETSC

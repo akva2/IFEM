@@ -152,8 +152,10 @@ StdVector SystemMatrix::operator/(const StdVector& b)
 
 DOFVectorOps* DOFVectorOps::Create(SystemMatrix::Type solver, const ProcessAdm& adm)
 {
+#ifdef HAS_PETSC
   if (solver == SystemMatrix::PETSC)
     return new PETScDOFVectorOps(adm);
+#endif
 
   return nullptr;
 }
