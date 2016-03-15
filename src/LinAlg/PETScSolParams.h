@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 
+class ProcessAdm;
+
 
 typedef std::vector<int>         IntVec;       //!< Integer vector
 typedef std::vector<IntVec>      IntMat;       //!< Integer matrix
@@ -49,8 +51,8 @@ class PETScSolParams
 public:
   //! \brief Set linear solver parameters for KSP object
   static void setParams(const LinSolParams& params,
-                        KSP& ksp, PetscIntMat& locSubdDofs,
-                        PetscIntMat& subdDofs, PetscRealVec& coords,
+                        const ProcessAdm& adm,
+                        KSP& ksp, PetscRealVec& coords,
                         ISMat& dirIndexSet, int nsd);
 
   //! \brief Set directional smoother
@@ -91,20 +93,23 @@ public:
   //! \param[in] locSubdDofs Local subdomain DOFs for ASM preconditioners
   //! \param[in] subdDofs Subdomain DOFs for ASM preconditioners
   static void setupSmoothers(PC& pc, const LinSolParams& params, size_t iBlock,
-                             ISMat& dirIndexSet,
-                             const PetscIntMat& locSubdDofs,
-                             const PetscIntMat& subdDofs);
+                             ISMat& dirIndexSet, const ProcessAdm& adm);
 
   //! \brief Setup an additive Schwarz preconditioner
   //! \param[in] PC The preconditioner to set coarse solver for
   //! \param[in] overlap The overlap
+  //! \param[in] nx Subdomains per patch in x
+  //! \param[in] ny Subdomains per patch in y
+  //! \param[in] nz Subdomains per patch in z
   //! \param[in] asmlu True to use LU subdomain solvers
+  //! \param[in] adm The process administrator (including the domain decomposition)
   //! \param[in] locSubdDofs Local subdomain DOFs for ASM preconditioners
   //! \param[in] subdDofs Subdomain DOFs for ASM preconditioners
   //! \param[in] smoother True if this is a smoother in multigrid
-  static void setupAdditiveSchwarz(PC& pc, int overlap, bool asmlu,
-                                   const PetscIntMat& locSubdDofs,
-                                   const PetscIntMat& subdDofs, bool smoother);
+  static void setupAdditiveSchwarz(PC& pc, int overlap, 
+                                   int nx, int ny, int nz,
+                                   bool asmlu, bool smoother,
+                                   const ProcessAdm& adm);
 };
 
 #endif

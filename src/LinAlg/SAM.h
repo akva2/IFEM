@@ -55,6 +55,10 @@ public:
   int getNoDOFs() const { return ndof; }
   //! \brief Returns the number of equations (free DOFs) in the model.
   virtual int getNoEquations() const { return neq; }
+  //! \brief Returns the number of equations for a given dofType.
+  //! \param nodeType Type of node
+  //! \param ldof DOFs in nodes (0 = all)
+  std::vector<int> getEquations(char nodeType, int dof=0) const;
   //! \brief Returns the Matrix of Accumulated DOFs.
   const int* getMADOF() const { return madof; }
   //! \brief Returns the Matrix of EQuation Numbers.

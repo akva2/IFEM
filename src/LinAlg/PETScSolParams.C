@@ -12,7 +12,10 @@
 //==============================================================================
 
 #include "PETScSolParams.h"
-#include "PCPerm.h"
+#include "PETScPCPerm.h"
+#include "ASMstruct.h"
+#include "ProcessAdm.h"
+#include "SAMpatch.h"
 #include "Utilities.h"
 #include "tinyxml.h"
 #include <fstream>
@@ -22,8 +25,9 @@
 
 
 void PETScSolParams::setParams(const LinSolParams& params,
-                               KSP& ksp, PetscIntMat& locSubdDofs,
-			       PetscIntMat& subdDofs, PetscRealVec& coords,
+                               const ProcessAdm& adm,
+                               KSP& ksp, 
+                               PetscRealVec& coords,
 			       ISMat& dirIndexSet, int nsd)
 {
   // Set linear solver method
@@ -65,8 +69,11 @@ void PETScSolParams::setParams(const LinSolParams& params,
   }
 
   if (!strncasecmp(prec.c_str(),"asm",3) || !strncasecmp(prec.c_str(),"gasm",4))
-    setupAdditiveSchwarz(pc, params.getBlock(0).getIntValue("overlap"), !strncasecmp(prec.c_str(),"asmlu",5),
-                         locSubdDofs, subdDofs, false);
+    setupAdditiveSchwarz(pc, params.getBlock(0).getIntValue("overlap"),
+                         params.getBlock(0).getIntValue("nx"),
+                         params.getBlock(0).getIntValue("ny"),
+                         params.getBlock(0).getIntValue("nz"),
+                         prec == "asmlu", false, adm);
   else if (!strncasecmp(prec.c_str(),"ml",2) || !strncasecmp(prec.c_str(),"gamg",4)) {
     if (!strncasecmp(prec.c_str(),"ml",2))
       setMLOptions("", params.getBlock(0));
@@ -80,7 +87,7 @@ void PETScSolParams::setParams(const LinSolParams& params,
     if (!params.getBlock(0).hasValue("ml_coarse_solver"))
       setupCoarseSolver(pc, "", params.getBlock(0));
 
-    setupSmoothers(pc, params, 0, dirIndexSet, locSubdDofs, subdDofs);
+    setupSmoothers(pc, params, 0, dirIndexSet, adm);
   }
   else {
     PCSetFromOptions(pc);
@@ -246,9 +253,7 @@ void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const 
 
 
 void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t iBlock,
-                                    ISMat& dirIndexSet,
-                                    const PetscIntMat& locSubdDofs,
-                                    const PetscIntMat& subdDofs)
+                                    ISMat& dirIndexSet, const ProcessAdm& adm)
 {
   PetscInt n;
   PCMGGetLevels(pc,&n);
@@ -292,8 +297,13 @@ void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t i
     KSPGetPC(preksp,&prepc);
 
     if (smoother == "asm" || smoother == "asmlu")
-      setupAdditiveSchwarz(prepc, params.getBlock(iBlock).getIntValue("overlap"), smoother == "asmlu",
-                           locSubdDofs, subdDofs, true);
+      setupAdditiveSchwarz(prepc,
+                           params.getBlock(iBlock).getIntValue("overlap"),
+                           params.getBlock(iBlock).getIntValue("nx"),
+                           params.getBlock(iBlock).getIntValue("ny"),
+                           params.getBlock(iBlock).getIntValue("nz"),
+                           smoother == "asmlu",
+                           true, adm);
     else if (smoother == "compositedir" && (i==n-1)) {
       Mat mat;
       Mat Pmat;
@@ -315,10 +325,39 @@ void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t i
 }
 
 
-void PETScSolParams::setupAdditiveSchwarz(PC& pc, int overlap, bool asmlu,
-                                          const PetscIntMat& locSubdDofs,
-                                          const PetscIntMat& subdDofs, bool smoother)
+void PETScSolParams::setupAdditiveSchwarz(PC& pc, int overlap,
+                                          int nx, int ny, int nz, bool asmlu,
+                                          bool smoother,
+                                          const ProcessAdm& adm)
 {
+  IntMat locSubdDofs, subdDofs;
+  if (nx+ny+nz > 0) {
+    const SAMpatch* samp = adm.dd.getSAM();
+    locSubdDofs.resize(nx*ny*samp->getPatches().size());
+    size_t d = 0;
+    for (const auto& it : samp->getPatches()) {
+      const ASMstruct* pch = dynamic_cast<const ASMstruct*>(it);
+      if (!pch)
+        break;
+      int n1, n2, n3;
+      pch->getNoStructElms(n1,n2,n3);
+      const_cast<DomainDecomposition&>(adm.dd).calcAppropriateGroups(n1, n2, n3, nx, ny, nz, overlap);
+      for (size_t g = 0; g < adm.dd.getNoSubdomains(); ++g, ++d) {
+        std::set<int> eqnSet;
+        for (const auto& iEl : adm.dd[g]) {
+          IntVec eqns;
+          samp->getElmEqns(eqns, it->getElmID(iEl+1));
+          for (auto& it : eqns)
+            it--;
+          eqnSet.insert(eqns.begin(), eqns.end());
+        }
+        std::copy_if(eqnSet.begin(), eqnSet.end(),
+                     std::back_inserter(locSubdDofs[d]), [](const int& a) { return a > -1;});
+      }
+    }
+    subdDofs = locSubdDofs;
+  }
+
   PCSetType(pc, PCASM);
   if (!smoother)
     PCASMSetType(pc,PC_ASM_BASIC);
