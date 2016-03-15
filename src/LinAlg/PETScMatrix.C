@@ -141,24 +141,18 @@ PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar,
 
   LinAlgInit::increfs();
 
+  if (spar.getNoBlocks() > 1) {
+    isvec.resize(spar.getNoBlocks());
+    matvec.resize(spar.getNoBlocks()*spar.getNoBlocks());
+    for (auto& it : matvec) {
+      MatCreate(*adm.getCommunicator(), &it);
+      MatSetFromOptions(it);
+    }
+  }
+
   setParams = true;
   ISsize = 0;
   nLinSolves = 0;
-}
-
-
-PETScMatrix::PETScMatrix (const PETScMatrix& B) :
-  nsp(nullptr), adm(B.adm), solParams(B.solParams)
-{
-  MatDuplicate(B.A,MAT_COPY_VALUES,&A);
-
-  // Create linear solver object.
-  KSPCreate(*adm.getCommunicator(),&ksp);
-
-  LinAlgInit::increfs();
-
-  setParams = true;
-  ISsize = 0;
 }
 
 
@@ -170,6 +164,11 @@ PETScMatrix::~PETScMatrix ()
   // Deallocation of matrix object.
   MatDestroy(&A);
   LinAlgInit::decrefs();
+  for (auto& it : matvec)
+    MatDestroy(&it);
+  matvec.clear();
+  for (auto& it : isvec)
+    ISDestroy(&it);
 }
 
 
@@ -177,103 +176,117 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 {
   SparseMatrix::initAssembly(sam, b);
 
-  const SAMpatch* samp = dynamic_cast<const SAMpatch*>(&sam);
-  if (!samp)
-    return;
-
   // Get number of equations in linear system
   const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
 
-  size_t nx = solParams.getBlock(0).getIntValue("nx");
-  size_t ny = solParams.getBlock(0).getIntValue("ny");
-  size_t nz = solParams.getBlock(0).getIntValue("nz");
-  int overlap = solParams.getBlock(0).getIntValue("overlap");
-
-  if (nx+ny+nz > 0) {
-    locSubdDofs.resize(nx*ny*samp->getPatches().size());
-    size_t d = 0;
-    for (const auto& it : samp->getPatches()) {
-      const ASMstruct* pch = dynamic_cast<const ASMstruct*>(it);
-      if (!pch)
-        break;
-      int n1, n2, n3;
-      pch->getNoStructElms(n1,n2,n3);
-      const_cast<DomainDecomposition&>(adm.dd).calcAppropriateGroups(n1, n2, n3, nx, ny, nz, overlap);
-      for (size_t g = 0; g < adm.dd.getNoSubdomains(); ++g, ++d) {
-        std::set<int> eqnSet;
-        for (const auto& iEl : adm.dd[g]) {
-          IntVec eqns;
-          sam.getElmEqns(eqns, it->getElmID(iEl+1));
-          for (auto& it : eqns)
-            it--;
-          eqnSet.insert(eqns.begin(), eqns.end());
-        }
-        std::copy_if(eqnSet.begin(), eqnSet.end(),
-                     std::back_inserter(locSubdDofs[d]), [](const int& a) { return a > -1;});
-      }
-    }
-    subdDofs = locSubdDofs;
-  }
-
-  // Set correct number of rows and columns for matrix.
-  MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
-  MPI_Barrier(*adm.getCommunicator());
-
-  MatSetFromOptions(A);
-
-  // Allocate sparsity pattern
   std::vector<std::set<int>> dofc;
   sam.getDofCouplings(dofc);
-  if (adm.isParallel()) {
-    int ifirst = adm.dd.getMinEq();
-    int ilast  = adm.dd.getMaxEq();
-    // !!! SERIOUS OVER/UNDERALLOCATION !!!
-    PetscIntVec d_nnz(ilast-ifirst+1, 100), o_nnz(ilast-ifirst+1, 100);
 
-//    for (size_t i = 0; dofc.size(); ++i) {
-//      for (const auto& it : dofc[i]) {
-//        if (
-//        if (adm.dd.getGlobalEq(it) >= ifirst && adm.dd.getGlobalEq(it) < ilast)
-//          ++d_nnz[i];
-//        else
-//          ++o_nnz[i];
-//      }
-//    }
+  if (matvec.empty()) {
+    // Set correct number of rows and columns for matrix.
+    MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
+    MPI_Barrier(*adm.getCommunicator());
 
-//    Vec nnz;
-//    VecCreate(*adm.getCommunicator(),&nnz);
-//    VecSetSizes(nnz, ilast-ifirst);
+    MatSetFromOptions(A);
 
-    MatMPIAIJSetPreallocation(A,PETSC_DEFAULT,d_nnz.data(),
-                                PETSC_DEFAULT,o_nnz.data());
-  } else {
-    PetscIntVec Nnz;
-    for (const auto& it : dofc)
-      Nnz.push_back(it.size());
+    // Allocate sparsity pattern
+    if (adm.isParallel()) {
+      int ifirst = adm.dd.getMinEq();
+      int ilast  = adm.dd.getMaxEq();
+      // !!! SERIOUS OVER/UNDERALLOCATION !!!
+      PetscIntVec d_nnz(ilast-ifirst+1, 100), o_nnz(ilast-ifirst+1, 100);
 
-    MatSeqAIJSetPreallocation(A,PETSC_DEFAULT,Nnz.data());
+  //    for (size_t i = 0; dofc.size(); ++i) {
+  //      for (const auto& it : dofc[i]) {
+  //        if (
+  //        if (adm.dd.getGlobalEq(it) >= ifirst && adm.dd.getGlobalEq(it) < ilast)
+  //          ++d_nnz[i];
+  //        else
+  //          ++o_nnz[i];
+  //      }
+  //    }
 
-    PetscIntVec col;
-    for (const auto& it2 : dofc)
-      for (const auto& it : it2)
-        col.push_back(it-1);
+  //    Vec nnz;
+  //    VecCreate(*adm.getCommunicator(),&nnz);
+  //    VecSetSizes(nnz, ilast-ifirst);
 
-    MatSeqAIJSetColumnIndices(A,&col[0]);
-    MatSetOption(A, MAT_NEW_NONZERO_LOCATION_ERR, PETSC_TRUE);
-    MatSetOption(A, MAT_KEEP_NONZERO_PATTERN, PETSC_TRUE);
-  }
+      MatMPIAIJSetPreallocation(A,PETSC_DEFAULT,d_nnz.data(),
+                                  PETSC_DEFAULT,o_nnz.data());
+    } else {
+      PetscIntVec Nnz;
+      for (const auto& it : dofc)
+        Nnz.push_back(it.size());
 
-  MatSetUp(A);
+      MatSeqAIJSetPreallocation(A,PETSC_DEFAULT,Nnz.data());
 
-  if (linsysType == LinAlg::SPD)
-    MatSetOption(A, MAT_SPD, PETSC_TRUE);
-  if (linsysType == LinAlg::SYMMETRIC)
-    MatSetOption(A, MAT_SYMMETRIC, PETSC_TRUE);
+      PetscIntVec col;
+      for (const auto& it2 : dofc)
+        for (const auto& it : it2)
+          col.push_back(it-1);
+
+      MatSeqAIJSetColumnIndices(A,&col[0]);
+      MatSetOption(A, MAT_NEW_NONZERO_LOCATION_ERR, PETSC_TRUE);
+      MatSetOption(A, MAT_KEEP_NONZERO_PATTERN, PETSC_TRUE);
+    }
+
+    MatSetUp(A);
+
+    if (linsysType == LinAlg::SPD)
+      MatSetOption(A, MAT_SPD, PETSC_TRUE);
+    if (linsysType == LinAlg::SYMMETRIC)
+      MatSetOption(A, MAT_SYMMETRIC, PETSC_TRUE);
 
 #ifndef SP_DEBUG
-  // Do not abort program for allocation error in release mode
-  MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
+    // Do not abort program for allocation error in release mode
+    MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 #endif
+  } else {
+    // get equations for block
+    std::vector<std::vector<int>> blockEqs(solParams.getNoBlocks());
+    for (size_t i = 0; i < solParams.getNoBlocks(); ++i) {
+      char dofType = solParams.getBlock(i).basis == 1 ? 'D' : 
+                            'P'+solParams.getBlock(i).basis-2;
+      // grab DOFs of given type(s)
+      if (solParams.getBlock(i).comps != 0) {
+        char temp[32];
+        sprintf(temp,"%lu",solParams.getBlock(i).comps);
+        for (char* t = temp; *t != 0; ++t) {
+          std::vector<int> tmp = adm.dd.getSAM()->getEquations(dofType, (int)(*t - '0'));
+          blockEqs[i].insert(blockEqs[i].end(), tmp.begin(), tmp.end());
+        }
+      } else
+        blockEqs[i] = adm.dd.getSAM()->getEquations(dofType);
+    }
+
+    // nnz per block
+    std::vector<std::vector<PetscInt>> nnz(solParams.getNoBlocks());
+    for (size_t i = 0; i < solParams.getNoBlocks(); ++i)
+      for (const auto& it : blockEqs[i])
+        nnz[i].push_back(dofc[it].size());
+
+    auto it = matvec.begin();
+    for (size_t i = 0; i < solParams.getNoBlocks(); ++i)
+      for (size_t j = 0; j < solParams.getNoBlocks(); ++j, ++it) {
+        MatSetSizes(*it, blockEqs[i].size(), blockEqs[j].size(),
+                    PETSC_DETERMINE, PETSC_DETERMINE);
+        MatSetFromOptions(*it);
+        MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz[i].data());
+      }
+
+    // index sets
+    for (size_t i = 0; i < isvec.size(); ++i)
+      ISCreateGeneral(*adm.getCommunicator(),blockEqs[i].size(),
+                      blockEqs[i].data(),PETSC_COPY_VALUES,&isvec[i]);
+
+    MatCreateNest(*adm.getCommunicator(),solParams.getNoBlocks(),isvec.data(),
+                  solParams.getNoBlocks(),isvec.data(),matvec.data(),&A);
+
+#ifndef SP_DEBUG
+    // Do not abort program for allocation error in release mode
+    for (auto& it : matvec)
+      MatSetOption(it,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
+#endif
+  }
 }
 
 
@@ -502,7 +515,7 @@ Real PETScMatrix::Linfnorm () const
 
 bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
 {
-  PETScSolParams::setParams(solParams,ksp,locSubdDofs,subdDofs,coords,dirIndexSet,adm.dd.getNoSpaceDim());
+  PETScSolParams::setParams(solParams,adm,ksp,coords,dirIndexSet,adm.dd.getNoSpaceDim());
   return true;
 }
 

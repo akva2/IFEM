@@ -102,8 +102,6 @@ public:
   //! \brief Constructor.
   PETScMatrix(const ProcessAdm& padm, const LinSolParams& spar,
               LinAlg::LinearSystemType ltype);
-  //! \brief Copy constructor.
-  PETScMatrix(const PETScMatrix& A);
   //! \brief The destructor frees the dynamically allocated arrays.
   virtual ~PETScMatrix();
 
@@ -112,9 +110,6 @@ public:
 
   //! \brief Returns the dimension of the system matrix.
   virtual size_t dim(int = 1) const { return 0; }
-
-  //! \brief Creates a copy of the system matrix and returns a pointer to it.
-  virtual SystemMatrix* copy() const { return new PETScMatrix(*this); }
 
   //! \brief Initializes the element assembly process.
   //! \details Must be called once before the element assembly loop.
@@ -181,6 +176,9 @@ protected:
   //! \brief Solve a linear system
   bool solve(const Vec& b, Vec& x, bool newLHS, bool knoll);
 
+  //! \brief Disabled copy constructor.
+  PETScMatrix(const PETScMatrix& A);
+
   Mat                 A;               //!< The actual PETSc matrix
   KSP                 ksp;             //!< Linear equation solver
   MatNullSpace*       nsp;             //!< Null-space of linear operator
@@ -195,6 +193,8 @@ protected:
   int                 nLinSolves;      //!< Number of linear solves
   LinAlg::LinearSystemType linsysType; //!< Linear system type
   IS glob2LocEq = nullptr; //!< Index set for global-to-local equations.
+  std::vector<Mat> matvec; //!< Blocks for block matrices.
+  std::vector<IS> isvec;   //!< Index sets for block matrices.
 };
 
 
