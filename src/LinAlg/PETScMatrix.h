@@ -18,9 +18,9 @@
 #include "SystemMatrix.h"
 #include "SparseMatrix.h"
 #include "PETScSupport.h"
+#include "PETScSolParams.h"
 #include "LinAlgenums.h"
-
-class LinSolParams;
+#include <set>
 
 typedef std::vector<PetscInt>    PetscIntVec;  //!< PETSc integer vector
 typedef std::vector<PetscIntVec> PetscIntMat;  //!< PETSc integer matrix
@@ -183,30 +183,35 @@ protected:
   KSP                 ksp;             //!< Linear equation solver
   MatNullSpace*       nsp;             //!< Null-space of linear operator
   const ProcessAdm&   adm;             //!< Process administrator
-  const LinSolParams& solParams;       //!< Linear solver parameters
+  PETScSolParams      solParams;       //!< Linear solver parameters
   bool                setParams;       //!< If linear solver parameters are set
   PetscInt            ISsize;          //!< Number of index sets/elements
   PetscIntMat         locSubdDofs;     //!< Degrees of freedom for unique subdomains
   PetscIntMat         subdDofs;        //!< Degrees of freedom for subdomains
-  PetscRealVec        coords;          //!< Coordinates of local nodes (x0,y0,z0,x1,y1,...)
-  ISMat               dirIndexSet;     //!< Direction ordering
   int                 nLinSolves;      //!< Number of linear solves
   LinAlg::LinearSystemType linsysType; //!< Linear system type
   IS glob2LocEq = nullptr; //!< Index set for global-to-local equations.
   std::vector<Mat> matvec; //!< Blocks for block matrices.
   std::vector<IS> isvec;   //!< Index sets for block matrices.
+  Mat Sp;                  //!< Preconditioner for Schur block
+
+  std::vector<std::set<int>> blockEqs; //!< Equations belonging to each block
+  std::vector<std::array<int,3>> glb2Blk; //!< Maps matrix entries in CSC order to block matrix entries.
 };
 
 
+/*! \brief Class handling global DOF vector operations */
 class PETScDOFVectorOps : public DOFVectorOps
 {
 public:
-  //! \brief The constructor initializes the \a l2gn array.
-  //! \param[in] g2ln Global-to-local node numbers for this processor
+  //! \brief Constructor.
   //! \param[in] padm Parallel process administrator
   PETScDOFVectorOps(const ProcessAdm& padm);
   //! \brief The destructor destroys the index set arrays.
   virtual ~PETScDOFVectorOps();
+
+  //! \brief Returns true if DOF ops are active (i.e. vector is parallel).
+  bool active() const;
 
   //! \brief Computes the dot-product of two vectors.
   //! \param[in] x First vector in dot-product

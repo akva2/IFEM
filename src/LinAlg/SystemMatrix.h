@@ -346,6 +346,9 @@ class DOFVectorOps {
     //! \brief Empty destructor
     virtual ~DOFVectorOps() {}
 
+    //! \brief Returns true if we are active
+    virtual bool active() const = 0;
+
     //! \brief Computes the dot-product of two vectors.
     //! \param[in] x First vector in dot-product
     //! \param[in] y Second vector in dot-product

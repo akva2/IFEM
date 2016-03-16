@@ -7,13 +7,14 @@
 //!
 //! \author Arne Morten Kvarving / SINTEF
 //!
-//! \brief Linear solver parameters for PETSc matrices.
+//! \brief Linear solver parameters for PETSc.
 //!
 //==============================================================================
 
 #include "PETScSolParams.h"
 #include "PETScPCPerm.h"
 #include "ASMstruct.h"
+#include "LinSolParams.h"
 #include "ProcessAdm.h"
 #include "SAMpatch.h"
 #include "Utilities.h"
@@ -24,24 +25,14 @@
 #include <iterator>
 
 
-void PETScSolParams::setParams(const LinSolParams& params,
-                               const ProcessAdm& adm,
-                               KSP& ksp, 
-                               PetscRealVec& coords,
-			       ISMat& dirIndexSet, int nsd)
+void PETScSolParams::setupPC(PC& pc,
+                             size_t block,
+                             const std::string& prefix,
+                             const std::set<int>& blockEqs)
 {
-  // Set linear solver method
-  KSPSetType(ksp,params.getStringValue("type").c_str());
-  KSPSetTolerances(ksp,params.getDoubleValue("rtol"),
-                   params.getDoubleValue("atol"),
-                   params.getDoubleValue("dtol"),
-                   params.getIntValue("maxits"));
-
   // Set preconditioner
-  PC pc;
-  KSPGetPC(ksp,&pc);
-  std::string prec = params.getStringValue("pc");
-  if (!strncasecmp(prec.c_str(),"compositedir",12)) {
+  std::string prec = params.getBlock(block).getStringValue("pc");
+  if (prec == "compositedir") {
     Mat mat;
     Mat Pmat;
 #if PETSC_VERSION_MINOR < 5
@@ -50,62 +41,52 @@ void PETScSolParams::setParams(const LinSolParams& params,
 #else
     PCGetOperators(pc,&mat,&Pmat);
 #endif
-    addDirSmoother(pc,Pmat,params.getBlock(0),0,dirIndexSet);
+    //TODO: Dir smoothers are complicated by condensated DOFs
+    //addDirSmoother(pc,Pmat,params.getBlock(block),block,dirIndexSet);
   }
+  else if (prec == "asmlu")
+    PCSetType(pc,"asm");
   else
     PCSetType(pc,prec.c_str());
 
 #if PETSC_HAVE_HYPRE
-  if (!strncasecmp(prec.c_str(),"hypre",5)) {
-    PCHYPRESetType(pc,params.getBlock(0).getStringValue("hypre_type").c_str());
-    setHypreOptions("", params.getBlock(0));
+  if (prec == "hypre") {
+    PCHYPRESetType(pc,params.getBlock(block).getStringValue("hypre_type").c_str());
+    setHypreOptions(prefix, params.getBlock(block));
   }
 #endif
 
-  if (!strncasecmp(prec.c_str(),"gamg",4) || !strncasecmp(prec.c_str(),"ml",2) ) {
-    PetscInt nloc = coords.size()/nsd;
-    PCSetCoordinates(pc,nsd,nloc,&coords[0]);
-    PCGAMGSetType(pc, PCGAMGAGG); // TODO?
+  // TODO: coordinate based agglomeration won't work with condensated dofs.
+//  if (prec == "gamg" || prec == "ml") {
+//    PetscInt nloc = coords.size()/nsd;
+//    PCSetCoordinates(pc,nsd,nloc,&coords[0]);
+//    PCGAMGSetType(pc, PCGAMGAGG);
+//  }
+
+  if (prec == "asm" || prec == "gasm" || prec == "asmlu")
+    setupAdditiveSchwarz(pc, block, prec == "asmlu", false, blockEqs);
+  else if (prec == "ml")
+    setMLOptions(prefix, params.getBlock(block));
+  else if (prec == "gamg")
+    setGAMGOptions(prefix, params.getBlock(block));
+
+  PCSetFromOptions(pc);
+  PCSetUp(pc);
+
+  // Settings for coarse solver
+  if ((prec == "ml" || prec == "gamg")) {
+    if (params.getBlock(block).hasValue("multigrid_coarse_solver"))
+      setupCoarseSolver(pc, prefix, params.getBlock(block));
+    // TODO: dir smoothers
+    setupSmoothers(pc, block, ISMat(), blockEqs);
   }
-
-  if (!strncasecmp(prec.c_str(),"asm",3) || !strncasecmp(prec.c_str(),"gasm",4))
-    setupAdditiveSchwarz(pc, params.getBlock(0).getIntValue("overlap"),
-                         params.getBlock(0).getIntValue("nx"),
-                         params.getBlock(0).getIntValue("ny"),
-                         params.getBlock(0).getIntValue("nz"),
-                         prec == "asmlu", false, adm);
-  else if (!strncasecmp(prec.c_str(),"ml",2) || !strncasecmp(prec.c_str(),"gamg",4)) {
-    if (!strncasecmp(prec.c_str(),"ml",2))
-      setMLOptions("", params.getBlock(0));
-    else if (!strncasecmp(prec.c_str(),"gamg",4))
-      setGAMGOptions("", params.getBlock(0));
-
-    PCSetFromOptions(pc);
-    PCSetUp(pc);
-
-    // Settings for coarse solver
-    if (!params.getBlock(0).hasValue("ml_coarse_solver"))
-      setupCoarseSolver(pc, "", params.getBlock(0));
-
-    setupSmoothers(pc, params, 0, dirIndexSet, adm);
-  }
-  else {
-    PCSetFromOptions(pc);
-    PCSetUp(pc);
-  }
-
-  KSPSetFromOptions(ksp);
-  KSPSetUp(ksp);
-
-  MPI_Comm comm;
-  PetscObjectGetComm((PetscObject)ksp,&comm);
-  PCView(pc,PETSC_VIEWER_STDOUT_(comm));
 }
 
 
-bool PETScSolParams::addDirSmoother(PC pc, Mat P, const LinSolParams::BlockParams& block,
-                                    int iBlock, ISMat& dirIndexSet)
+bool PETScSolParams::addDirSmoother(PC pc, const Mat& P,
+                                    int iBlock, const ISMat& dirIndexSet)
 {
+  const LinSolParams::BlockParams& block = params.getBlock(iBlock);
   PCSetType(pc,"composite");
   PCCompositeSetType(pc,PC_COMPOSITE_MULTIPLICATIVE);
   for (size_t k = 0;k < block.dirSmoother.size();k++)
@@ -119,7 +100,7 @@ bool PETScSolParams::addDirSmoother(PC pc, Mat P, const LinSolParams::BlockParam
     PCShellSetContext(dirpc,pcperm);
     PCShellSetDestroy(dirpc,PCPermDestroy);
     PCShellSetName(dirpc,"dir");
-    PCPermSetUp(dirpc,&dirIndexSet[iBlock][k],P,block.dirSmoother[k].type.c_str());
+    PCPermSetUp(dirpc,const_cast<IS*>(&dirIndexSet[iBlock][k]),P,block.dirSmoother[k].type.c_str());
   }
 
   return true;
@@ -194,8 +175,8 @@ void PETScSolParams::setHypreOptions(const std::string& prefix, const SettingMap
 
 void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const SettingMap& map)
 {
-  std::string coarseSolver = map.getStringValue("ml_coarse_solver");
-  std::string coarsePackage = map.getStringValue("ml_coarse_package");
+  std::string coarseSolver = map.getStringValue("multigrid_coarse_solver");
+  std::string coarsePackage = map.getStringValue("multigrid_coarse_package");
   if (coarseSolver == "OneLevelSchwarz" ||
       coarseSolver == "TwoLevelSchwarz") {
     KSP cksp;
@@ -216,7 +197,7 @@ void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const 
       PCSetUp(spc);
     } else {
       PCSetType(spc,PCML);
-      PetscOptionsSetValue(AddPrefix(prefix,"mg_coarse_pc_ml_maxNLevels").c_str(),"2");	
+      PetscOptionsSetValue(AddPrefix(prefix,"mg_coarse_pc_ml_maxNLevels").c_str(),"2");
       PCSetFromOptions(spc);
       PCSetUp(spc);
 
@@ -238,6 +219,14 @@ void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const 
       PCSetType(subspc,PCLU);
       KSPSetType(subsksp[k],KSPPREONLY);
     }
+  } else if (coarseSolver == "lu") {
+    KSP cksp;
+    PC  cpc;
+    PCMGGetCoarseSolve(pc,&cksp);
+    KSPSetType(cksp,"preonly");
+    KSPGetPC(cksp,&cpc);
+    PCSetType(cpc,"lu");
+    PCSetUp(cpc);
   }
 
   if (!coarsePackage.empty()) {
@@ -252,8 +241,9 @@ void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const 
 }
 
 
-void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t iBlock,
-                                    ISMat& dirIndexSet, const ProcessAdm& adm)
+void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
+                                    const ISMat& dirIndexSet, 
+                                    const std::set<int>& blockEqs)
 {
   PetscInt n;
   PCMGGetLevels(pc,&n);
@@ -297,13 +287,7 @@ void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t i
     KSPGetPC(preksp,&prepc);
 
     if (smoother == "asm" || smoother == "asmlu")
-      setupAdditiveSchwarz(prepc,
-                           params.getBlock(iBlock).getIntValue("overlap"),
-                           params.getBlock(iBlock).getIntValue("nx"),
-                           params.getBlock(iBlock).getIntValue("ny"),
-                           params.getBlock(iBlock).getIntValue("nz"),
-                           smoother == "asmlu",
-                           true, adm);
+      setupAdditiveSchwarz(prepc, iBlock, smoother == "asmlu", true, blockEqs);
     else if (smoother == "compositedir" && (i==n-1)) {
       Mat mat;
       Mat Pmat;
@@ -314,7 +298,8 @@ void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t i
       PCGetOperators(prepc,&mat,&Pmat);
 #endif
 
-      addDirSmoother(prepc,Pmat,params.getBlock(iBlock),iBlock,dirIndexSet);
+      //TODO: dir smoothers are complicated by condensated DOFs
+      //addDirSmoother(prepc,Pmat,params.getBlock(iBlock),iBlock,dirIndexSet);
     }
     else
       PCSetType(prepc,smoother.c_str());
@@ -325,11 +310,15 @@ void PETScSolParams::setupSmoothers(PC& pc, const LinSolParams& params, size_t i
 }
 
 
-void PETScSolParams::setupAdditiveSchwarz(PC& pc, int overlap,
-                                          int nx, int ny, int nz, bool asmlu,
+void PETScSolParams::setupAdditiveSchwarz(PC& pc, size_t block,
+                                          bool asmlu,
                                           bool smoother,
-                                          const ProcessAdm& adm)
+                                          const std::set<int>& blockEqs)
 {
+  int overlap = params.getBlock(block).getIntValue("overlap");
+  int nx = params.getBlock(block).getIntValue("nx");
+  int ny = params.getBlock(block).getIntValue("ny");
+  int nz = params.getBlock(block).getIntValue("nz");
   IntMat locSubdDofs, subdDofs;
   if (nx+ny+nz > 0) {
     const SAMpatch* samp = adm.dd.getSAM();
@@ -347,9 +336,17 @@ void PETScSolParams::setupAdditiveSchwarz(PC& pc, int overlap,
         for (const auto& iEl : adm.dd[g]) {
           IntVec eqns;
           samp->getElmEqns(eqns, it->getElmID(iEl+1));
-          for (auto& it : eqns)
-            it--;
-          eqnSet.insert(eqns.begin(), eqns.end());
+          if (blockEqs.empty()) {
+            for (auto& it : eqns)
+              it--;
+            eqnSet.insert(eqns.begin(), eqns.end());
+          } else {
+            for (auto& it : eqns) {
+              auto it2 = blockEqs.find(it);
+              if (it2 != blockEqs.end())
+                eqnSet.insert(std::distance(blockEqs.begin(), it2));
+            }
+          }
         }
         std::copy_if(eqnSet.begin(), eqnSet.end(),
                      std::back_inserter(locSubdDofs[d]), [](const int& a) { return a > -1;});

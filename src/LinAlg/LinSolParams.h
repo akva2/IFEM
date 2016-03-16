@@ -82,7 +82,6 @@ public:
 
   //! \brief Obtain settings for a given block
   const BlockParams& getBlock(size_t i) const { return blocks[i]; }
-
 private:
   std::vector<BlockParams> blocks; //!< Parameters for each block
 };

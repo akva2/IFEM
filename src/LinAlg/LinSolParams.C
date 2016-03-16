@@ -92,18 +92,22 @@ bool LinSolParams::BlockParams::read(const TiXmlElement* elem, const std::string
       std::string v;
       if (utl::getAttribute(child, "smoother", v))
         addValue("multigrid_smoother", v);
-      if (utl::getAttribute(child, "levels", v))
+      else if (utl::getAttribute(child, "smoother", v))
+        addValue("multigrid_smoother", v);
+      else if (utl::getAttribute(child, "levels", v))
         addValue("multigrid_levels", v);
-      if (utl::getAttribute(child, "no_smooth", v)) {
+      else if (utl::getAttribute(child, "no_smooth", v)) {
         addValue("multigrid_no_smooth", v);
         addValue("multigrid_no_fine_smooth", v);
       }
-      if (utl::getAttribute(child, "finesmoother", v))
+      else if (utl::getAttribute(child, "finesmoother", v))
         addValue("multigrid_finesmoother", v);
-      if (utl::getAttribute(child, "multigrid_no_fine_smooth", v))
+      else if (utl::getAttribute(child, "multigrid_no_fine_smooth", v))
         addValue("multigrid_no_fine_smooth", v);
-      if (utl::getAttribute(child, "ksp", v))
+      else if (utl::getAttribute(child, "ksp", v))
         addValue("multigrid_ksp", v);
+      else if (utl::getAttribute(child, "coarse_solver", v))
+        addValue("multigrid_coarse_solver", v);
     } else if (!strcasecmp(child->Value(),"dirsmoother")) {
       size_t order;
       std::string type;
@@ -123,6 +127,9 @@ bool LinSolParams::BlockParams::read(const TiXmlElement* elem, const std::string
         if (value = utl::getValue(child, key.c_str()))
           addValue(prefix+key, value);
     }
+
+  if (!hasValue("multigrid_finesmoother") && hasValue("multigrid_smoother"))
+    addValue("multigrid_finesmoother", getStringValue("multigrid_smoother"));
 
   return true;
 }

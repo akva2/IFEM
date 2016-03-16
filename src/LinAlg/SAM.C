@@ -821,7 +821,7 @@ bool SAM::applyDirichlet (Vector& dofVec) const
 
 Real SAM::dot (const Vector& x, const Vector& y, char dofType) const
 {
-  if (dofOps)
+  if (dofOps && dofOps->active())
     return dofOps->dot(x, y, dofType, *this);
 
   if (nodeType.empty() || dofType == 'A')
@@ -841,7 +841,7 @@ Real SAM::dot (const Vector& x, const Vector& y, char dofType) const
 
 Real SAM::normL2 (const Vector& x, char dofType) const
 {
-  if (dofOps)
+  if (dofOps && dofOps->active())
     return dofOps->normL2(x, dofType, *this);
 
   if (x.empty())
@@ -893,7 +893,7 @@ Real SAM::normInf (const Vector& x, size_t& comp, char dofType) const
       }
   }
 
-  if (dofOps)
+  if (dofOps && dofOps->active())
     return dofOps->normInf(retVal);
 
   return retVal;
@@ -951,16 +951,17 @@ bool SAM::getNodalReactions (int inod, const Vector& rf, Vector& nrf) const
 }
 
 
-std::vector<int> SAM::getEquations(char dofType, int dof) const
+std::set<int> SAM::getEquations(char dofType, int dof) const
 {
-  std::vector<int> result;
+  std::set<int> result;
   for (int i = 1; i <= getNoNodes(); ++i) {
     if (getNodeType(i) == dofType) {
       auto dofs = getNodeDOFs(i);
-      for (int d = dof > 0 ? dof : 1; d <= dof > 0 ? dof : dofs.second-dofs.first; ++d) {
+      for (int d = (dof > 0 ? dof : 1);
+               d <= (dof > 0 ? dof : dofs.second-dofs.first+1); ++d) {
         int eq = getEquation(i, d);
         if (eq > 0)
-          result.push_back(eq);
+          result.insert(eq);
       }
     }
   }
