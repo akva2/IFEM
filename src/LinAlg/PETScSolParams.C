@@ -128,7 +128,7 @@ static void condSetup(const std::string& prefix, const std::string& petsc_option
 void PETScSolParams::setMLOptions(const std::string& prefix, const SettingMap& map)
 {
   condSetup(prefix, "pc_ml_maxNLevels", "multigrid_levels", map);
-  condSetup(prefix, "pc_ml_maxCoarseSize", "ml_max_coarse_size", map);
+  condSetup(prefix, "pc_ml_maxCoarseSize", "multigrid_max_coarse_size", map);
   condSetup(prefix, "pc_ml_maxCoarsenScheme", "ml_coarsen_scheme", map);
   condSetup(prefix, "pc_ml_Threshold", "ml_threshold", map);
   condSetup(prefix, "pc_ml_DampingFactor", "ml_damping_factor", map);
@@ -250,6 +250,13 @@ void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
 
   std::string mgKSP = params.getBlock(iBlock).getStringValue("multigrid_ksp");
 
+  // warn that richardson might break symmetry if the KSP is CG
+  if (mgKSP == "defrichardson" && params.getStringValue("type") == KSPCG)
+    std::cerr << "**PETScMatrix** WARNING: Using multigrid with Richardson on sublevels.\n"
+              << "If you get divergence with KSP_DIVERGED_INDEFINITE_PC, try\n"
+              << "adding ksp=\"chebyshev\" to the multigrid tag.\n"
+              << "Add ksp=\"richardson\" to quell this warning." << std::endl;
+
   // Presmoother settings
   for (int i = 1;i < n;i++) {
     KSP preksp;
@@ -260,13 +267,6 @@ void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
     PetscInt noSmooth;
 
     PCMGGetSmoother(pc,i,&preksp);
-
-    // warn that richardson might break symmetry if the KSP is CG
-    if (mgKSP == "defrichardson" && params.getStringValue("type") == KSPCG)
-      std::cerr << "WARNING: Using multigrid with Richardson on sublevels.\n"
-                << "If you get divergence with KSP_DIVERGED_INDEFINITE_PC, try\n"
-                << "adding <mgksp>chebyshev</mgksp. Add <mgksp>richardson</mgksp>\n"
-                << "to quell this warning." << std::endl;
 
     if (mgKSP == "richardson" || mgKSP == "defrichardson")
       KSPSetType(preksp,KSPRICHARDSON);

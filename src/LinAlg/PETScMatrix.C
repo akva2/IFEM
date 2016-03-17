@@ -481,7 +481,7 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     return false;
   }
 
-  if (solParams.get().getIntValue("message_level") > 1) {
+  if (solParams.get().getIntValue("verbosity") > 1) {
     PetscInt its;
     KSPGetIterationNumber(ksp,&its);
     PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %D\n",solParams.get().getStringValue("type").c_str(),its);
@@ -631,8 +631,8 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
   KSPSetFromOptions(ksp);
   KSPSetUp(ksp);
 
-  PCView(pc,PETSC_VIEWER_STDOUT_(*adm.getCommunicator()));
-  KSPView(ksp, PETSC_VIEWER_STDOUT_(*adm.getCommunicator()));
+  if (solParams.get().getIntValue("verbosity") >= 1)
+    KSPView(ksp, PETSC_VIEWER_STDOUT_(*adm.getCommunicator()));
 
   return true;
 }

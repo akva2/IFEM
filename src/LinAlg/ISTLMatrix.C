@@ -20,9 +20,14 @@
 #include "Profiler.h"
 #include "SAMpatch.h"
 #include "DomainDecomposition.h"
+#include <dune/common/version.hh>
 #include <dune/istl/overlappingschwarz.hh>
 #include <dune/istl/superlu.hh>
 #include <dune/istl/paamg/amg.hh>
+#if DUNE_VERSION_NEWER(DUNE_ISTL, 2, 3)
+#include <dune/istl/paamg/fastamg.hh>
+#include <dune/istl/paamg/twolevelmethod.hh>
+#endif
 
 
 ISTLVector::ISTLVector(const ProcessAdm& padm) : adm(padm)
@@ -210,26 +215,30 @@ static Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*
   std::string type = solParams.getStringValue("type");
   double rtol = solParams.getDoubleValue("rtol");
   int maxits = solParams.getIntValue("maxits");
-  int verbosity = solParams.getIntValue("linearsolver_verbosity");
+  int verbosity = solParams.getIntValue("verbosity");
   if (type == "bcgs")
     return new Dune::BiCGSTABSolver<ISTLMatrix::Vec>(op, pre, rtol, maxits, verbosity);
   else if (type == "cg")
     return new Dune::CGSolver<ISTLMatrix::Vec>(op, pre, rtol, maxits, verbosity);
   else if (type == "minres")
     return new Dune::MINRESSolver<ISTLMatrix::Vec>(op, pre, rtol, maxits, verbosity);
-  else if (type == "gmres")
-    return new Dune::RestartedGMResSolver<ISTLMatrix::Vec>(op, pre, rtol, solParams.getIntValue("gmres_restart_iterations"),
-                                                           maxits, verbosity);
+  else if (type == "gmres") {
+    int restart = solParams.getIntValue("gmres_restart_iterations");
+    return new Dune::RestartedGMResSolver<ISTLMatrix::Vec>(op, pre, rtol,
+                                                           restart, maxits, verbosity);
+  } else
+    std::cerr << "**ISTLMatrix** Unknown solver type " << type << "." << std::endl;
 
   return nullptr;
 }
 
+/*! \brief Helper template for setting up an AMG preconditioner with a given smoother */
 
 template<class Smoother>
 static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
                  Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> 
   setupAMG(const LinSolParams& params, size_t block,
-           Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op)
+           Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op, int nsd)
 {
   // The coupling metric used in the AMG
   typedef Dune::Amg::FirstDiagonal CouplingMetric;
@@ -243,6 +252,21 @@ static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
   typename AMG::SmootherArgs args;
   args.relaxationFactor = 1.0;
   args.iterations = std::max(1, params.getBlock(block).getIntValue("multigrid_no_smooth"));
+
+  if (params.getBlock(block).hasValue("multigrid_max_coarse_size"))
+    crit.setCoarsenTarget(params.getBlock(block).getIntValue("multigrid_max_coarse_size"));
+
+  if (params.getBlock(block).hasValue("multigrid_no_smooth")) {
+    int val = params.getBlock(block).getIntValue("multigrid_no_smooth");
+    crit.setNoPreSmoothSteps(val);
+    crit.setNoPostSmoothSteps(val);
+  }
+
+  if (params.getBlock(block).hasValue("multigrid_max_coarse_size"))
+    crit.setCoarsenTarget(params.getBlock(block).getIntValue("multigrid_max_coarse_size"));
+
+  crit.setDefaultValuesIsotropic(nsd);
+
   std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
             Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> res;
 
@@ -251,6 +275,89 @@ static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
 
   return res;
 }
+
+
+#if DUNE_VERSION_NEWER(DUNE_ISTL, 2, 3)
+/*! \brief Helper template for setting up a AMG preconditioner
+ *!        with fine smoother differing from the other levels */
+
+template<class FineSmoother, class Smoother>
+static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
+                 Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> 
+  setupAMG2_full(const LinSolParams& params, size_t block,
+                 Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op, int nsd,
+                 FineSmoother* fsmooth)
+{
+  typedef Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec> Operator;
+  typedef Dune::Amg::FirstDiagonal CouplingMetric;
+  typedef Dune::Amg::SymmetricCriterion<ISTLMatrix::Mat,CouplingMetric> CritBase;
+  typedef Dune::Amg::CoarsenCriterion<CritBase> Criterion;
+  typedef Dune::Amg::AggregationLevelTransferPolicy<Operator,Criterion> TransferPolicy;
+  typedef Dune::Amg::OneStepAMGCoarseSolverPolicy<Operator,Smoother,Criterion> CoarsePolicy;
+  typedef typename Dune::Amg::SmootherTraits<Smoother>::Arguments SmootherArgs;
+  typedef typename Dune::Amg::TwoLevelMethod<Operator, CoarsePolicy, FineSmoother> AMG2;
+
+  SmootherArgs args;
+  args.relaxationFactor = 1.0;
+
+  Criterion crit;
+  if (params.getBlock(block).hasValue("multigrid_max_coarse_size"))
+    crit.setCoarsenTarget(params.getBlock(block).getIntValue("multigrid_max_coarse_size"));
+
+  if (params.getBlock(block).hasValue("multigrid_no_smooth")) {
+    int val = params.getBlock(block).getIntValue("multigrid_no_smooth");
+    crit.setNoPreSmoothSteps(val);
+    crit.setNoPostSmoothSteps(val);
+  }
+
+  if (params.getBlock(block).hasValue("multigrid_max_coarse_size"))
+    crit.setCoarsenTarget(params.getBlock(block).getIntValue("multigrid_max_coarse_size"));
+
+  crit.setDefaultValuesIsotropic(nsd);
+
+  CoarsePolicy coarsePolicy(args, crit);
+  TransferPolicy policy(crit);
+  std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
+            Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> res;
+  Dune::shared_ptr<FineSmoother> fsp(fsmooth);
+  res.second = new AMG2(op, fsp, policy, coarsePolicy);
+  res.first = setupWithPreType<AMG2>(params, op, *res.second);
+
+  return res;
+}
+
+
+template<class FineSmoother>
+static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
+                 Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> 
+  setupAMG2_smoother(const LinSolParams& params, size_t block,
+                     Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op, int nsd, FineSmoother* fsmooth)
+{
+  std::string smoother = params.getBlock(block).getStringValue("multigrid_smoother");
+  if (params.getBlock(block).getStringValue("multigrid_smoother") == "ssor")
+    return setupAMG2_full<FineSmoother,Dune::SeqSSOR<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>>(params, block, op, nsd, fsmooth);
+  else {
+    std::cerr << "**ISTLMatrix** Invalid smoother " << smoother << "." << std::endl;
+    return {nullptr, nullptr};
+  }
+}
+
+
+static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
+                 Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> 
+  setupAMG2(const LinSolParams& params, size_t block,
+            Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op, int nsd)
+{
+  std::string smoother = params.getBlock(block).getStringValue("multigrid_finesmoother");
+  if (params.getBlock(block).getStringValue("multigrid_finesmoother") == "ilu") {
+    auto fsmooth = new Dune::SeqILU0<ISTLMatrix::Mat, ISTLMatrix::Vec, ISTLMatrix::Vec>(op.getmat(), 1.0);
+    return setupAMG2_smoother(params, block, op, nsd, fsmooth);
+  } else {
+    std::cerr << "**ISTLMatrix** Invalid fine smoother " << smoother << "." << std::endl;
+    return {nullptr, nullptr};
+  }
+}
+#endif
 
 
 void ISTLMatrix::setupSolver()
@@ -337,27 +444,49 @@ void ISTLMatrix::setupSolver()
                 Dune::Preconditioner<ISTLMatrix::Vec, ISTLMatrix::Vec>*> res {nullptr, nullptr};
       if (solParams.getBlock(0).getStringValue("multigrid_smoother") !=
           solParams.getBlock(0).getStringValue("multigrid_finesmoother")) {
+#if DUNE_VERSION_NEWER(DUNE_ISTL, 2, 3)
+        auto res = setupAMG2(solParams, 0, op, adm.dd.getNoSpaceDim());
+        solver.reset(res.first);
+        pre.reset(res.second);
+#else
         std::cerr << "**ISTLMatrix** Separate fine smoother not implemented." << std::endl;
         return;
-      }
+#endif
+      } else {
+        std::string smoother = solParams.getBlock(0).getStringValue("multigrid_smoother");
+        if (smoother.empty()) {
+          std::cerr << "** ISTLMatrix ** No smoother defined for AMG, defaulting to ILU" << std::endl;
+          smoother = "ilu";
+        }
+        if (smoother == "ilu")
+          res = setupAMG<Dune::SeqILU0<Mat,Vec,Vec>>(solParams, 0, op, adm.dd.getNoSpaceDim());
+        else if (smoother == "sor")
+          res = setupAMG<Dune::SeqSOR<Mat,Vec,Vec>>(solParams, 0, op, adm.dd.getNoSpaceDim());
+        else if (smoother == "ssor")
+          res = setupAMG<Dune::SeqSSOR<Mat,Vec,Vec>>(solParams, 0, op, adm.dd.getNoSpaceDim());
+        else if (smoother == "jacobi")
+          res = setupAMG<Dune::SeqJac<Mat,Vec,Vec>>(solParams, 0, op, adm.dd.getNoSpaceDim());
 
-      std::string smoother = solParams.getBlock(0).getStringValue("multigrid_smoother");
-      if (smoother.empty()) {
-        std::cerr << "** ISTLMatrix ** No smoother defined for AMG, defaulting to ILU" << std::endl;
-        smoother = "ilu";
+        solver.reset(res.first);
+        pre.reset(res.second);
       }
-      if (smoother == "ilu")
-        res = setupAMG<Dune::SeqILU0<Mat,Vec,Vec>>(solParams, 0, op);
-      else if (smoother == "sor")
-        res = setupAMG<Dune::SeqSOR<Mat,Vec,Vec>>(solParams, 0, op);
-      else if (smoother == "ssor")
-        res = setupAMG<Dune::SeqSSOR<Mat,Vec,Vec>>(solParams, 0, op);
-      else if (smoother == "jacobi")
-        res = setupAMG<Dune::SeqJac<Mat,Vec,Vec>>(solParams, 0, op);
-
-      solver.reset(res.first);
-      pre.reset(res.second);
     }
+#if DUNE_VERSION_NEWER(DUNE_ISTL, 2, 3)
+    else if (prec == "fastamg") {
+      // The coupling metric used in the AMG
+      typedef Dune::Amg::FirstDiagonal CouplingMetric;
+      // The coupling criterion used in the AMG
+      typedef Dune::Amg::SymmetricCriterion<ISTLMatrix::Mat, CouplingMetric> CritBase;
+      // The coarsening criterion used in the AMG
+      typedef Dune::Amg::CoarsenCriterion<CritBase> Criterion;
+      Criterion crit;
+
+      pre.reset(new Dune::Amg::FastAMG<Operator,Vec>(op, crit));
+      solver.reset(setupWithPreType<Dune::Amg::FastAMG<Operator,Vec>>(solParams, op, *pre));
+    }
+#endif
+    else
+      std::cerr << "**ISTLMatrix** Unknown preconditioner " << prec << "." << std::endl;
   }
 }
 

@@ -77,6 +77,7 @@ LinSolParams::LinSolParams()
   addValue("dtol", "1e6");
   addValue("maxits", "1000");
   addValue("gmres_restart_iterations", "100");
+  addValue("verbosity", "1");
 }
 
 
@@ -92,22 +93,24 @@ bool LinSolParams::BlockParams::read(const TiXmlElement* elem, const std::string
       std::string v;
       if (utl::getAttribute(child, "smoother", v))
         addValue("multigrid_smoother", v);
-      else if (utl::getAttribute(child, "smoother", v))
+      if (utl::getAttribute(child, "smoother", v))
         addValue("multigrid_smoother", v);
-      else if (utl::getAttribute(child, "levels", v))
+      if (utl::getAttribute(child, "levels", v))
         addValue("multigrid_levels", v);
-      else if (utl::getAttribute(child, "no_smooth", v)) {
+      if (utl::getAttribute(child, "no_smooth", v)) {
         addValue("multigrid_no_smooth", v);
         addValue("multigrid_no_fine_smooth", v);
       }
-      else if (utl::getAttribute(child, "finesmoother", v))
+      if (utl::getAttribute(child, "finesmoother", v))
         addValue("multigrid_finesmoother", v);
-      else if (utl::getAttribute(child, "multigrid_no_fine_smooth", v))
+      if (utl::getAttribute(child, "multigrid_no_fine_smooth", v))
         addValue("multigrid_no_fine_smooth", v);
-      else if (utl::getAttribute(child, "ksp", v))
+      if (utl::getAttribute(child, "ksp", v))
         addValue("multigrid_ksp", v);
-      else if (utl::getAttribute(child, "coarse_solver", v))
+      if (utl::getAttribute(child, "coarse_solver", v))
         addValue("multigrid_coarse_solver", v);
+      if (utl::getAttribute(child, "max_coarse_size", v))
+        addValue("multigrid_max_coarse_size", v);
     } else if (!strcasecmp(child->Value(),"dirsmoother")) {
       size_t order;
       std::string type;
@@ -139,11 +142,14 @@ bool LinSolParams::read (const TiXmlElement* elem)
 {
   const char* value = 0;
 
+  if (elem->Attribute("verbosity"))
+    addValue("verbosity", elem->Attribute("verbosity"));
+
   const TiXmlElement* child = elem->FirstChildElement();
   for (; child; child = child->NextSiblingElement())
     if ((value = utl::getValue(child,"type")))
       addValue("type", value);
-    else if ((value = utl::getValue(child,"noStepBeforeReset")))
+    else if ((value = utl::getValue(child,"gmres_restart_iterations")))
       addValue("gmres_restart_iterations", value);
     else if ((value = utl::getValue(child,"pc")))
       addValue("pc", value);
