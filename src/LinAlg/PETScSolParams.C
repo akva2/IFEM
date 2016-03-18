@@ -268,10 +268,10 @@ void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
 
     PCMGGetSmoother(pc,i,&preksp);
 
-    if (mgKSP == "richardson" || mgKSP == "defrichardson")
+    if (mgKSP == "defrichardson")
       KSPSetType(preksp,KSPRICHARDSON);
-    else if (mgKSP == "chebyshev")
-      KSPSetType(preksp,KSPCHEBYSHEV);
+    else
+      KSPSetType(preksp,mgKSP.c_str());
 
     std::string finesmoother = params.getBlock(iBlock).getStringValue("multigrid_finesmoother");
     if ((i == n-1) && !finesmoother.empty()) {

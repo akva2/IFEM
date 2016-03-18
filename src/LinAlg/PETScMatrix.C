@@ -266,18 +266,21 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     }
 
     // nnz per block
-    std::vector<std::vector<PetscInt>> nnz(solParams.get().getNoBlocks());
-    for (size_t i = 0; i < solParams.get().getNoBlocks(); ++i)
-      for (const auto& it : blockEqs[i])
-        nnz[i].push_back(dofc[it-1].size());
+    size_t blocks = solParams.get().getNoBlocks();
+    std::vector<std::vector<PetscInt>> nnz(blocks*blocks);
+    size_t k = 0;
+    for (size_t i = 0; i < blocks; ++i)
+      for (size_t j = 0; j < blocks; ++j, ++k)
+        for (const auto& it : blockEqs[i])
+          nnz[k].push_back(std::min(dofc[it-1].size(), blockEqs[j].size()));
 
     auto it = matvec.begin();
-    for (size_t i = 0; i < solParams.get().getNoBlocks(); ++i)
-      for (size_t j = 0; j < solParams.get().getNoBlocks(); ++j, ++it) {
+    for (size_t i = 0; i < blocks; ++i)
+      for (size_t j = 0; j < blocks; ++j, ++it) {
         MatSetSizes(*it, blockEqs[i].size(), blockEqs[j].size(),
                     PETSC_DETERMINE, PETSC_DETERMINE);
         MatSetFromOptions(*it);
-        MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz[i].data());
+        MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz[i*blocks+j].data());
         MatSetUp(*it);
       }
 
@@ -577,6 +580,10 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
   if (matvec.empty()) {
     solParams.setupPC(pc, 0, "", std::set<int>());
   } else {
+    if (matvec.size() > 4) {
+      std::cerr << "** PETSCMatrix ** Only two blocks supported for now." << std::endl;
+      return false;
+    }
     PCSetType(pc,PCFIELDSPLIT);
     PetscInt m1, m2, n1, n2, nr, nc, nsplit;
     KSP  *subksp;
@@ -593,18 +600,18 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
     MatGetDiagonal(matvec[0],diagA00);
 
     VecReciprocal(diagA00);
-//    VecScale(diagA00,-1.0); TODO: WHY?
     MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
     MatMatMult(matvec[2],matvec[1],MAT_INITIAL_MATRIX,PETSC_DEFAULT,&Sp);
     VecReciprocal(diagA00);
     MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
     VecDestroy(&diagA00);
     MatGetSize(Sp,&nr,&nc);
-    MatAXPY(Sp,1.0,matvec[3],DIFFERENT_NONZERO_PATTERN);
+    MatAXPY(Sp,-1.0,matvec[3],DIFFERENT_NONZERO_PATTERN);
     PCFieldSplitSetIS(pc,"u",isvec[0]);
     PCFieldSplitSetIS(pc,"p",isvec[1]);
     PCFieldSplitSetType(pc,PC_COMPOSITE_SCHUR);
     PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
+//    MatCreateSchurComplement(matvec[0],matvec[0],matvec[1],matvec[2],matvec[3],&Sp);
     PCSetFromOptions(pc);
     PCSetUp(pc);
     PCFieldSplitGetSubKSP(pc,&nsplit,&subksp);

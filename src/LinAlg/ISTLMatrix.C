@@ -30,6 +30,95 @@
 #endif
 
 
+//! \brief Implements a Schur-complement based block preconditioner */
+  template<class P1, class P2>
+class SchurPreconditioner : public Dune::Preconditioner<Vector,Vector> {
+  public:
+    // define the category
+    enum {
+      //! \brief The category the preconditioner is part of.
+      category=Dune::SolverCategory::sequential
+    };
+
+    //! \brief Constructor
+    //! \param[in] P The multiplier block with diagonal A approximation
+    //! \param[in] B The mortar coupling matrix
+    //! \param[in] Apre_ A preconfigured preconditioner for A
+    //! \param[in] symmetric If true, use symmetric preconditioning
+    SchurPreconditioner(const P1& P1, const P2& p2,
+      Apre(Apre_), B(B_), N(B.N()), M(B.M()),
+      Lpre(P_, false, false), symmetric(symmetric_)
+    {
+    }
+
+    //! \brief Destructor
+    virtual ~MortarSchurPre()
+    {
+    }
+
+    //! \brief Preprocess preconditioner
+    virtual void pre(Vector& x, Vector& b)
+    {
+      // extract displacement DOFs
+      Vector tempx, tempb;
+      MortarUtils::extractBlock(tempx, x, N);
+      MortarUtils::extractBlock(tempb, b, N);
+      Apre.pre(tempx, tempb);
+      MortarUtils::injectBlock(x, tempx, N);
+      MortarUtils::injectBlock(b, tempb, N);
+    }
+
+    //! \brief Applies the preconditioner
+    //! \param[out] v The resulting vector
+    //! \param[in] d The vector to apply the preconditioner to
+    virtual void apply(Vector& v, const Vector& d)
+    {
+      // multiplier block (second row)
+      Vector temp;
+      MortarUtils::extractBlock(temp, d, M, N);
+      Dune::InverseOperatorResult r;
+      Vector temp2;
+      temp2.resize(temp.size(), false);
+      Lpre.apply(temp2, temp, r);
+      MortarUtils::injectBlock(v, temp2, M, N);
+
+      // elasticity block (first row)
+      MortarUtils::extractBlock(temp, d, N);
+      if (!symmetric)
+        B.mmv(temp2, temp);
+
+      temp2.resize(N, false);
+      temp2 = 0;
+      Apre.apply(temp2, temp);
+      MortarUtils::injectBlock(v, temp2, N);
+    }
+
+    //! \brief Dummy post-process function
+    virtual void post(Vector& x)
+    {
+      Apre.post(x);
+    }
+  protected:
+    //! \brief The preconditioner for the elasticity operator
+    PrecondElasticityBlock& Apre;
+
+    //! \brief The mortar coupling matrix
+    const Matrix& B;
+
+    //! \brief Number of displacement DOFs
+    int N;
+
+    //! \brief Number of multiplier DOFs
+    int M;
+
+    //! \brief Linear solver for the multiplier block
+    LUSolver Lpre;
+
+    //! \brief Whether or not to use a symmetric preconditioner
+    bool symmetric; 
+};
+
+
 ISTLVector::ISTLVector(const ProcessAdm& padm) : adm(padm)
 {
   LinAlgInit::increfs();
