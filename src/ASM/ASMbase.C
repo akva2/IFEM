@@ -207,6 +207,45 @@ bool ASMbase::addLagrangeMultipliers (size_t iel, const IntVec& mGLag,
 }
 
 
+bool ASMbase::addGlobalLagrangeMultipliers(const IntVec& mGLag,
+                                           unsigned char nnLag)
+{
+  if (shareFE == 'F')
+    return false;
+
+  for (size_t i = 0; i < mGLag.size(); i++)
+  {
+    size_t node = MLGN.size();
+    IntVec::const_iterator it = std::find(MLGN.begin(),MLGN.end(),mGLag[i]);
+    if (it == MLGN.end())
+      myMLGN.push_back(mGLag[i]); // Add a new Lagrange multiplier node
+    else
+      node = it - MLGN.begin(); // Existing Lagrange multiplier node
+
+    // Update the nodal range (1-based indices) of the Lagrange multipliers
+    if (myLMs.first == 0)
+      myLMs.first = myLMs.second = node+1;
+    else if (node+1 < myLMs.first)
+    {
+      std::cerr <<" *** ASMbase::addGlobalLagrangeMultiplier: Node "<< node+1
+		<<" out of range ["<< myLMs.first <<","<< myLMs.second
+		<<"]."<< std::endl;
+      return false;
+    }
+    else if (node >= myLMs.second)
+      myLMs.second = node+1;
+
+    // Extend the element connectivity table
+    for (auto& it : myMNPC)
+      it.push_back(node);
+  }
+
+  nLag = nnLag;
+
+  return true;
+}
+
+
 size_t ASMbase::getNodeIndex (int globalNum, bool) const
 {
   IntVec::const_iterator it = std::find(MLGN.begin(),MLGN.end(),globalNum);
