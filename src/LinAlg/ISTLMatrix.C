@@ -160,16 +160,11 @@ void ISTLMatrix::initAssembly (const SAM& sam, bool b)
     sum += it.size();
 
   A.setSize(rows(), cols(), sum);
-  A.setBuildMode(Mat::random);
+  A.setBuildMode(Mat::row_wise);
 
-  for (size_t i = 0; i < dofc.size(); ++i)
-    A.setrowsize(i,dofc[i].size());
-  A.endrowsizes();
-
-  for (size_t i = 0; i < dofc.size(); ++i)
-    for (const auto& it : dofc[i])
-      A.addindex(i, it-1);
-  A.endindices();
+  for (auto row = A.createbegin(); row != A.createend(); ++row)
+    for (const auto& it : dofc[row.index()])
+      row.insert(it-1);
 }
 
 bool ISTLMatrix::beginAssembly()
@@ -296,7 +291,6 @@ static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
   typedef Dune::Amg::OneStepAMGCoarseSolverPolicy<Operator,Smoother,Criterion> CoarsePolicy;
   typedef typename Dune::Amg::SmootherTraits<Smoother>::Arguments SmootherArgs;
   typedef typename Dune::Amg::TwoLevelMethod<Operator, CoarsePolicy, FineSmoother> AMG2;
-
   SmootherArgs args;
   args.relaxationFactor = 1.0;
 
@@ -334,8 +328,18 @@ static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
                      Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op, int nsd, FineSmoother* fsmooth)
 {
   std::string smoother = params.getBlock(block).getStringValue("multigrid_smoother");
-  if (params.getBlock(block).getStringValue("multigrid_smoother") == "ssor")
+  if (smoother == "ssor")
     return setupAMG2_full<FineSmoother,Dune::SeqSSOR<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>>(params, block, op, nsd, fsmooth);
+  else if (smoother == "sor")
+    return setupAMG2_full<FineSmoother,Dune::SeqSOR<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>>(params, block, op, nsd, fsmooth);
+  else if (smoother == "jacobi")
+    return setupAMG2_full<FineSmoother,Dune::SeqJac<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>>(params, block, op, nsd, fsmooth);
+  else if (smoother == "ilu") {
+    int level = params.getBlock(block).getIntValue("ilu_fill_level");
+    if (level > 0)
+      std:: cerr << "**ISTLMATRIX ** ILU(n) smoothing currently not available, using ILU(0)." << std::endl;
+    return setupAMG2_full<FineSmoother,Dune::SeqILU0<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>>(params, block, op, nsd, fsmooth);
+  }
   else {
     std::cerr << "**ISTLMatrix** Invalid smoother " << smoother << "." << std::endl;
     return {nullptr, nullptr};
@@ -348,12 +352,16 @@ static std::pair<Dune::InverseOperator<ISTLMatrix::Vec,ISTLMatrix::Vec>*,
   setupAMG2(const LinSolParams& params, size_t block,
             Dune::MatrixAdapter<ISTLMatrix::Mat,ISTLMatrix::Vec,ISTLMatrix::Vec>& op, int nsd)
 {
-  std::string smoother = params.getBlock(block).getStringValue("multigrid_finesmoother");
-  if (params.getBlock(block).getStringValue("multigrid_finesmoother") == "ilu") {
+  std::string fsmoother = params.getBlock(block).getStringValue("multigrid_finesmoother");
+  int nosmooth = std::max(1, params.getBlock(block).getIntValue("multigrid_no_fine_smooth"));
+  if (fsmoother == "ilu") {
     auto fsmooth = new Dune::SeqILU0<ISTLMatrix::Mat, ISTLMatrix::Vec, ISTLMatrix::Vec>(op.getmat(), 1.0);
     return setupAMG2_smoother(params, block, op, nsd, fsmooth);
+  } else if (fsmoother == "ssor") {
+    auto fsmooth = new Dune::SeqSSOR<ISTLMatrix::Mat, ISTLMatrix::Vec, ISTLMatrix::Vec>(op.getmat(), nosmooth, 1.0);
+    return setupAMG2_smoother(params, block, op, nsd, fsmooth);
   } else {
-    std::cerr << "**ISTLMatrix** Invalid fine smoother " << smoother << "." << std::endl;
+    std::cerr << "**ISTLMatrix** Invalid fine smoother " << fsmoother << "." << std::endl;
     return {nullptr, nullptr};
   }
 }

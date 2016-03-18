@@ -65,19 +65,20 @@ bool SettingMap::hasValue(const std::string& key) const
 LinSolParams::BlockParams::BlockParams() :
   basis(1), comps(0)
 {
+  addValue("pc", "ilu");
   addValue("multigrid_ksp", "defrichardson");
 }
 
 LinSolParams::LinSolParams()
 {
   addValue("type", "gmres");
-  addValue("pc", "ilu");
   addValue("rtol", "1e-6");
   addValue("atol", "1e-20");
   addValue("dtol", "1e6");
   addValue("maxits", "1000");
   addValue("gmres_restart_iterations", "100");
   addValue("verbosity", "1");
+  blocks.resize(1);
 }
 
 
@@ -146,6 +147,7 @@ bool LinSolParams::read (const TiXmlElement* elem)
     addValue("verbosity", elem->Attribute("verbosity"));
 
   const TiXmlElement* child = elem->FirstChildElement();
+  size_t bid = 0;
   for (; child; child = child->NextSiblingElement())
     if ((value = utl::getValue(child,"type")))
       addValue("type", value);
@@ -156,7 +158,7 @@ bool LinSolParams::read (const TiXmlElement* elem)
     else if ((value = utl::getValue(child,"schurpc")))
       addValue("schurpc", value);
     else if (!strcasecmp(child->Value(),"block")) {
-      blocks.resize(blocks.size()+1);
+      blocks.resize(++bid);
       blocks.back().read(child);
     }
     else if ((value = utl::getValue(child,"atol")))
@@ -168,10 +170,8 @@ bool LinSolParams::read (const TiXmlElement* elem)
     else if ((value = utl::getValue(child,"maxits")))
       addValue("maxits", value);
 
-  if (blocks.size() == 0) {
-    blocks.resize(1);
+  if (blocks.size() == 1 && bid == 0)
     blocks.back().read(elem);
-  }
 
   return true;
 }
