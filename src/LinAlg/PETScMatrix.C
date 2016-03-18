@@ -256,8 +256,13 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
           std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType, (int)(*t - '0'));
           blockEqs[i].insert(tmp.begin(), tmp.end());
         }
-      } else
+      } else {
         blockEqs[i] = adm.dd.getSAM()->getEquations(dofType);
+        if (dofType == 'P') { // hack
+          std::set<int> tmp = adm.dd.getSAM()->getEquations('L', 1);
+          blockEqs[i].insert(tmp.begin(), tmp.end());
+        }
+      }
     }
 
     // nnz per block
