@@ -248,9 +248,11 @@ private:
   size_t nrow;   //!< Number of matrix rows
   size_t ncol;   //!< Number of matrix columns
 
+protected:
   IntVec IA; //!< Identifies the beginning of each row or column
   IntVec JA; //!< Specifies column/row index of each nonzero element
   Vector  A; //!< Stores the nonzero matrix elements
+private:
   ValueMap       elem; //!< Stores nonzero matrix elements with index pairs
   SparseSolver solver; //!< Which equation solver to use
   SuperLUdata*    slu; //!< Matrix data for the SuperLU equation solver
