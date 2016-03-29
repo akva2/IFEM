@@ -34,8 +34,8 @@ LinAlgInit::LinAlgInit (int argc, char** argv)
 #elif defined(HAS_PETSC)
   PetscInitialize(&argc,&argv,(char*)0,PETSC_NULL);
 #endif
-#ifdef PARALLEL_PETSC
-  MPI_Comm_rank(PETSC_COMM_WORLD,&myPid);
+#ifdef HAVE_MPI
+  MPI_Comm_rank(MPI_COMM_WORLD,&myPid);
 #else
   myPid = 0;
 #endif

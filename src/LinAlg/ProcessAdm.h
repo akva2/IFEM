@@ -42,10 +42,17 @@ public:
 
   //! \brief Construct an empty (serial) process administrator.
   ProcessAdm();
-#ifdef HAS_PETSC
+#if defined(HAS_PETSC) || defined(HAVE_MPI)
   //! \brief Construct a parallel process administrator.
   ProcessAdm(MPI_Comm& mpi_comm);
 #endif
+
+#ifdef HAVE_MPI
+  //! \brief Construct a parallel process administrator.
+  //! \details This overload is necessary due to MPI_COMM_WORLD being .. ickily.
+  ProcessAdm(bool hack);
+#endif
+
   //! \brief The destructor releases the process administrator.
   ~ProcessAdm();
 
