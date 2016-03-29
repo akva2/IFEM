@@ -63,6 +63,9 @@ public:
   const int* getMADOF() const { return madof; }
   //! \brief Returns the Matrix of EQuation Numbers.
   const int* getMEQN() const { return meqn; }
+  //! \brief Returns the nodes for a given dofType.
+  //! \param nodeType Type of node
+  std::set<int> getNodes(char nodeType) const;
 
   //! \brief Returns max number of DOF couplings in the model.
   int getMaxDofCouplings() const;

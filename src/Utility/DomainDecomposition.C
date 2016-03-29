@@ -13,6 +13,7 @@
 
 #include "DomainDecomposition.h"
 #include "ASMbase.h"
+#include "LinSolParams.h"
 #include "ProcessAdm.h"
 #include "SAMpatch.h"
 #include "SIMbase.h"
@@ -249,8 +250,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
     adm.send(sim.getSAM()->getNoEquations(), 1);
 
   MLGEQ.resize(sim.getSAM()->getNoEquations());
-  for (int i = 0; i < sim.getSAM()->getNoEquations();++i)
-    MLGEQ[i] = i + 1 + nEq;
+  std::iota(MLGEQ.begin(), MLGEQ.end(), 1+nEq);
 
   minEq = nEq+1;
   maxEq = nEq;
@@ -373,9 +373,155 @@ int DomainDecomposition::getGlobalEq(int lEq) const
 }
 
 
-bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
+bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim,
+                                const LinSolParams* spar)
 {
   nsd = sim.getNoSpaceDim();
   sam = dynamic_cast<const SAMpatch*>(sim.getSAM());
-  return calcGlobalNodeNumbers(adm, sim) && calcGlobalEqNumbers(adm, sim);
+
+  // calculate global node numbers for the model
+  if (!calcGlobalNodeNumbers(adm, sim))
+    return false;
+  
+  // blocks - calculate global eq numbers for each block
+  if (spar && spar->getNoBlocks() > 1)
+    if (!setupBlocks(*spar, adm, sim))
+      return false;
+
+  // calculate global eq numbers for entire matrix
+  if (!calcGlobalEqNumbers(adm, sim)) 
+    return false;
+
+  return true;
+}
+
+
+bool DomainDecomposition::setupBlocks(const LinSolParams& solParams,
+                                      const ProcessAdm& adm,
+                                      const SIMbase& sim)
+{
+  blocks.resize(solParams.getNoBlocks());
+  for (size_t i = 0; i < solParams.getNoBlocks(); ++i) {
+    std::map<int, int> s2b; // maps from local system to block equations
+
+    MatrixBlock& block = blocks[i];
+
+    if (adm.getProcId() > 0)
+      adm.receive(block.minEq, adm.getProcId()-1);
+    block.maxEq = block.minEq;
+
+    // map our equations
+    size_t idx = 0;
+    for (int b = solParams.getBlock(i).basis; b > 0; b /= 10) {
+      int basis = b % 10;
+      char dofType = basis == 1 ? 'D' : 'P'+basis-2;
+      std::set<int> nodes = sam->getNodes(dofType);
+      for (const auto& it : nodes) {
+        auto dofs = sam->getNodeDOFs(it);
+        for (int d = dofs.first; d <= dofs.second; ++d) {
+          int e = sam->getEquation(it, d-dofs.first+1);
+          if (e > 0) {
+            block.eqs.push_back(e);
+            block.MLGEQ.push_back(block.minEq+idx);
+            s2b.insert(std::make_pair(e, idx++));
+          }
+        }
+      }
+    }
+
+    std::map<int,int> old2new;
+    for (const auto& it : ghostConnections) {
+      int sidx = sim.getLocalPatchIndex(it.slave);
+      if (sidx < 1)
+        continue;
+
+      std::vector<int> locEqs;
+      std::vector<int> locNodes;
+      for (int b = solParams.getBlock(i).basis; b > 0; b /= 10) {
+        int basis = b % 10;
+        sim.getPatch(sidx)->getBoundaryNodes(it.midx, locNodes, basis);
+        for (size_t i = 0; i < locNodes.size(); ++i) {
+          int node = locNodes[i];
+          std::pair<int,int> dofs = sam->getNodeDOFs(node);
+          for (int dof = dofs.first; dof <= dofs.second; ++dof) {
+            int eq = sam->getEquation(node, dof-dofs.first+1);
+            if (eq > 0)
+              locEqs.push_back(block.MLGEQ[s2b[eq]]);
+            else
+              locEqs.push_back(0);
+          }
+        }
+      }
+      int nRecv;
+      adm.receive(nRecv, getPatchOwner(it.slave));
+      if (nRecv =! locEqs.size()) {
+        std::cerr <<"\n *** DomainDecomposition::calcGlobalNodeNumbers(): Topology error, number of equations "
+          << nRecv << ", expected " << locEqs.size() << std::endl;
+        return false;
+      }
+
+      IntVec glbEqs(locEqs.size());
+      adm.receive(glbEqs, getPatchOwner(it.master));
+
+      // check that dof types match
+      for (size_t i = 0; i < locEqs.size(); ++i)
+        if (locEqs[i] < 1 && glbEqs[i] > 0) {
+          std::cerr <<"\n *** DomainDecomposition::calcGlobalNodeNumbers(): Topology error, dof constraint mismatch" << std::endl;
+          return false;
+        }
+
+      for (size_t i = 0; i < glbEqs.size(); ++i) {
+        if (locEqs[i] < 1)
+          continue;
+        int leq = locEqs[it.orient==1?glbEqs.size()-1-i:i];
+        old2new[leq] = glbEqs[i];
+      }
+    }
+
+    // remap ghost equations
+    for (auto& it : block.MLGEQ)
+      utl::renumber(it, old2new, false);
+
+    // remap the rest of our equations
+    for (int i = 1; i <= sim.getSAM()->getNoEquations(); ++i)
+      if (old2new.find(i + block.minEq - 1) == old2new.end()) {
+        std::map<int,int> old2new2;
+        old2new2[i + block.minEq - 1] = ++block.maxEq;
+        for (auto& it : block.MLGEQ)
+          utl::renumber(it, old2new2, false);
+      }
+    
+    // send max equation number
+    if (adm.getProcId() < adm.getProcId()-1)
+      adm.send(block.maxEq, adm.getProcId()+1);
+
+    for (const auto& it : ghostConnections) {
+      int midx = sim.getLocalPatchIndex(it.master);
+      if (midx < 1)
+        continue;
+
+      std::vector<int> glbEqs;
+      std::vector<int> glbNodes;
+      for (int b = solParams.getBlock(i).basis; b > 0; b /= 10) {
+        int basis = b % 10;
+        sim.getPatch(midx)->getBoundaryNodes(it.midx, glbNodes, basis);
+        for (size_t i = 0; i < glbNodes.size(); ++i) {
+          int node = glbNodes[i];
+          std::pair<int,int> dofs = sim.getSAM()->getNodeDOFs(node);
+          for (int dof = dofs.first; dof <= dofs.second; ++dof) {
+            int eq = sim.getSAM()->getEquation(node, dof-dofs.first+1);
+            if (eq > 0)
+              glbEqs.push_back(block.MLGEQ[s2b[eq]]);
+            else
+              glbEqs.push_back(0);
+          }
+        }
+      }
+      adm.send(int(glbEqs.size()), getPatchOwner(it.slave));
+      if (glbEqs.size())
+        adm.send(glbEqs, getPatchOwner(it.slave));
+    }
+  }
+
+  return true;
 }

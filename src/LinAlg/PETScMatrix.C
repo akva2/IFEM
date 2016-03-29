@@ -293,24 +293,22 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
                       blockEq.data(),PETSC_COPY_VALUES,&isvec[i]);
     }
 
-    // map from sparse matrix indices to block matrix indices
+    // map from total matrix indices to block matrix indices
     glb2Blk.resize(SparseMatrix::A.size());
     for (size_t j = 0; j < cols(); ++j) {
       for (int i = IA[j]; i < IA[j+1]; ++i) {
         int iblk = -1;
         int jblk = -1;
-        size_t ofs = 0;
         for (size_t b = 0; b < blockEqs.size() && (iblk == -1 || jblk == -1); ++b) {
           std::set<int>::const_iterator it;
           if (iblk == -1 && (it = blockEqs[b].find(JA[i]+1)) != blockEqs[b].end()) {
             iblk = b;
-            glb2Blk[i][1] = *it - ofs - 1;
+            glb2Blk[i][1] = std::distance(blockEqs[b].begin(), it);
           }
           if (jblk == -1 && (it = blockEqs[b].find(j+1)) != blockEqs[b].end()) {
             jblk = b;
-            glb2Blk[i][2] = j - ofs;
+            glb2Blk[i][2] = std::distance(blockEqs[b].begin(), it);
           }
-          ofs += blockEqs[b].size();
         }
         glb2Blk[i][0] = iblk*solParams.get().getNoBlocks() + jblk;
       }

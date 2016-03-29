@@ -18,6 +18,8 @@
 #include <vector>
 #include <cstddef>
 
+
+class LinSolParams;
 class ProcessAdm;
 class SAMpatch;
 class SIMbase;
@@ -42,21 +44,27 @@ public:
 
   std::vector<Interface> ghostConnections; //!< Connections to other processes.
 
+  //! \brief Returns number of spatial dimensions
   int getNoSpaceDim() const { return nsd; }
 
   //! \brief Setup domain decomposition
-  bool setup(const ProcessAdm& adm, const SIMbase& sim);
+  bool setup(const ProcessAdm& adm, const SIMbase& sim, const LinSolParams* spar);
 
   //! \brief Get first equation owned by this process.
   int getMinEq() const { return minEq; };
+
   //! \brief Get last equation owned by this process.
   int getMaxEq() const { return maxEq; };
+
   //! \brief Get first node owned by this process.
   int getMinNode() const { return minNode; }
+
   //! \brief Get last node owned by this process.
   int getMaxNode() const { return maxNode; }
+
   //! \brief Get first DOF owned by this process.
   int getMinDOF() const { return minDof; }
+
   //! \brief Get last DOF owned by this process.
   int getMaxDOF() const { return maxDof; }
 
@@ -131,6 +139,9 @@ private:
   //! \brief Calculate the global equation numbers for given finite element model.
   bool calcGlobalEqNumbers(const ProcessAdm& adm, const SIMbase& sim);
 
+  bool setupBlocks(const LinSolParams& solParams, const ProcessAdm& adm,
+                   const SIMbase& sim);
+
   std::map<int,int> patchOwner; //!< Process that owns a particular patch
 
   std::vector<int> MLGN; //!< Process-local-to-global node numbers
@@ -142,6 +153,16 @@ private:
   int minNode; //!< First node we own
   int maxNode; //!< Last node we own
   int nsd; //!< Number of spatial dimensions
+
+  //! \brief Holds information about a block matrix
+  struct MatrixBlock {
+    int minEq; //!< First equation we own in block
+    int maxEq; //!< Last equation we own in block
+    std::vector<int> eqs; //!< Equations numbers belonging to matrix block on this process
+    std::vector<int> MLGEQ; //!< Global equation numbers in block
+  };
+
+  std::vector<MatrixBlock> blocks; //!< Equations belonging to matrix blocks
 
   const SAMpatch* sam; //!< The SAM the DD is setup across
 };

@@ -29,8 +29,9 @@
 #include <dune/istl/paamg/twolevelmethod.hh>
 #endif
 
+/*
 
-//! \brief Implements a Schur-complement based block preconditioner */
+//! \brief Implements a Schur-complement based block preconditioner
   template<class P1, class P2>
 class SchurPreconditioner : public Dune::Preconditioner<Vector,Vector> {
   public:
@@ -117,6 +118,8 @@ class SchurPreconditioner : public Dune::Preconditioner<Vector,Vector> {
     //! \brief Whether or not to use a symmetric preconditioner
     bool symmetric; 
 };
+
+*/
 
 
 ISTLVector::ISTLVector(const ProcessAdm& padm) : adm(padm)
