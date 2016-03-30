@@ -17,6 +17,7 @@
 #include "MatVec.h"
 #include <set>
 
+class DOFVectorOps;
 class SystemMatrix;
 class SystemVector;
 
@@ -38,7 +39,7 @@ class SAM
 {
 public:
   //! \brief The constructor initializes an empty object.
-  SAM();
+  SAM(DOFVectorOps* ops = nullptr);
   //! \brief The destructor frees the dynamically allocated arrays.
   virtual ~SAM();
 
@@ -330,11 +331,14 @@ protected:
 
   std::vector<char> nodeType; //!< Nodal DOF classification
 
+  DOFVectorOps* dofOps; //!< Helper class for DOF vector operations
+
   friend class DenseMatrix;
   friend class SPRMatrix;
   friend class SparseMatrix;
   friend class PETScMatrix;
   friend class PETScBlockMatrix;
 };
+
 
 #endif

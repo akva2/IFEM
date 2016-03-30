@@ -15,11 +15,7 @@
 #include "SIMoptions.h"
 #include "ASMs2DC1.h"
 #include "ASMunstruct.h"
-#ifdef HAS_PETSC
-#include "SAMpatchPETSc.h"
-#else
 #include "SAMpatch.h"
-#endif
 #include "IntegrandBase.h"
 #include "AlgEqSystem.h"
 #include "LinSolParams.h"
@@ -1054,14 +1050,7 @@ bool SIMbase::preprocess (const IntVec& ignored, bool fixDup)
 
   // Initialize data structures for the algebraic system
   if (mySam) delete mySam;
-#ifdef HAS_PETSC
-  if (opt.solver == SystemMatrix::PETSC)
-    mySam = new SAMpatchPETSc(*g2l,adm);
-  else
-    mySam = new SAMpatch();
-#else
-  mySam = new SAMpatch();
-#endif
+  mySam = new SAMpatch(DOFVectorOps::Create((SystemMatrix::Type)opt.solver, adm));
   if (!static_cast<SAMpatch*>(mySam)->init(myModel,ngnod))
     return false;
 

@@ -61,9 +61,9 @@ void expand_(const Real* solVec, const Real* ttcc,
 #endif
 
 
-SAM::SAM () : nnod(mpar[0]), nel(mpar[1]), ndof(mpar[2]),
+SAM::SAM (DOFVectorOps* ops) : nnod(mpar[0]), nel(mpar[1]), ndof(mpar[2]),
 	      nspdof(mpar[5]), nceq(mpar[6]), neq(mpar[10]),
-	      nmmnpc(mpar[14]), nmmceq(mpar[15])
+	      nmmnpc(mpar[14]), nmmceq(mpar[15]), dofOps(ops)
 {
   // Initialize the parameters array to zero
   memset(mpar,0,sizeof(mpar));
@@ -93,6 +93,7 @@ SAM::~SAM ()
   if (ttcc)   delete[] ttcc;
   if (minex)  delete[] minex;
   if (meqn)   delete[] meqn;
+  delete dofOps;
 }
 
 
@@ -819,6 +820,9 @@ bool SAM::applyDirichlet (Vector& dofVec) const
 
 Real SAM::dot (const Vector& x, const Vector& y, char dofType) const
 {
+  if (dofOps)
+    return dofOps->dot(x, y, dofType, *this);
+
   if (nodeType.empty() || dofType == 'A')
     return x.dot(y); // All nodes are of the same type, or consider all of them
 
@@ -836,6 +840,9 @@ Real SAM::dot (const Vector& x, const Vector& y, char dofType) const
 
 Real SAM::normL2 (const Vector& x, char dofType) const
 {
+  if (dofOps)
+    return dofOps->normL2(x, dofType, *this);
+
   if (x.empty())
     return Real(0);
   else if (nodeType.empty()) // All nodes are of the same type
@@ -884,6 +891,9 @@ Real SAM::normInf (const Vector& x, size_t& comp, char dofType) const
           }
       }
   }
+
+  if (dofOps)
+    return dofOps->normInf(retVal);
 
   if (dofOps)
     return dofOps->normInf(retVal);

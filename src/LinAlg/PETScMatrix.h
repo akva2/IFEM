@@ -229,6 +229,64 @@ protected:
 };
 
 
+class PETScDOFVectorOps : public DOFVectorOps
+{
+public:
+  //! \brief The constructor initializes the \a l2gn array.
+  //! \param[in] g2ln Global-to-local node numbers for this processor
+  //! \param[in] padm Parallel process administrator
+  PETScDOFVectorOps(const ProcessAdm& padm);
+  //! \brief The destructor destroys the index set arrays.
+  virtual ~PETScDOFVectorOps();
+
+  //! \brief Computes the dot-product of two vectors.
+  //! \param[in] x First vector in dot-product
+  //! \param[in] y Second vector in dot-product
+  //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+  //! \return Value of dot-product
+  //!
+  //! \details Both vectors are defined over all nodes in the patch, i.e.
+  //! for parallel vectors the ghost entries are also included.
+  virtual Real dot(const Vector& x, const Vector& y, char dofType, const SAM& sam) const;
+
+  //! \brief Computes the L2-norm of a vector.
+  //! \param[in] x Vector for norm computation
+  //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+  //! \return Value of L2-norm
+  //!
+  //! \details The vector is defined over all nodes in the patch, i.e.
+  //! for parallel vectors the ghost entries are also included.
+  virtual Real normL2(const Vector& x, char dofType, const SAM& sam) const;
+
+  //! \brief Computes the inf-norm of a vector.
+  //! \param[in] x Vector for norm computation
+  //! \param comp Local nodal DOF on input, index of the largest value on output
+  //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+  //! \return Value of inf-norm
+  //!
+  //! \details The vector is defined over all nodes in the patch, i.e.
+  //! for parallel vectors the ghost entries are also included.
+  virtual Real normInf(Real value) const;
+
+private:
+  //! \brief Setup a parallel index set for a given dofType
+  void setupIS(char dofType, const SAM& sam) const;
+
+#ifdef HAS_PETSC
+  //! \brief Struct holding dof vector info
+  struct DofIS {
+    IS local;        //!< Local index set for dof type
+    IS global;       //!< Global index set for dof type
+    bool scatterCreated = false;
+    VecScatter ctx;  //!< Scatterer
+  };
+  mutable std::map<char, DofIS> dofIS; //!< Map of dof type scatter info
+#endif
+
+  const ProcessAdm& adm; //<! Process administrator and domain decomposition
+};
+
+
 #ifdef HAS_PETSC
 //! \brief Matrix-vector product
 PETScVector operator*(const SystemMatrix& A, const PETScVector& b);

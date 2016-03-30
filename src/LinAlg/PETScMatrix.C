@@ -15,7 +15,7 @@
 #ifdef HAS_PETSC
 #include "LinSolParams.h"
 #include "LinAlgInit.h"
-#include "SAMpatchPETSc.h"
+#include "SAMpatch.h"
 #include "ProcessAdm.h"
 #include "SIMenums.h"
 #include "ASMstruct.h"
@@ -177,7 +177,7 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 {
   SparseMatrix::initAssembly(sam, b);
 
-  const SAMpatchPETSc* samp = dynamic_cast<const SAMpatchPETSc*>(&sam);
+  const SAMpatch* samp = dynamic_cast<const SAMpatch*>(&sam);
   if (!samp)
     return;
 
@@ -227,6 +227,7 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
   if (adm.isParallel()) {
     int ifirst = adm.dd.getMinEq();
     int ilast  = adm.dd.getMaxEq();
+    // !!! SERIOUS OVER/UNDERALLOCATION !!!
     PetscIntVec d_nnz(ilast-ifirst+1, 100), o_nnz(ilast-ifirst+1, 100);
 
 //    for (size_t i = 0; dofc.size(); ++i) {
@@ -262,6 +263,8 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     MatSetOption(A, MAT_KEEP_NONZERO_PATTERN, PETSC_TRUE);
   }
 
+  MatSetUp(A);
+
   if (linsysType == LinAlg::SPD)
     MatSetOption(A, MAT_SPD, PETSC_TRUE);
   if (linsysType == LinAlg::SYMMETRIC)
@@ -271,8 +274,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
   // Do not abort program for allocation error in release mode
   MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 #endif
-
-  MatSetUp(A);
 }
 
 
@@ -522,4 +523,131 @@ PETScVector operator/(SystemMatrix& A, const PETScVector& b)
   A.solve(b, results);
   return results;
 }
+
+
+PETScDOFVectorOps::PETScDOFVectorOps(const ProcessAdm& padm) : adm(padm)
+{
+  LinAlgInit::increfs();
+}
+
+
+PETScDOFVectorOps::~PETScDOFVectorOps()
+{
+  for (auto& it : dofIS) {
+    if (it.second.scatterCreated)
+      VecScatterDestroy(&it.second.ctx);
+    ISDestroy(&it.second.local);
+    ISDestroy(&it.second.global);
+  }
+  dofIS.clear();
+  LinAlgInit::decrefs();
+}
+
+
+Real PETScDOFVectorOps::dot (const Vector& x, const Vector& y, char dofType, const SAM& sam) const
+{
+#ifdef HAVE_MPI
+  if (adm.isParallel()) {
+    if (dofIS.find(dofType) == dofIS.end())
+      setupIS(dofType, sam);
+
+    Vec lx, ly;
+    VecCreateSeqWithArray(PETSC_COMM_SELF, 1, x.size(), x.data(), &lx);
+    VecCreateSeqWithArray(PETSC_COMM_SELF, 1, y.size(), y.data(), &ly);
+    Vec gx, gy;
+    VecCreate(*adm.getCommunicator(), &gx);
+    VecCreate(*adm.getCommunicator(), &gy);
+    VecSetSizes(gx, adm.dd.getMaxDOF()-adm.dd.getMinDOF()+1, PETSC_DETERMINE);
+    VecSetSizes(gy, adm.dd.getMaxDOF()-adm.dd.getMinDOF()+1, PETSC_DETERMINE);
+    if (!dofIS[dofType].scatterCreated) {
+      VecScatterCreate(lx, dofIS[dofType].local, gx, dofIS[dofType].global, &dofIS[dofType].ctx);
+      dofIS[dofType].scatterCreated = true;
+    }
+
+    VecScatterBegin(dofIS[dofType].ctx, lx, gx, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterEnd(dofIS[dofType].ctx, lx, gx, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterBegin(dofIS[dofType].ctx, ly, gy, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterEnd(dofIS[dofType].ctx, ly, gy, INSERT_VALUES, SCATTER_FORWARD);
+    PetscReal d;
+    VecDot(gx, gy, &d);
+    VecDestroy(&lx);
+    VecDestroy(&gx);
+    VecDestroy(&ly);
+    VecDestroy(&gy);
+
+    return d;
+  }
 #endif
+
+  return sam.dot(x, y, dofType);
+}
+
+
+Real PETScDOFVectorOps::normL2(const Vector& x, char dofType, const SAM& sam) const
+{
+#ifdef HAVE_MPI
+  if (adm.isParallel()) {
+    if (dofIS.find(dofType) == dofIS.end())
+      setupIS(dofType, sam);
+
+    Vec lx;
+    VecCreateSeqWithArray(PETSC_COMM_SELF, 1, x.size(), x.data(), &lx);
+    Vec gx;
+    VecCreate(*adm.getCommunicator(), &gx);
+    VecSetSizes(gx, adm.dd.getMaxDOF()-adm.dd.getMinDOF()+1, PETSC_DETERMINE);
+    VecSetFromOptions(gx);
+    PetscInt n;
+    VecGetSize(gx, &n);
+
+    if (!dofIS[dofType].scatterCreated) {
+      VecScatterCreate(lx, dofIS[dofType].local, gx, dofIS[dofType].global, &dofIS[dofType].ctx);
+      dofIS[dofType].scatterCreated = true;
+    }
+
+    VecScatterBegin(dofIS[dofType].ctx, lx, gx, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterEnd(dofIS[dofType].ctx, lx, gx, INSERT_VALUES, SCATTER_FORWARD);
+    PetscReal d;
+    VecNorm(gx, NORM_2, &d);
+    VecDestroy(&lx);
+    VecDestroy(&gx);
+
+    return d / sqrt(n);
+  }
+#endif
+
+  return sam.normL2(x, dofType);
+}
+
+
+Real PETScDOFVectorOps::normInf(Real value) const
+{
+#ifdef HAVE_MPI
+  if (adm.isParallel())
+    value = adm.allReduce(value, MPI_MAX);
+#endif
+
+  return value;
+}
+
+
+void PETScDOFVectorOps::setupIS(char dofType, const SAM& sam) const
+{
+  PetscIntVec ldofs;
+  PetscIntVec gdofs;
+  int gdof = adm.dd.getMinDOF()-1;
+  for (size_t i = 0; i < adm.dd.getMLGN().size(); ++i) {
+    if ((dofType == 'D' || sam.getNodeType(i+1) == dofType) &&
+        adm.dd.getMLGN()[i] >= adm.dd.getMinNode() &&
+        adm.dd.getMLGN()[i] <= adm.dd.getMaxNode()) {
+      std::pair<int, int> dofs = sam.getNodeDOFs(i+1);
+      for (int dof = dofs.first; dof <= dofs.second; ++dof) {
+        ldofs.push_back(dof-1);
+        gdofs.push_back(gdof++);
+      }
+    }
+  }
+  ISCreateGeneral(*adm.getCommunicator(), ldofs.size(), ldofs.data(), PETSC_COPY_VALUES, &dofIS[dofType].local);
+  ISCreateGeneral(*adm.getCommunicator(), gdofs.size(), gdofs.data(), PETSC_COPY_VALUES, &dofIS[dofType].global);
+}
+
+#endif // HAS_PETSC

@@ -335,4 +335,39 @@ protected:
 };
 
 
+/*!
+ \brief Abstract interface for DOF vector operations.
+*/
+class DOFVectorOps {
+  public:
+    //! \brief Create a DOFVectorOps of the appropriate type.
+    static DOFVectorOps* Create(SystemMatrix::Type solver, const ProcessAdm& adm);
+
+    //! \brief Empty destructor
+    virtual ~DOFVectorOps() {}
+
+    //! \brief Computes the dot-product of two vectors.
+    //! \param[in] x First vector in dot-product
+    //! \param[in] y Second vector in dot-product
+    //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+    //! \return Value of dot-product
+    //!
+    //! \details Both vectors are defined over all nodes in the patch, i.e.
+    //! for parallel vectors the ghost entries are also included.
+    virtual Real dot(const Vector& x, const Vector& y, char dofType, const SAM& sam) const = 0;
+
+    //! \brief Computes the L2-norm of a vector.
+    //! \param[in] x Vector for norm computation
+    //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+    //! \return Value of L2-norm
+    //!
+    //! \details The vector is defined over all nodes in the patch, i.e.
+    //! for parallel vectors the ghost entries are also included.
+    virtual Real normL2(const Vector& x, char dofType, const SAM& sam) const = 0;
+
+    //! \brief Computes the inf-norm of a vector.
+    //! \param value The local value of the info-norm
+    virtual Real normInf(Real value) const = 0;
+};
+
 #endif
