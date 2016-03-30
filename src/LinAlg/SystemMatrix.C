@@ -19,6 +19,7 @@
 #include "PETScMatrix.h"
 #endif
 #include "LinSolParams.h"
+#include "ProcessAdm.h"
 
 
 SystemVector* SystemVector::create (const ProcessAdm& adm, Type vectorType)
@@ -88,8 +89,9 @@ SystemMatrix* SystemMatrix::create (const ProcessAdm& padm, Type matrixType,
               << std::endl;
     exit(1);
   }
-#else
-  // Use default PETSc settings when no parameters are provided by user
+#endif
+
+  // Use default linear solver parameters when no parameters are provided by user
   static LinSolParams defaultPar;
 
   switch (matrixType)
