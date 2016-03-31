@@ -167,6 +167,8 @@ PETScMatrix::~PETScMatrix ()
   LinAlgInit::decrefs();
   for (auto& it : matvec)
     MatDestroy(&it);
+  if (!matvec.empty())
+    MatDestroy(&Sp);
   matvec.clear();
   for (auto& it : isvec)
     ISDestroy(&it);
@@ -246,21 +248,32 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     // get equations for block
     blockEqs.resize(solParams.get().getNoBlocks());
     for (size_t i = 0; i < solParams.get().getNoBlocks(); ++i) {
-      char dofType = solParams.get().getBlock(i).basis == 1 ? 'D' : 
-                                 'P'+solParams.get().getBlock(i).basis-2;
       // grab DOFs of given type(s)
+      int basis = solParams.get().getBlock(i).basis;
+      char dofType = basis  == 1 ? 'D' : 'P'+basis-2;
       if (solParams.get().getBlock(i).comps != 0) {
-        char temp[32];
-        sprintf(temp,"%lu",solParams.get().getBlock(i).comps);
-        for (char* t = temp; *t != 0; ++t) {
-          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType, (int)(*t - '0'));
+        for (int c = solParams.get().getBlock(i).comps; c > 0; c /= 10) {
+          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType, c % 10);
           blockEqs[i].insert(tmp.begin(), tmp.end());
         }
       } else {
-        blockEqs[i] = adm.dd.getSAM()->getEquations(dofType);
-        if (dofType == 'P') { // hack
-          std::set<int> tmp = adm.dd.getSAM()->getEquations('L', 1);
-          blockEqs[i].insert(tmp.begin(), tmp.end());
+        if (basis > 9) {
+          for (int b = basis; b > 0; b /= 10) {
+            int cb = b % 10;
+            dofType = cb == 1 ? 'D' : 'P'+cb-2;
+            std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
+            blockEqs[i].insert(tmp.begin(), tmp.end());
+            if (i == 1) { // hack
+              tmp = adm.dd.getSAM()->getEquations('L', 1);
+              blockEqs[i].insert(tmp.begin(), tmp.end());
+            }
+          }
+        } else {
+          blockEqs[i] = adm.dd.getSAM()->getEquations(dofType);
+          if (i == 1) { // hack
+            std::set<int> tmp = adm.dd.getSAM()->getEquations('L');
+            blockEqs[i].insert(tmp.begin(), tmp.end());
+          }
         }
       }
     }
@@ -295,22 +308,31 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
     // map from sparse matrix indices to block matrix indices
     glb2Blk.resize(SparseMatrix::A.size());
+    std::vector<std::array<int,2>> eq2b(neq, {-1, 0}); // cache
     for (size_t j = 0; j < cols(); ++j) {
       for (int i = IA[j]; i < IA[j+1]; ++i) {
         int iblk = -1;
         int jblk = -1;
-        size_t ofs = 0;
+        if (eq2b[JA[i]][0] != -1) {
+          iblk = eq2b[JA[i]][0];
+          glb2Blk[i][1] = eq2b[JA[i]][1];
+        } if (eq2b[j][0] != -1) {
+          jblk = eq2b[j][0];
+          glb2Blk[i][2] = eq2b[j][1];
+        }
+
         for (size_t b = 0; b < blockEqs.size() && (iblk == -1 || jblk == -1); ++b) {
           std::set<int>::const_iterator it;
           if (iblk == -1 && (it = blockEqs[b].find(JA[i]+1)) != blockEqs[b].end()) {
             iblk = b;
-            glb2Blk[i][1] = *it - ofs - 1;
+            eq2b[JA[i]][0] = b;
+            eq2b[JA[i]][1] = glb2Blk[i][1] = std::distance(blockEqs[b].begin(), it);
           }
           if (jblk == -1 && (it = blockEqs[b].find(j+1)) != blockEqs[b].end()) {
             jblk = b;
-            glb2Blk[i][2] = j - ofs;
+            eq2b[j][0] = b;
+            eq2b[j][1] = glb2Blk[i][2] = std::distance(blockEqs[b].begin(), it);
           }
-          ofs += blockEqs[b].size();
         }
         glb2Blk[i][0] = iblk*solParams.get().getNoBlocks() + jblk;
       }
@@ -585,12 +607,11 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
       return false;
     }
     PCSetType(pc,PCFIELDSPLIT);
-    PetscInt m1, m2, n1, n2, nr, nc, nsplit;
+    PetscInt m1, n1, nsplit;
     KSP  *subksp;
     PC   subpc[2];
     Vec diagA00;
     MatGetLocalSize(matvec[0],&m1,&n1);
-    MatGetLocalSize(matvec[3],&m2,&n2);
     if (adm.isParallel())
       VecCreateMPI(*adm.getCommunicator(),m1,PETSC_DETERMINE,&diagA00);
     else
@@ -598,20 +619,21 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
 
     // TODO: non-SIMPLE schur preconditioners
     MatGetDiagonal(matvec[0],diagA00);
-
     VecReciprocal(diagA00);
-    MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
-    MatMatMult(matvec[2],matvec[1],MAT_INITIAL_MATRIX,PETSC_DEFAULT,&Sp);
-    VecReciprocal(diagA00);
-    MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
+    Mat tmp;
+    MatConvert(matvec[1], MATSAME, MAT_INITIAL_MATRIX, &tmp);
+    MatDiagonalScale(tmp, diagA00, PETSC_NULL);
+    Mat tmp2;
+    MatMatMult(matvec[2], tmp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &tmp2);
+    MatConvert(matvec[3], MATSAME, MAT_INITIAL_MATRIX, &Sp);
     VecDestroy(&diagA00);
-    MatGetSize(Sp,&nr,&nc);
-    MatAXPY(Sp,-1.0,matvec[3],DIFFERENT_NONZERO_PATTERN);
+    MatAXPY(Sp,-1.0,tmp2,DIFFERENT_NONZERO_PATTERN);
+    MatDestroy(&tmp);
+    MatDestroy(&tmp2);
     PCFieldSplitSetIS(pc,"u",isvec[0]);
     PCFieldSplitSetIS(pc,"p",isvec[1]);
     PCFieldSplitSetType(pc,PC_COMPOSITE_SCHUR);
-    PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
-//    MatCreateSchurComplement(matvec[0],matvec[0],matvec[1],matvec[2],matvec[3],&Sp);
+    PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_DIAG);
     PCSetFromOptions(pc);
     PCSetUp(pc);
     PCFieldSplitGetSubKSP(pc,&nsplit,&subksp);

@@ -31,6 +31,7 @@
 
 
 //! \brief Implements a Schur-complement based block preconditioner */
+/*
   template<class P1, class P2>
 class SchurPreconditioner : public Dune::Preconditioner<Vector,Vector> {
   public:
@@ -117,6 +118,7 @@ class SchurPreconditioner : public Dune::Preconditioner<Vector,Vector> {
     //! \brief Whether or not to use a symmetric preconditioner
     bool symmetric; 
 };
+*/
 
 
 ISTLVector::ISTLVector(const ProcessAdm& padm) : adm(padm)
@@ -526,12 +528,6 @@ void ISTLMatrix::setupSolver()
         Dune::SeqOverlappingSchwarz<Mat, Vec>::subdomain_vector ddofs(locSubdDofs.size());
         for (size_t i = 0; i < locSubdDofs.size(); ++i)
           ddofs[i].insert(locSubdDofs[i].begin(), locSubdDofs[i].end());
-
-        for (auto& it : ddofs) {
-          for (auto& it2 : it)
-            std::cout << it2 << " ";
-          std::cout << std::endl;
-        }
 
         pre.reset(new Dune::SeqOverlappingSchwarz<Mat, Vec>(A, ddofs));
         solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<Mat, Vec>>(solParams, op, *pre));

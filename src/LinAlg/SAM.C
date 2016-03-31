@@ -744,7 +744,7 @@ int SAM::getEquation (int inod, int ldof) const
   if (idof >= madof[inod]) return -2;
 
   int ieq = meqn[idof-1];
-  if (ieq < 0) ieq = meqn[mmceq[mpmceq[-ieq-1]-1]];
+  if (ieq < 0) ieq = meqn[mmceq[mpmceq[-ieq-1]-1]-1];
   return ieq;
 }
 
@@ -955,7 +955,8 @@ std::set<int> SAM::getEquations(char dofType, int dof) const
 {
   std::set<int> result;
   for (int i = 1; i <= getNoNodes(); ++i) {
-    if (getNodeType(i) == dofType) {
+    char ch = getNodeType(i);
+    if (ch == dofType || (dofType == 'D' && ch == ' ')) {
       auto dofs = getNodeDOFs(i);
       for (int d = (dof > 0 ? dof : 1);
                d <= (dof > 0 ? dof : dofs.second-dofs.first+1); ++d) {
