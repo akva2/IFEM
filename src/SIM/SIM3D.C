@@ -33,8 +33,7 @@ SIM3D::SIM3D (unsigned char n1, bool check)
 }
 
 
-SIM3D::SIM3D (const std::vector<unsigned char>& fields, bool check)
-  : nf(fields)
+SIM3D::SIM3D (const CharVec& fields, bool check) : nf(fields)
 {
   checkRHSys = check;
 }
@@ -60,7 +59,7 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
       uppatch = myModel.size();
     utl::getAttribute(elem,"upperpatch",uppatch);
 
-    if (lowpatch < 1 || uppatch > (int)myModel.size())
+    if (lowpatch < 1 || uppatch > nGlPatches)
     {
       std::cerr <<" *** SIM3D::parse: Invalid patch indices, lower="
                 << lowpatch <<" upper="<< uppatch << std::endl;
@@ -71,14 +70,15 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     RealArray xi;
     if (!utl::parseKnots(elem,xi))
     {
-      int addu = 0, addv = 0, addw = 0;
+      int pid, addu = 0, addv = 0, addw = 0;
       utl::getAttribute(elem,"u",addu);
       utl::getAttribute(elem,"v",addv);
       utl::getAttribute(elem,"w",addw);
-      for (int j = lowpatch-1; j < uppatch; j++)
-        if ((pch = dynamic_cast<ASM3D*>(myModel[j])))
+      for (int j = lowpatch; j <= uppatch; j++)
+        if ((pid = this->getLocalPatchIndex(j)) > 0 &&
+            (pch = dynamic_cast<ASM3D*>(myModel[pid-1])))
         {
-          IFEM::cout <<"\tRefining P"<< j+1
+          IFEM::cout <<"\tRefining P"<< pid
                      <<" "<< addu <<" "<< addv <<" "<< addw << std::endl;
           pch->uniformRefine(0,addu);
           pch->uniformRefine(1,addv);
@@ -88,12 +88,13 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     else
     {
       // Non-uniform (graded) refinement
-      int dir = 1;
+      int pid, dir = 1;
       utl::getAttribute(elem,"dir",dir);
-      for (int j = lowpatch-1; j < uppatch; j++)
-        if ((pch = dynamic_cast<ASM3D*>(myModel[j])))
+      for (int j = lowpatch; j <= uppatch; j++)
+        if ((pid = this->getLocalPatchIndex(j)) > 0 &&
+            (pch = dynamic_cast<ASM3D*>(myModel[pid-1])))
         {
-          IFEM::cout <<"\tRefining P"<< j+1 <<" dir="<< dir;
+          IFEM::cout <<"\tRefining P"<< pid <<" dir="<< dir;
           for (size_t i = 0; i < xi.size(); i++)
             IFEM::cout <<" "<< xi[i];
           IFEM::cout << std::endl;
@@ -111,7 +112,7 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
       uppatch = myModel.size();
     utl::getAttribute(elem,"upperpatch",uppatch);
 
-    if (lowpatch < 1 || uppatch > (int)myModel.size())
+    if (lowpatch < 1 || uppatch > nGlPatches)
     {
       std::cerr <<" *** SIM3D::parse: Invalid patch indices, lower="
                 << lowpatch <<" upper="<< uppatch << std::endl;
@@ -119,14 +120,15 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     }
 
     ASM3D* pch = nullptr;
-    int addu = 0, addv = 0, addw = 0;
+    int pid, addu = 0, addv = 0, addw = 0;
     utl::getAttribute(elem,"u",addu);
     utl::getAttribute(elem,"v",addv);
     utl::getAttribute(elem,"w",addw);
-    for (int j = lowpatch-1; j < uppatch; j++)
-      if ((pch = dynamic_cast<ASM3D*>(myModel[j])))
+    for (int j = lowpatch; j <= uppatch; j++)
+      if ((pid = this->getLocalPatchIndex(j)) > 0 &&
+          (pch = dynamic_cast<ASM3D*>(myModel[pid-1])))
       {
-        IFEM::cout <<"\tRaising order of P"<< j+1
+        IFEM::cout <<"\tRaising order of P"<< pid
                    <<" "<< addu <<" "<< addv  <<" " << addw << std::endl;
         pch->raiseOrder(addu,addv,addw);
       }
@@ -733,7 +735,7 @@ void SIM3D::readNodes (std::istream& isn)
   {
     int patch = 0;
     isn >> patch;
-    int pid = getLocalPatchIndex(patch+1);
+    int pid = this->getLocalPatchIndex(patch+1);
     if (pid < 0) return;
 
     if (!this->readNodes(isn,pid-1))
@@ -844,7 +846,7 @@ ASMbase* SIM3D::createDefaultGeometry (const TiXmlElement* geo) const
   }
 
   std::istringstream unitCube(g2);
-  return this->readPatch(unitCube,1,nf);
+  return this->readPatch(unitCube,0,nf);
 }
 
 
