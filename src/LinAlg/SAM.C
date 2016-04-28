@@ -939,3 +939,23 @@ bool SAM::getNodalReactions (int inod, const Vector& rf, Vector& nrf) const
 
   return haveRF;
 }
+
+
+std::set<int> SAM::getEquations(char dofType, int dof) const
+{
+  std::set<int> result;
+  for (int i = 1; i <= getNoNodes(); ++i) {
+    char type = getNodeType(i);
+    if (type == dofType || (dofType == 'D' && type == ' ')) {
+      auto dofs = getNodeDOFs(i);
+      for (int d = (dof > 0 ? dof : 1);
+               d <= (dof > 0 ? dof : dofs.second-dofs.first+1); ++d) {
+        int eq = getEquation(i, d);
+        if (eq > 0)
+          result.insert(eq);
+      }
+    }
+  }
+
+  return result;
+}
