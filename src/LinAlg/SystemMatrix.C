@@ -88,10 +88,9 @@ SystemMatrix* SystemMatrix::create (const ProcessAdm& padm, Type matrixType,
               << std::endl;
     exit(1);
   }
-#else
-  // Use default PETSc settings when no parameters are provided by user
-  static LinSolParams defaultPar(3);
 #endif
+  // Use default settings when no parameters are provided by user
+  static LinSolParams defaultPar;
 
   switch (matrixType)
     {

@@ -15,7 +15,7 @@
 #include "ASMbase.h"
 #include "ASMstruct.h"
 #include "ProcessAdm.h"
-#include "SAM.h"
+#include "SAMpatch.h"
 #include "SIMbase.h"
 #include "IFEM.h"
 #include "Utilities.h"
@@ -465,6 +465,8 @@ int DomainDecomposition::getGlobalEq(int lEq) const
 
 bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
 {
+  nsd = sim.getNoSpaceDim();
+  sam = dynamic_cast<const SAMpatch*>(sim.getSAM());
   return calcGlobalNodeNumbers(adm, sim) && calcGlobalEqNumbers(adm, sim);
 }
 

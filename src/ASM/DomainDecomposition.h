@@ -20,6 +20,7 @@
 #include <cstddef>
 
 class ProcessAdm;
+class SAMpatch;
 class SIMbase;
 #include <iostream>
 
@@ -52,6 +53,9 @@ public:
   };
 
   std::set<Interface, SlaveOrder> ghostConnections; //!< Connections to other processes.
+
+  //! \brief Get number of spatial dimensions
+  int getNoSpaceDim() const { return nsd; }
 
   //! \brief Setup domain decomposition
   bool setup(const ProcessAdm& adm, const SIMbase& sim);
@@ -128,6 +132,9 @@ public:
   //! \brief Obtain local-to-global node mapping.
   const std::vector<int>& getMLGN() const { return MLGN; }
 
+  //! \brief Returns associated SAM
+  const SAMpatch* getSAM() const { return sam; }
+
 private:
   std::vector<std::vector<size_t>> subdomains; //!< Number of local subdomains
 
@@ -147,6 +154,9 @@ private:
   int maxDof; //!< Last DOF we own
   int minNode; //!< First node we own
   int maxNode; //!< Last node we own
+  int nsd; //!< Number of spatial dimensions
+
+  const SAMpatch* sam; //!< The SAM the DD is setup across
 };
 
 #endif
