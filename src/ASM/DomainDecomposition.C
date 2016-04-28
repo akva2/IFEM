@@ -325,8 +325,8 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
 bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
                                               const SIMbase& sim)
 {
-  minEq = 1;
-  maxEq = sim.getSAM()->getNoEquations();
+  blocks[0].minEq = 1;
+  blocks[0].maxEq = sim.getSAM()->getNoEquations();
 
 #ifdef HAVE_MPI
   if (adm.getNoProcs() == 1)
@@ -336,11 +336,11 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
   if (adm.getProcId() > 0)
     adm.receive(nEq, adm.getProcId()-1);
 
-  MLGEQ.resize(sim.getSAM()->getNoEquations());
-  std::iota(MLGEQ.begin(), MLGEQ.end(), nEq+1);
+  blocks[0].MLGEQ.resize(sim.getSAM()->getNoEquations());
+  std::iota(blocks[0].MLGEQ.begin(), blocks[0].MLGEQ.end(), nEq+1);
 
-  minEq = nEq+1;
-  maxEq = nEq;
+  blocks[0].minEq = nEq+1;
+  blocks[0].maxEq = nEq;
 
   std::map<int,int> old2new;
   for (const auto& it : ghostConnections) {
@@ -357,7 +357,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
       for (int dof = dofs.first; dof <= dofs.second; ++dof) {
         int eq = sim.getSAM()->getEquation(node, dof-dofs.first+1);
         if (eq > 0)
-          locEqs.push_back(MLGEQ[eq-1]);
+          locEqs.push_back(blocks[0].MLGEQ[eq-1]);
         else
           locEqs.push_back(0);
       }
@@ -402,20 +402,20 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
   }
 
   // remap ghost equations
-  for (auto& it : MLGEQ)
+  for (auto& it : blocks[0].MLGEQ)
     utl::renumber(it, old2new, false);
 
   // remap the rest of our equations
   for (int i = 1; i <= sim.getSAM()->getNoEquations(); ++i)
     if (old2new.find(i + nEq) == old2new.end()) {
       std::map<int,int> old2new2;
-      old2new2[i + nEq] = ++maxEq;
-      for (auto& it : MLGEQ)
+      old2new2[i + nEq] = ++blocks[0].maxEq;
+      for (auto& it : blocks[0].MLGEQ)
         utl::renumber(it, old2new2, false);
     }
 
   if (adm.getProcId() < adm.getNoProcs()-1)
-    adm.send(maxEq, adm.getProcId()+1);
+    adm.send(blocks[0].maxEq, adm.getProcId()+1);
 
   for (const auto& it : ghostConnections) {
     int midx = sim.getLocalPatchIndex(it.master);
@@ -431,7 +431,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
       for (int dof = dofs.first; dof <= dofs.second; ++dof) {
         int eq = sim.getSAM()->getEquation(node, dof-dofs.first+1);
         if (eq > 0)
-          glbEqs.push_back(MLGEQ[eq-1]);
+          glbEqs.push_back(blocks[0].MLGEQ[eq-1]);
         else
           glbEqs.push_back(0);
       }
@@ -449,17 +449,17 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 
 int DomainDecomposition::getGlobalEq(int lEq) const
 {
-  if (lEq < 1 || (!MLGEQ.empty() && lEq > (int)MLGEQ.size()))
+  if (lEq < 1 || (!blocks[0].MLGEQ.empty() && lEq > (int)blocks[0].MLGEQ.size()))
     return 0;
 
-  if (MLGEQ.empty()) {
-    if (lEq > maxEq)
+  if (blocks[0].MLGEQ.empty()) {
+    if (lEq > blocks[0].maxEq)
       return 0;
 
     return lEq;
   }
 
-  return MLGEQ[lEq-1];
+  return blocks[0].MLGEQ[lEq-1];
 }
 
 

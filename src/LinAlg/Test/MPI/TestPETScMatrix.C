@@ -49,6 +49,9 @@ public:
   InspectMatrixSIM(unsigned char n1 = 2, bool check = false) :
     SIM2D(n1, check) { myProblem = new DummyIntegrandForDummies; }
 
+  InspectMatrixSIM(const std::vector<unsigned char>& n, bool check = false) :
+    SIM2D(n, check) { myProblem = new DummyIntegrandForDummies; }
+
   SystemMatrix* getMatrix() { return myEqSys->getMatrix(0); }
 };
 
@@ -105,4 +108,69 @@ TEST(TestPETScMatrix, Assemble)
         ASSERT_FLOAT_EQ(vals[i], 0.0);
     MatRestoreRow(mat, r, &ncols, &cols, &vals);
   }
+}
+
+
+TEST(TestPETScMatrix, AssembleBlocks)
+{
+  InspectMatrixSIM sim({1,1});
+  sim.read("src/LinAlg/Test/refdata/petsc_test_blocks.xinp");
+  sim.opt.solver = SystemMatrix::PETSC;
+  sim.preprocess();
+  sim.initSystem(SystemMatrix::PETSC);
+
+  Matrix stencil(13,13);
+  for (size_t i = 1; i<= 9; ++i)
+    stencil(i,i) = 1.0;
+  for (size_t i = 10; i<= 13; ++i)
+    stencil(i,i) = 2.0;
+
+  for (int iel = 1; iel <= sim.getSAM()->getNoElms(); ++iel)
+    sim.getMatrix()->assemble(stencil, *sim.getSAM(), iel);
+
+  sim.getMatrix()->beginAssembly();
+  sim.getMatrix()->endAssembly();
+
+  // now inspect the matrix blocks
+/*  const std::vector<Mat>& mat = static_cast<PETScMatrix*>(sim.getMatrix())->getBlockMatrices();
+
+  for (size_t b = 0; b < mat.size(); ++b) {
+    PetscInt mr, mc;
+    MatGetSize(mat[b], &mr, &mc);
+
+    if (b == 0 || b == 3) { // diagonal blocks
+      Vec vec;
+      VecCreate(PETSC_COMM_SELF, &vec);
+      VecSetFromOptions(vec);
+      VecSetType(vec, VECSEQ);
+      VecSetSizes(vec, mr, PETSC_DECIDE);
+      MatGetDiagonal(mat[b], vec);
+      VecView(vec, PETSC_VIEWER_STDOUT_WORLD);
+      PetscScalar* a;
+      VecGetArray(vec, &a);
+      std::vector<int> ref;
+      // check that we have the correct diagonal values
+      std::stringstream str;
+      str << "src/LinAlg/Test/refdata/petsc_matrix_diagonal_block" << b/2 + 1 << ".ref";
+      IntVec v = readIntVector(str.str());
+      ASSERT_EQ(mr, (int)v.size());
+      for (int i = 0; i < mr; ++i)
+        ASSERT_FLOAT_EQ(double(v[i]), a[i]);
+
+      VecRestoreArray(vec, &a);
+      VecDestroy(&vec);
+    }
+
+    // check that no values outside the diagonal are != 0
+    for (PetscInt r = 0; r < mr; ++r) {
+      const PetscInt* cols;
+      PetscInt ncols;
+      const PetscScalar* vals;
+      MatGetRow(mat[b], r, &ncols, &cols, &vals);
+      for (PetscInt i = 0; i < ncols; ++i)
+        if (cols[i] != r)
+          ASSERT_FLOAT_EQ(vals[i], 0.0);
+      MatRestoreRow(mat[b], r, &ncols, &cols, &vals);
+    }
+  }*/
 }

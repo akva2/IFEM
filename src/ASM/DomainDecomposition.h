@@ -22,7 +22,6 @@
 class ProcessAdm;
 class SAMpatch;
 class SIMbase;
-#include <iostream>
 
 
 /*!
@@ -54,6 +53,8 @@ public:
 
   std::set<Interface, SlaveOrder> ghostConnections; //!< Connections to other processes.
 
+  DomainDecomposition() : blocks(1) {}
+
   //! \brief Get number of spatial dimensions
   int getNoSpaceDim() const { return nsd; }
 
@@ -61,9 +62,9 @@ public:
   bool setup(const ProcessAdm& adm, const SIMbase& sim);
 
   //! \brief Get first equation owned by this process.
-  int getMinEq() const { return minEq; };
+  int getMinEq(size_t idx = 0) const { return blocks[idx].minEq; };
   //! \brief Get last equation owned by this process.
-  int getMaxEq() const { return maxEq; };
+  int getMaxEq(size_t idx = 0) const { return blocks[idx].maxEq; };
   //! \brief Get first node owned by this process.
   int getMinNode() const { return minNode; }
   //! \brief Get last node owned by this process.
@@ -127,7 +128,7 @@ public:
   int getGlobalEq(int lEq) const;
 
   //! \brief Obtain local-to-global equation mapping.
-  const std::vector<int>& getMLGEQ() const { return MLGEQ; }
+  const std::vector<int>& getMLGEQ(size_t idx = 0) const { return blocks[idx].MLGEQ; }
 
   //! \brief Obtain local-to-global node mapping.
   const std::vector<int>& getMLGN() const { return MLGN; }
@@ -146,10 +147,15 @@ private:
 
   std::map<int,int> patchOwner; //!< Process that owns a particular patch
 
+  //! \brief Struct with information per matrix block.
+  struct BlockInfo {
+    std::vector<int> MLGEQ; //!< Process-local-to-global equation numbers for block.
+    int minEq; //!< First equation we own in block.
+    int maxEq; //!< Last equation we own in block.
+  };
+
   std::vector<int> MLGN; //!< Process-local-to-global node numbers
-  std::vector<int> MLGEQ; //!< Process-local-to-global equation numbers
-  int minEq; //!< First equation we own
-  int maxEq; //!< Last equation we own
+  std::vector<BlockInfo> blocks; //!< Equation mappings for all matrix blocks.
   int minDof; //!< First DOF we own
   int maxDof; //!< Last DOF we own
   int minNode; //!< First node we own
