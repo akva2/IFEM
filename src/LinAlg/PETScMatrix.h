@@ -18,9 +18,9 @@
 #include "SystemMatrix.h"
 #include "SparseMatrix.h"
 #include "PETScSupport.h"
+#include "PETScSolParams.h"
 #include "LinAlgenums.h"
-
-class LinSolParams;
+#include <set>
 
 typedef std::vector<PetscInt>    PetscIntVec;  //!< PETSc integer vector
 typedef std::vector<PetscIntVec> PetscIntMat;  //!< PETSc integer matrix
@@ -186,7 +186,7 @@ protected:
   KSP                 ksp;             //!< Linear equation solver
   MatNullSpace*       nsp;             //!< Null-space of linear operator
   const ProcessAdm&   adm;             //!< Process administrator
-  const LinSolParams& solParams;       //!< Linear solver parameters
+  PETScSolParams      solParams;       //!< Linear solver parameters
   bool                setParams;       //!< If linear solver parameters are set
   PetscInt            ISsize;          //!< Number of index sets/elements
   PetscRealVec        coords;          //!< Coordinates of local nodes (x0,y0,z0,x1,y1,...)

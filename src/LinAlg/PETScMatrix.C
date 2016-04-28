@@ -12,6 +12,7 @@
 //==============================================================================
 
 #include "PETScMatrix.h"
+#include "PETScSolParams.h"
 #include "LinSolParams.h"
 #include "LinAlgInit.h"
 #include "SAMpatchPETSc.h"
@@ -188,37 +189,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
   // Get number of local equations in linear system
   const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
-
-  size_t nx = solParams.getBlock(0).subdomains[0];
-  size_t ny = solParams.getBlock(0).subdomains[1];
-  size_t nz = solParams.getBlock(0).subdomains[2];
-  int overlap = solParams.getBlock(0).overlap;
-
-  if (nx+ny+nz > 0) {
-    locSubdDofs.resize(nx*ny*samp->getPatches().size());
-    size_t d = 0;
-    for (const auto& it : samp->getPatches()) {
-      const ASMstruct* pch = dynamic_cast<const ASMstruct*>(it);
-      if (!pch)
-        break;
-      int n1, n2, n3;
-      pch->getNoStructElms(n1,n2,n3);
-      const_cast<DomainDecomposition&>(adm.dd).calcAppropriateGroups(n1, n2, n3, nx, ny, nz, overlap);
-      for (size_t g = 0; g < adm.dd.getNoSubdomains(); ++g, ++d) {
-        std::set<int> eqnSet;
-        for (const auto& iEl : adm.dd[g]) {
-          IntVec eqns;
-          sam.getElmEqns(eqns, iEl+1);
-          for (auto& it : eqns)
-            it--;
-          eqnSet.insert(eqns.begin(), eqns.end());
-        }
-        std::copy_if(eqnSet.begin(), eqnSet.end(),
-                     std::back_inserter(locSubdDofs[d]), [](const int& a) { return a > -1;});
-      }
-    }
-    subdDofs = locSubdDofs;
-  }
 
   // Set correct number of rows and columns for matrix.
   MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
@@ -512,8 +482,8 @@ bool PETScMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
 bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
 {
   // Reset linear solver
-  if (nLinSolves && solParams.getResetSolver())
-    if (nLinSolves%solParams.getResetSolver() == 0) {
+  if (nLinSolves && solParams.getIntValue("gmres_restart_iterations"))
+    if (nLinSolves%solParams.getIntValue("gmres_restart_iterations") == 0) {
       KSPDestroy(&ksp);
       KSPCreate(*adm.getCommunicator(),&ksp);
       setParams = true;
@@ -542,10 +512,10 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     return false;
   }
 
-  if (solParams.getMessageLevel() > 1) {
+  if (solParams.getIntValue("verbosity") > 1) {
     PetscInt its;
     KSPGetIterationNumber(ksp,&its);
-    PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %D\n",solParams.getMethod().c_str(),its);
+    PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %D\n",solParams.getStringValue("type").c_str(),its);
   }
   nLinSolves++;
 

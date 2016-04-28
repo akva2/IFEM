@@ -504,7 +504,7 @@ bool SIMbase::parse (const TiXmlElement* elem)
 
   if (!strcasecmp(elem->Value(),"linearsolver")) {
     if (!mySolParams)
-      mySolParams = new LinSolParams(nsd);
+      mySolParams = new LinSolParams();
     result &= mySolParams->read(elem);
   }
 
@@ -770,9 +770,9 @@ bool SIMbase::parse (char* keyWord, std::istream& is)
 void SIMbase::readLinSolParams (std::istream& is, int npar)
 {
   if (!mySolParams)
-    mySolParams = new LinSolParams(nsd);
+    mySolParams = new LinSolParams;
 
-  mySolParams->read(is,npar);
+  std::cerr << "Reading linear solver parameters from .inp is no longer supported" << std::endl;
 }
 
 
