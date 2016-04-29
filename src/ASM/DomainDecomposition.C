@@ -447,9 +447,9 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 }
 
 
-int DomainDecomposition::getGlobalEq(int lEq) const
+int DomainDecomposition::getGlobalEq(int lEq, size_t idx) const
 {
-  if (lEq < 1 || (!blocks[0].MLGEQ.empty() && lEq > (int)blocks[0].MLGEQ.size()))
+  if (lEq < 1 || (idx < blocks.size() && !blocks[idx].MLGEQ.empty() && lEq > (int)blocks[idx].MLGEQ.size()))
     return 0;
 
   if (blocks[0].MLGEQ.empty()) {
@@ -459,7 +459,7 @@ int DomainDecomposition::getGlobalEq(int lEq) const
     return lEq;
   }
 
-  return blocks[0].MLGEQ[lEq-1];
+  return blocks[idx].MLGEQ[lEq-1];
 }
 
 
@@ -467,7 +467,50 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
 {
   nsd = sim.getNoSpaceDim();
   sam = dynamic_cast<const SAMpatch*>(sim.getSAM());
-  return calcGlobalNodeNumbers(adm, sim) && calcGlobalEqNumbers(adm, sim);
+
+  // Establish global node numbers
+  if (!calcGlobalNodeNumbers(adm, sim))
+    return false;
+
+  // Establish global equation numbers.
+  // Needed for the vector, even with block matrices.
+  if (!calcGlobalEqNumbers(adm, sim))
+    return false;
+
+  // Establish local-to-global equation mappings for each block.
+  if (sim.getSolParams() && sim.getSolParams()->getNoBlocks() > 1) {
+    const LinSolParams& solParams = *sim.getSolParams();
+    blocks.resize(solParams.getNoBlocks()+1);
+    
+    // Find local equations for each block
+   for (size_t i = 0; i < solParams.getNoBlocks(); ++i) {
+      // grab DOFs of given type(s)
+      int basis = solParams.getBlock(i).basis;
+      char dofType = basis  == 1 ? 'D' : 'P'+basis-2;
+      if (solParams.getBlock(i).comps != 0) {
+        std::set<int> comps = utl::getDigits(solParams.getBlock(i).comps);
+        for (auto& c : comps) {
+          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType, c);
+          blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
+        }
+      } else {
+        std::set<int> bases = utl::getDigits(basis);
+        for (auto& b : bases) {
+          int cb = b;
+          dofType = cb == 1 ? 'D' : 'P'+cb-2;
+          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
+          blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
+          // hack. stick multipliers in the second block. Correct thing to do for average pressure constraint in Stokes.
+          if (i == 1) {
+            tmp = adm.dd.getSAM()->getEquations('L', 1);
+            blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
+          }
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
 

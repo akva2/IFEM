@@ -196,6 +196,9 @@ protected:
   IS glob2LocEq = nullptr; //!< Index set for global-to-local equations.
   std::vector<Mat> matvec; //!< Blocks for block matrices.
   std::vector<IS> isvec;   //!< Index sets for block matrices.
+
+  std::vector<std::set<int>> blockEqs; //!< Equations belonging to each block
+  std::vector<std::array<int,3>> glb2Blk; //!< Maps matrix entries in CSC order to block matrix entries.
 };
 
 

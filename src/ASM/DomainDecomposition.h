@@ -125,7 +125,9 @@ public:
   int getPatchOwner(size_t p) const;
 
   //! \brief Get global equation number
-  int getGlobalEq(int lEq) const;
+  //! \param lEq Local equation number
+  //! \param idx Block to get index for
+  int getGlobalEq(int lEq, size_t idx=0) const;
 
   //! \brief Obtain local-to-global equation mapping.
   const std::vector<int>& getMLGEQ(size_t idx = 0) const { return blocks[idx].MLGEQ; }
@@ -152,10 +154,11 @@ private:
     std::vector<int> MLGEQ; //!< Process-local-to-global equation numbers for block.
     int minEq; //!< First equation we own in block.
     int maxEq; //!< Last equation we own in block.
+    std::set<int> localEqs; //!< Local equations belonging to the block.
   };
 
   std::vector<int> MLGN; //!< Process-local-to-global node numbers
-  std::vector<BlockInfo> blocks; //!< Equation mappings for all matrix blocks.
+  std::vector<BlockInfo> blocks; //!< Equation mappings for all matrix blocks. First entry is for the total matrix.
   int minDof; //!< First DOF we own
   int maxDof; //!< Last DOF we own
   int minNode; //!< First node we own

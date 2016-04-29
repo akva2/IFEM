@@ -200,6 +200,9 @@ public:
   //! for the result fields associated with each simulator in the HDF5 output.
   virtual std::string getName() const { return "SIMbase"; }
 
+  //! \brief Obtain the linear solver parameters.
+  const LinSolParams* getSolParams() const { return mySolParams; }
+
   //! \brief Returns the number of parameter dimensions in the model.
   virtual unsigned short int getNoParamDim() const = 0;
   //! \brief Returns the number of spatial dimensions in the model.

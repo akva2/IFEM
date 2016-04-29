@@ -21,6 +21,7 @@
 #include "ASMstruct.h"
 #include "DomainDecomposition.h"
 #include "Profiler.h"
+#include "Utilities.h"
 
 
 PETScVector::PETScVector(const ProcessAdm& padm) : adm(padm)
@@ -189,8 +190,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
   MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
   MPI_Barrier(*adm.getCommunicator());
 
-  MatSetFromOptions(A);
-
   // Allocate sparsity pattern
   std::vector<std::set<int>> dofc;
   sam.getDofCouplings(dofc);
@@ -198,7 +197,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
   if (matvec.empty()) {
     // Set correct number of rows and columns for matrix.
     MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
-    MPI_Barrier(*adm.getCommunicator());
 
     MatSetFromOptions(A);
 
@@ -232,7 +230,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
         Nnz.push_back(it.size());
 
       MatSeqAIJSetPreallocation(A,PETSC_DEFAULT,Nnz.data());
-      MatSeqAIJSetPreallocation(A,PETSC_DEFAULT,Nnz.data());
 
       PetscIntVec col;
       for (const auto& it2 : dofc)
@@ -257,43 +254,92 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 #endif
   } else {
     // get equations for block
-    std::vector<std::vector<int>> blockEqs(solParams.getNoBlocks());
+    blockEqs.resize(solParams.getNoBlocks());
     for (size_t i = 0; i < solParams.getNoBlocks(); ++i) {
-      char dofType = solParams.getBlock(i).basis == 1 ? 'D' :
-                            'P'+solParams.getBlock(i).basis-2;
       // grab DOFs of given type(s)
+      int basis = solParams.getBlock(i).basis;
+      char dofType = basis  == 1 ? 'D' : 'P'+basis-2;
       if (solParams.getBlock(i).comps != 0) {
-        char temp[32];
-        sprintf(temp,"%lu",solParams.getBlock(i).comps);
-        for (char* t = temp; *t != 0; ++t) {
-          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType, (int)(*t - '0'));
-          blockEqs[i].insert(blockEqs[i].end(), tmp.begin(), tmp.end());
+        std::set<int> comps = utl::getDigits(solParams.getBlock(i).comps);
+        for (auto& c : comps) {
+          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType, c);
+          blockEqs[i].insert(tmp.begin(), tmp.end());
         }
       } else {
-        auto blk = adm.dd.getSAM()->getEquations(dofType);
-        std::copy(blk.begin(), blk.end(), std::back_inserter(blockEqs[i]));
+        std::set<int> bases = utl::getDigits(basis);
+        for (auto& b : bases) {
+          int cb = b;
+          dofType = cb == 1 ? 'D' : 'P'+cb-2;
+          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
+          blockEqs[i].insert(tmp.begin(), tmp.end());
+          // hack. stick multipliers in the second block. Correct thing to do for average pressure constraint in Stokes.
+          if (i == 1) {
+            tmp = adm.dd.getSAM()->getEquations('L', 1);
+            blockEqs[i].insert(tmp.begin(), tmp.end());
+          }
+        }
       }
     }
 
     // nnz per block
-    std::vector<std::vector<PetscInt>> nnz(solParams.getNoBlocks());
-    for (size_t i = 0; i < solParams.getNoBlocks(); ++i)
-      for (const auto& it : blockEqs[i])
-        nnz[i].push_back(dofc[it].size());
+    size_t blocks = solParams.getNoBlocks();
+    std::vector<std::vector<PetscInt>> nnz(blocks*blocks);
+    size_t k = 0;
+    for (size_t i = 0; i < blocks; ++i)
+      for (size_t j = 0; j < blocks; ++j, ++k)
+        for (const auto& it : blockEqs[i])
+          nnz[k].push_back(std::min(dofc[it-1].size(), blockEqs[j].size()));
 
     auto it = matvec.begin();
-    for (size_t i = 0; i < solParams.getNoBlocks(); ++i)
-      for (size_t j = 0; j < solParams.getNoBlocks(); ++j, ++it) {
+    for (size_t i = 0; i < blocks; ++i)
+      for (size_t j = 0; j < blocks; ++j, ++it) {
         MatSetSizes(*it, blockEqs[i].size(), blockEqs[j].size(),
                     PETSC_DETERMINE, PETSC_DETERMINE);
         MatSetFromOptions(*it);
-        MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz[i].data());
+        MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz[i*blocks+j].data());
+        MatSetUp(*it);
       }
 
     // index sets
-    for (size_t i = 0; i < isvec.size(); ++i)
-      ISCreateGeneral(*adm.getCommunicator(),blockEqs[i].size(),
-                      blockEqs[i].data(),PETSC_COPY_VALUES,&isvec[i]);
+    for (size_t i = 0; i < isvec.size(); ++i) {
+      std::vector<int> blockEq(blockEqs[i].begin(), blockEqs[i].end());
+      for (auto& it : blockEq)
+        --it;
+      ISCreateGeneral(*adm.getCommunicator(),blockEq.size(),
+                      blockEq.data(),PETSC_COPY_VALUES,&isvec[i]);
+    }
+
+    // map from sparse matrix indices to block matrix indices
+    glb2Blk.resize(SparseMatrix::A.size());
+    std::vector<std::array<int,2>> eq2b(neq, {-1, 0}); // cache
+    for (size_t j = 0; j < cols(); ++j) {
+      for (int i = IA[j]; i < IA[j+1]; ++i) {
+        int iblk = -1;
+        int jblk = -1;
+        if (eq2b[JA[i]][0] != -1) {
+          iblk = eq2b[JA[i]][0];
+          glb2Blk[i][1] = eq2b[JA[i]][1];
+        } if (eq2b[j][0] != -1) {
+          jblk = eq2b[j][0];
+          glb2Blk[i][2] = eq2b[j][1];
+        }
+
+        for (size_t b = 0; b < blockEqs.size() && (iblk == -1 || jblk == -1); ++b) {
+          std::set<int>::const_iterator it;
+          if (iblk == -1 && (it = blockEqs[b].find(JA[i]+1)) != blockEqs[b].end()) {
+            iblk = b;
+            eq2b[JA[i]][0] = b;
+            eq2b[JA[i]][1] = glb2Blk[i][1] = std::distance(blockEqs[b].begin(), it);
+          }
+          if (jblk == -1 && (it = blockEqs[b].find(j+1)) != blockEqs[b].end()) {
+            jblk = b;
+            eq2b[j][0] = b;
+            eq2b[j][1] = glb2Blk[i][2] = std::distance(blockEqs[b].begin(), it);
+          }
+        }
+        glb2Blk[i][0] = iblk*solParams.getNoBlocks() + jblk;
+      }
+    }
 
     MatCreateNest(*adm.getCommunicator(),solParams.getNoBlocks(),isvec.data(),
                   solParams.getNoBlocks(),isvec.data(),matvec.data(),&A);
@@ -309,11 +355,17 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
 bool PETScMatrix::beginAssembly()
 {
-  this->optimiseSLU();
-  for (size_t j = 0; j < cols(); ++j)
-    for (int i = IA[j]; i < IA[j+1]; ++i)
-      MatSetValue(A, adm.dd.getGlobalEq(JA[i]+1)-1,
-                  adm.dd.getGlobalEq(j+1)-1, SparseMatrix::A[i], ADD_VALUES);
+  if (matvec.empty()) {
+    for (size_t j = 0; j < cols(); ++j)
+      for (int i = IA[j]; i < IA[j+1]; ++i)
+        MatSetValue(A, adm.dd.getGlobalEq(JA[i]+1)-1,
+                    adm.dd.getGlobalEq(j+1)-1, SparseMatrix::A[i], ADD_VALUES);
+  } else {
+    for (size_t j = 0; j < cols(); ++j)
+      for (int i = IA[j]; i < IA[j+1]; ++i)
+        MatSetValue(matvec[glb2Blk[i][0]], adm.dd.getGlobalEq(glb2Blk[i][1], glb2Blk[i][0]),
+                    adm.dd.getGlobalEq(glb2Blk[i][2], glb2Blk[i][0]), SparseMatrix::A[i], ADD_VALUES);
+  }
 
   MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);
   return true;
@@ -334,7 +386,12 @@ void PETScMatrix::init ()
   SparseMatrix::init();
 
   // Set all matrix elements to zero
-  MatZeroEntries(A);
+  if (matvec.empty())
+    MatZeroEntries(A);
+  else {
+    for (auto& it : matvec)
+      MatZeroEntries(it);
+  }
 }
 
 
@@ -377,7 +434,6 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
     }
 
     if (adm.isParallel()) {
-#ifdef PARALLEL_PETSC
       Vec solution;
       VecCreateSeqWithArray(PETSC_COMM_SELF, 1, adm.dd.getMLGEQ().size(), Bsptr->getPtr(), &solution);
       VecScatter ctx;
@@ -386,7 +442,6 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
       VecScatterEnd(ctx, Bptr->getVector(),solution,INSERT_VALUES,SCATTER_FORWARD);
       VecScatterDestroy(&ctx);
       VecDestroy(&solution);
-#endif
     } else {
       PetscScalar* data;
       VecGetArray(Bptr->getVector(), &data);

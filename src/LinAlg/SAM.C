@@ -945,7 +945,8 @@ std::set<int> SAM::getEquations(char dofType, int dof) const
 {
   std::set<int> result;
   for (int i = 1; i <= getNoNodes(); ++i) {
-    if (getNodeType(i) == dofType) {
+    char type = getNodeType(i);
+    if (type == dofType || (dofType == 'D' && type == ' ')) {
       auto dofs = getNodeDOFs(i);
       for (int d = (dof > 0 ? dof : 1);
                d <= (dof > 0 ? dof : dofs.second-dofs.first+1); ++d) {
