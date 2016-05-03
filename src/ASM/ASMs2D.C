@@ -1302,7 +1302,7 @@ void ASMs2D::getBoundaryNodes (int lIndex, IntVec& nodes, int basis) const
   if (basis == 0)
     basis = 1;
 
-  if (!getBasis(basis)) return; // silently ignore empty patches
+  if (!this->getBasis(basis)) return; // silently ignore empty patches
 
 #if SP_DEBUG > 1
   size_t last = nodes.size();
