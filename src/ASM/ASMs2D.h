@@ -183,7 +183,7 @@ public:
   //! \param[in] lIndex Local index of the boundary edge
   //! \param glbNodes Array of global boundary node numbers
   //! \param basis Which basis to grab nodes for (0 for all)
-  virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes, int basis = 0) const;
+  virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes, int basis) const;
 
   //! \brief Assigns new global node numbers for all nodes of the patch.
   //! \param nodes Object with global nodes numbers to assign to this patch

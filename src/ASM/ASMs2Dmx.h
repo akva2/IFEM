@@ -208,7 +208,7 @@ public:
   //! \param[in] lIndex Local index of the boundary edge
   //! \param glbNodes Array of global boundary node numbers
   //! \param basis Which basis to grab nodes for (0 for all)
-  virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes, int basis = 0) const;
+  virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes, int basis) const;
 protected:
 
   std::vector<std::shared_ptr<Go::SplineSurface>> m_basis; //!< Vector of bases
