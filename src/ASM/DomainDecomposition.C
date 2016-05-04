@@ -56,37 +56,42 @@ public:
           std::iota(it, it+dim1, n*dim1);
       }
       else if (orient == 2) {
+        auto it = nodes.begin();
         for (int n = 0; n < dim2; ++n) {
-          int idx = (n+1)*dim1;
-           std::generate(nodes.begin()+n*dim1, nodes.begin()+(n+1)*dim1,
-                       [&idx] { return --idx; });
+          int idx = (n+1)*dim1-1;
+          for (int i = 0; i < dim1; ++i, ++it, --idx)
+            *it = idx;
         }
       }
       else if (orient == 3)
         std::iota(nodes.rbegin(), nodes.rend(), 0);
       else if (orient == 4) {
+        auto it = nodes.begin();
         for (int n = 0; n < dim2; ++n) {
-          int idx = n-dim1;
-          std::generate(nodes.begin()+n*dim1, nodes.begin()+(n+1)*dim1,
-                        [dim1,&idx] { return idx += dim1; });
+          int idx = n;
+          for (int i = 0; i < dim1; ++i, ++it, idx += dim1)
+            *it = idx;
         }
       } else if (orient == 5) {
+        auto it = nodes.begin();
         for (int n = 0; n < dim2; ++n) {
-          int idx = -n-1;
-          std::generate(nodes.begin()+n*dim1, nodes.begin()+(n+1)*dim1,
-                         [dim1,&idx] { return idx += dim1; });
+          int idx = dim1-n-1;
+          for (int i = 0; i < dim1; ++i, ++it, idx += dim1)
+            *it = idx;
         }
       } else if (orient == 6) {
+        auto it = nodes.begin();
         for (int n = 0; n < dim2; ++n) {
-          int idx = (dim2-1)*dim1+n + dim1;
-          std::generate(nodes.begin()+n*dim1, nodes.begin()+(n+1)*dim1,
-                        [dim1,&idx] { return idx -= dim1; });
+          int idx = (dim2-1)*dim1+n;
+          for (int i = 0; i < dim1; ++i, ++it, idx -= dim1)
+            *it = idx;
         }
       } else if (orient == 7) {
+        auto it = nodes.begin();
         for (int n = 0; n < dim2; ++n) {
-          int idx = dim2*dim1-n-1 + dim1;
-          std::generate(nodes.begin()+n*dim1, nodes.begin()+(n+1)*dim1,
-                        [dim1,&idx] { return idx -= dim1; });
+          int idx = dim2*dim1-n-1;
+          for (int i = 0; i < dim1; ++i, ++it, idx -= dim1)
+            *it = idx;
         }
       }
     } else {
