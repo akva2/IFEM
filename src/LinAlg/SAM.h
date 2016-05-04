@@ -57,7 +57,7 @@ public:
   //! \brief Returns the equations numbers for a given dofType.
   //! \param nodeType Type of node
   //! \param ldof DOFs in nodes (0 = all)
-  std::set<int> getEquations(char nodeType, int dof=0) const;
+  IntSet getEquations(char nodeType, int dof=0) const;
   //! \brief Returns the Matrix of Accumulated DOFs.
   const int* getMADOF() const { return madof; }
   //! \brief Returns the Matrix of EQuation Numbers.

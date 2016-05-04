@@ -941,7 +941,7 @@ bool SAM::getNodalReactions (int inod, const Vector& rf, Vector& nrf) const
 }
 
 
-std::set<int> SAM::getEquations(char dofType, int dof) const
+IntSet SAM::getEquations(char dofType, int dof) const
 {
   IntSet result;
   for (int inod = 0; inod < nnod; inod++) {
