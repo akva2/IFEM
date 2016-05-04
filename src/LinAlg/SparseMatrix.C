@@ -700,10 +700,8 @@ void SparseMatrix::initAssembly (const SAM& sam, bool delayLocking)
 {
   this->resize(sam.neq,sam.neq);
 #ifdef USE_OPENMP
-  if (omp_get_max_threads() < 2)
-    return;
-
-  preAssemble(sam, delayLocking);
+  if (omp_get_max_threads() > 1)
+    preAssemble(sam, delayLocking);
 #endif
 }
 
