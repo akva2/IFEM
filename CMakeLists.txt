@@ -33,6 +33,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 include(cmake/Scripts/UseMultiArch.cmake)
 
 if(NOT IFEM_AS_SUBMODULE)
+  if(NOT IFEM_PATH)
+    set(IFEM_PATH ${PROJECT_SOURCE_DIR})
+  endif()
   find_package(IFEMDeps)
 endif()
 
