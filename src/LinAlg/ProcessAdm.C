@@ -28,8 +28,7 @@ ProcessAdm::ProcessAdm() : cout(std::cout)
 }
 
 #if defined(HAS_PETSC) || defined(HAVE_MPI)
-ProcessAdm::ProcessAdm(MPI_Comm& mpi_comm) :
-  cout(std::cout)
+ProcessAdm::ProcessAdm(MPI_Comm& mpi_comm) : cout(std::cout)
 {
   LinAlgInit::increfs();
 #ifdef HAVE_MPI
