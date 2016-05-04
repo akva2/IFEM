@@ -59,11 +59,9 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     if (utl::getAttribute(elem,"lowerpatch",lowpatch))
       uppatch = myModel.size();
     utl::getAttribute(elem,"upperpatch",uppatch);
-    int check = myModel.size();
-    if (nGlPatches > 0)
-      check = nGlPatches;
+    int nPatch = nGlPatches > 0 ? nGlPatches : myModel.size();
 
-    if (lowpatch < 1 || uppatch > check)
+    if (lowpatch < 1 || uppatch > nPatch)
     {
       std::cerr <<" *** SIM3D::parse: Invalid patch indices, lower="
                 << lowpatch <<" upper="<< uppatch << std::endl;
@@ -121,11 +119,9 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     if (utl::getAttribute(elem,"lowerpatch",lowpatch))
       uppatch = myModel.size();
     utl::getAttribute(elem,"upperpatch",uppatch);
-    int check = myModel.size();
-    if (nGlPatches > 0)
-      check = nGlPatches;
 
-    if (lowpatch < 1 || uppatch > check)
+    int nPatch = nGlPatches > 0 ? nGlPatches : myModel.size();
+    if (lowpatch < 1 || uppatch > nPatch)
     {
       std::cerr <<" *** SIM3D::parse: Invalid patch indices, lower="
                 << lowpatch <<" upper="<< uppatch << std::endl;
@@ -138,7 +134,7 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     utl::getAttribute(elem,"v",addv);
     utl::getAttribute(elem,"w",addw);
     for (int j = lowpatch-1; j < uppatch; j++) {
-      int p = getLocalPatchIndex(j+1);
+      int p = this->getLocalPatchIndex(j+1);
       if (p < 1)
         continue;
       if ((pch = dynamic_cast<ASM3D*>(myModel[p-1])))
