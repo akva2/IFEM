@@ -48,8 +48,7 @@ ProcessAdm::ProcessAdm(MPI_Comm& mpi_comm) : cout(std::cout)
 
 
 #ifdef HAVE_MPI
-ProcessAdm::ProcessAdm(bool) :
-  cout(std::cout)
+ProcessAdm::ProcessAdm(bool) : cout(std::cout)
 {
   LinAlgInit::increfs();
   MPI_Comm_dup(MPI_COMM_WORLD,&comm);
