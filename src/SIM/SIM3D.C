@@ -78,9 +78,7 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
       utl::getAttribute(elem,"w",addw);
       for (int j = lowpatch-1; j < uppatch; j++) {
         int p = getLocalPatchIndex(j+1);
-        if (p < 1)
-          continue;
-        if ((pch = dynamic_cast<ASM3D*>(myModel[p-1])))
+        if (p > 0 && (pch = dynamic_cast<ASM3D*>(myModel[p-1])))
         {
           IFEM::cout <<"\tRefining P"<< p
                      <<" "<< addu <<" "<< addv <<" "<< addw << std::endl;
@@ -97,9 +95,7 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
       utl::getAttribute(elem,"dir",dir);
       for (int j = lowpatch-1; j < uppatch; j++) {
         int p = getLocalPatchIndex(j+1);
-        if (p < 1)
-          continue;
-        if ((pch = dynamic_cast<ASM3D*>(myModel[p-1])))
+        if (p > 0 && (pch = dynamic_cast<ASM3D*>(myModel[p-1])))
         {
           IFEM::cout <<"\tRefining P"<< p <<" dir="<< dir;
           for (size_t i = 0; i < xi.size(); i++)
@@ -135,9 +131,7 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
     utl::getAttribute(elem,"w",addw);
     for (int j = lowpatch-1; j < uppatch; j++) {
       int p = this->getLocalPatchIndex(j+1);
-      if (p < 1)
-        continue;
-      if ((pch = dynamic_cast<ASM3D*>(myModel[p-1])))
+      if (p > 0 && (pch = dynamic_cast<ASM3D*>(myModel[p-1])))
       {
         IFEM::cout <<"\tRaising order of P"<< p
                    <<" "<< addu <<" "<< addv  <<" " << addw << std::endl;
