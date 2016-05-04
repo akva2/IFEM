@@ -59,7 +59,7 @@ public:
         for (int n = 0; n < dim2; ++n) {
           int idx = (n+1)*dim1;
            std::generate(nodes.begin()+n*dim1, nodes.begin()+(n+1)*dim1,
-                       [dim1,&idx] { return --idx; });
+                       [&idx] { return --idx; });
         }
       }
       else if (orient == 3)
