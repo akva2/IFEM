@@ -252,6 +252,7 @@ private:
   SparseSolver solver; //!< Which equation solver to use
   SuperLUdata*    slu; //!< Matrix data for the SuperLU equation solver
   int      numThreads; //!< Number of threads to use for the SuperLU_MT solver
+
 protected:
   IntVec IA; //!< Identifies the beginning of each row or column
   IntVec JA; //!< Specifies column/row index of each nonzero element
