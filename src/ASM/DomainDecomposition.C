@@ -609,8 +609,14 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
           // Hack: stick multipliers in the second block.
           // Correct thing to do for average pressure constraint in Stokes.
           if (i == 1) {
-            tmp = sam->getEquations('L', 1);
-            blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
+            auto LMs = sim.getPatch(1)->getLagrangeMultipliers();
+            for (size_t n = LMs.first; n <= LMs.second && n; ++n) {
+              if (sim.getPatch(1)->getLMType(n) == 'G') {
+                int lEq = sam->getEquation(n, 1);
+                if (lEq > 0)
+                  blocks[i+1].localEqs.insert(lEq);
+              }
+            }
           }
         }
       }
