@@ -393,6 +393,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 
   auto locLMs = sim.getPatch(1)->getLagrangeMultipliers();
   std::vector<int> glbLMs;
+  std::vector<int> blkLMs;
   std::vector<int> nEqs(blocks.size());
   if (adm.getProcId() > 0) {
     adm.receive(nEqs, adm.getProcId()-1);
@@ -412,6 +413,11 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 
     glbLMs.resize(nLMs);
     adm.receive(glbLMs, adm.getProcId()-1);
+    // HACK: multipliers always in second block
+    if (blocks.size() > 1) {
+      blkLMs.resize(nLMs);
+      adm.receive(blkLMs, adm.getProcId()-1);
+    }
   }
 
   for (size_t block = 0; block < blocks.size(); ++block) {
@@ -432,11 +438,19 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
   std::vector<std::map<int,int>> old2new(blocks.size());
 
   size_t n = locLMs.first;
+  auto blockIt = blkLMs.begin();
   for (const auto& it : glbLMs) {
     while (sim.getPatch(1)->getLMType(n) != 'G')
       ++n;
-    int leq = blocks[0].MLGEQ[sim.getSAM()->getEquation(n, 1)-1];
+    int seq = sim.getSAM()->getEquation(n, 1);
+    int leq = blocks[0].MLGEQ[seq-1];
     old2new[0][leq] = it;
+    if (blocks.size() > 1 && !blkLMs.empty()) {
+      auto it = blocks[2].localEqs.find(seq);
+      int leq = blocks[2].MLGEQ[std::distance(blocks[2].localEqs.begin(), it)];
+      old2new[2][leq] = *blockIt;
+      ++blockIt;
+    }
   }
 
   for (const auto& it : ghostConnections) {
@@ -525,18 +539,30 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
       maxEqs.push_back(it.maxEq);
 
     adm.send(maxEqs, adm.getProcId()+1);
+
     auto LMs = sim.getPatch(1)->getLagrangeMultipliers();
     std::vector<int> LM;
+    size_t nMult = 0;
     for (size_t n = LMs.first; n <= LMs.second && n; ++n) {
       // TODO: > 1 dof for multipliers
       if (sim.getPatch(1)->getLMType(n) == 'G') {
+        // global Lagrange multipliers
         int eq = sim.getSAM()->getEquation(n, 1);
         if (eq > 0)
-          LM.push_back(blocks[0].MLGEQ[eq-1]);
+          LM.push_back(blocks[0].MLGEQ[eq-1]), ++nMult;
       }
     }
+
     adm.send((int)LM.size(), adm.getProcId()+1);
     adm.send(LM, adm.getProcId()+1);
+
+    // HACK: multipliers always in second block
+    LM.clear();
+    if (blocks.size() > 1) {
+      for (size_t i = 0; i < nMult; ++i)
+        LM.push_back(blocks[2].MLGEQ[blocks[2].MLGEQ.size()-nMult+i]);
+      adm.send(LM, adm.getProcId()+1);
+    }
   }
 
   for (const auto& it : ghostConnections) {
@@ -606,7 +632,7 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
           dofType = cb == 1 ? 'D' : 'P'+cb-2;
           std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
           blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
-          // Hack: stick multipliers in the second block.
+          // HACK: multipliers always in second block
           // Correct thing to do for average pressure constraint in Stokes.
           if (i == 1) {
             auto LMs = sim.getPatch(1)->getLagrangeMultipliers();

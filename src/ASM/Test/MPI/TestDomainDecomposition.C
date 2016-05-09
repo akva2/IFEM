@@ -25,6 +25,9 @@ public:
   TestGlobalLMSIM(unsigned char n1 = 2, bool check = false) :
     SIM2D(n1, check) {}
 
+  TestGlobalLMSIM(const std::vector<unsigned char>& nf, bool check = false) :
+    SIM2D(nf, check) {}
+
 protected:
   bool preprocessBeforeAsmInit(int& nnod)
   {
@@ -227,6 +230,54 @@ TEST_P(TestDomainDecomposition2D, SetupMixedBasisBlockEqsBasis)
   str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_blocks_basis_orient";
   str << GetParam() << "_block2_eqs" << adm.getProcId() << ".ref";
   B = readIntVector(str.str());
+  check_intvectors_equal(dd.getMLGEQ(2), B);
+}
+
+
+TEST_P(TestDomainDecomposition2D, SetupMixedBasisBlockEqsBasisGlobalLM)
+{
+  TestGlobalLMSIM sim({2,2});
+  std::stringstream str;
+  str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_blocks_basis_orient";
+  str << GetParam() << ".xinp";
+  sim.read(str.str().c_str());
+  sim.preprocess();
+
+  const ProcessAdm& adm = sim.getProcessAdm();
+  // TODO: unnecessary cast and setup call after integration.
+  DomainDecomposition& dd = const_cast<DomainDecomposition&>(adm.dd);
+  dd.setup(adm, sim);
+
+  str.str("");
+  str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_mixed_orient";
+  str << GetParam() << "_eqs" << adm.getProcId() << ".ref";
+  IntVec B = readIntVector(str.str());
+  if (adm.getProcId() == 0)
+    B.push_back(49);
+  else {
+    for (auto& it : B)
+      if (it > 48)
+        ++it;
+    B.push_back(49);
+  }
+  check_intvectors_equal(dd.getMLGEQ(0), B);
+  str.str("");
+  str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_blocks_basis_orient";
+  str << GetParam() << "_block1_eqs" << adm.getProcId() << ".ref";
+  B = readIntVector(str.str());
+  check_intvectors_equal(dd.getMLGEQ(1), B);
+  str.str("");
+  str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_blocks_basis_orient";
+  str << GetParam() << "_block2_eqs" << adm.getProcId() << ".ref";
+  B = readIntVector(str.str());
+  if (adm.getProcId() == 0)
+    B.push_back(19);
+  else {
+    for (auto& it : B)
+      if (it > 18)
+        ++it;
+    B.push_back(19);
+  }
   check_intvectors_equal(dd.getMLGEQ(2), B);
 }
 
