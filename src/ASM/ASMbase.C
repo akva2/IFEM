@@ -66,6 +66,7 @@ ASMbase::ASMbase (const ASMbase& patch, unsigned char n_f)
   firstIp = patch.firstIp;
   firstBp = patch.firstBp;
   myLMs = patch.myLMs;
+  myLMTypes = patch.myLMTypes;
   // Note: Properties are _not_ copied
 }
 
@@ -146,6 +147,7 @@ void ASMbase::clear (bool retainGeometry)
     delete *it;
 
   myLMs.first = myLMs.second = 0;
+  myLMTypes.clear();
 
   myMLGN.clear();
   BCode.clear();
@@ -188,7 +190,7 @@ bool ASMbase::addLagrangeMultipliers (size_t iel, const IntVec& mGLag,
 
     // Update the nodal range (1-based indices) of the Lagrange multipliers
     if (myLMs.first == 0)
-      myLMs.first = myLMs.second = node+1;
+      myLMs.first = myLMs.second = node = node+1;
     else if (node+1 < myLMs.first)
     {
       std::cerr <<" *** ASMbase::addLagrangeMultipliers: Node "<< node+1
@@ -197,7 +199,10 @@ bool ASMbase::addLagrangeMultipliers (size_t iel, const IntVec& mGLag,
       return false;
     }
     else if (node >= myLMs.second)
-      myLMs.second = node+1;
+      myLMs.second = node = node+1;
+
+    myLMTypes.resize(node-myLMs.first+1);
+    myLMTypes[node-myLMs.first] = 'L';
 
     // Extend the element connectivity table
     myMNPC[iel-1].push_back(node);
@@ -224,7 +229,7 @@ bool ASMbase::addGlobalLagrangeMultipliers(const IntVec& mGLag,
 
     // Update the nodal range (1-based indices) of the Lagrange multipliers
     if (myLMs.first == 0)
-      myLMs.first = myLMs.second = node+1;
+      myLMs.first = myLMs.second = node = node+1;
     else if (node+1 < myLMs.first)
     {
       std::cerr <<" *** ASMbase::addGlobalLagrangeMultiplier: Node "<< node+1
@@ -233,7 +238,10 @@ bool ASMbase::addGlobalLagrangeMultipliers(const IntVec& mGLag,
       return false;
     }
     else if (node >= myLMs.second)
-      myLMs.second = node+1;
+      myLMs.second = node = node+1;
+
+    myLMTypes.resize(node-myLMs.first+1);
+    myLMTypes[node-myLMs.first] = 'G';
 
     // Extend the element connectivity table
     for (auto& it : myMNPC)
@@ -264,6 +272,15 @@ int ASMbase::getNodeID (size_t inod, bool) const
 }
 
 
+char ASMbase::getLMType(size_t n) const
+{
+  if (n >= myLMs.first && n <= myLMs.second)
+    return myLMTypes[n-myLMs.first];
+
+  return 'L';
+}
+
+
 int ASMbase::getElmID (size_t iel) const
 {
   if (iel < 1 || iel > MLGE.size())
@@ -281,7 +298,7 @@ unsigned char ASMbase::getNodalDOFs (size_t inod) const
 
 char ASMbase::getNodeType (size_t inod) const
 {
-  return this->isLMn(inod) ? 'L' : (inod > nnod ? 'X' : 'D');
+  return this->isLMn(inod) ? getLMType(inod) : (inod > nnod ? 'X' : 'D');
 }
 
 
