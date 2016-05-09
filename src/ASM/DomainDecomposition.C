@@ -48,51 +48,23 @@ public:
         dim1 = n1, dim2 = n2;
 
       nodes.resize(dim1*dim2);
-      if (orient == 0)
-        std::iota(nodes.begin(), nodes.end(), 0);
-      else if (orient == 1) {
-        auto it = nodes.begin();
-        for (int n = dim2-1; n >= 0; --n, it += dim1)
-          std::iota(it, it+dim1, n*dim1);
-      }
-      else if (orient == 2) {
-        auto it = nodes.begin();
-        for (int n = 0; n < dim2; ++n) {
-          int idx = (n+1)*dim1-1;
-          for (int i = 0; i < dim1; ++i, ++it, --idx)
-            *it = idx;
-        }
-      }
-      else if (orient == 3)
-        std::iota(nodes.rbegin(), nodes.rend(), 0);
-      else if (orient == 4) {
-        auto it = nodes.begin();
-        for (int n = 0; n < dim2; ++n) {
-          int idx = n;
-          for (int i = 0; i < dim1; ++i, ++it, idx += dim1)
-            *it = idx;
-        }
-      } else if (orient == 5) {
-        auto it = nodes.begin();
-        for (int n = 0; n < dim2; ++n) {
-          int idx = dim2-n-1;
-          for (int i = 0; i < dim1; ++i, ++it, idx += dim1)
-            *it = idx;
-        }
-      } else if (orient == 6) {
-        auto it = nodes.begin();
-        for (int n = 0; n < dim2; ++n) {
-          int idx = (dim2-1)*dim1+n;
-          for (int i = 0; i < dim1; ++i, ++it, idx -= dim1)
-            *it = idx;
-        }
-      } else if (orient == 7) {
-        auto it = nodes.begin();
-        for (int n = 0; n < dim2; ++n) {
-          int idx = dim2*dim1-n-1;
-          for (int i = 0; i < dim1; ++i, ++it, idx -= dim1)
-            *it = idx;
-        }
+      typedef std::function<std::pair<int,int>(int dim1, int dim2, int n)> NodeOrder;
+#define PAIR(x, y) [](int dim1, int dim2, int n) { return std::make_pair(x,y); }
+      const std::vector<NodeOrder> orders  = {PAIR(n*dim1,              1),  // 0 1 2 3 4 5 6 7 8
+                                              PAIR((dim2-n-1)*dim1,     1),  // 6 7 8 3 4 5 0 1 2
+                                              PAIR((n+1)*dim1-1,       -1),  // 2 1 0 5 4 3 8 7 6
+                                              PAIR(dim1*dim2-n*dim1-1, -1),  // 8 7 6 5 4 3 2 1 0
+                                              PAIR(n,                dim1),  // 0 3 6 1 4 7 2 5 8
+                                              PAIR(dim2-n-1,         dim1),  // 2 5 8 1 4 7 0 3 6
+                                              PAIR((dim2-1)*dim1+n, -dim1),  // 6 3 0 7 4 1 8 5 2
+                                              PAIR(dim2*dim1-n-1,   -dim1)}; // 8 5 2 7 4 1 6 3 0
+#undef PAIR
+
+      auto it = nodes.begin();
+      for (int n = 0; n < dim2; ++n) {
+        auto order = orders[orient](dim1, dim2, n);
+        for (int i = 0; i < dim1; ++i, ++it, order.first += order.second)
+          *it = order.first;
       }
     } else {
       if (lIdx == 1 || lIdx == 2)
@@ -613,7 +585,7 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
   if (sim.getSolParams() && sim.getSolParams()->getNoBlocks() > 1) {
     const LinSolParams& solParams = *sim.getSolParams();
     blocks.resize(solParams.getNoBlocks()+1);
-    
+ 
     // Find local equations for each block
     for (size_t i = 0; i < solParams.getNoBlocks(); ++i) {
       // grab DOFs of given type(s)
