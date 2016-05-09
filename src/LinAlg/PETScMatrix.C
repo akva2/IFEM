@@ -168,7 +168,7 @@ PETScMatrix::~PETScMatrix ()
   for (auto& it : matvec)
     MatDestroy(&it);
 
-  if (!isvec.empty())
+  if (SPsetup)
     MatDestroy(&Sp);
 
   for (auto& it : isvec)
@@ -276,9 +276,11 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
                     PETSC_DETERMINE, PETSC_DETERMINE);
         MatSetFromOptions(*it);
         if (adm.isParallel()) {
-          int ifirst = adm.dd.getMinEq(j+1);
-          int ilast  = adm.dd.getMaxEq(j+1);
-          int maxfill = std::min(100, ilast-ifirst+1);
+          int ifirst = adm.dd.getMinEq(i+1);
+          int ilast  = adm.dd.getMaxEq(i+1);
+          int icf = adm.dd.getMinEq(j+1);
+          int icl  = adm.dd.getMaxEq(j+1);
+          int maxfill = std::min(std::min(100, ilast-ifirst+1), icl-icf+1);
           // !!! SERIOUS OVER/UNDERALLOCATION !!!
           PetscIntVec d_nnz(ilast-ifirst+1, maxfill),
                       o_nnz(ilast-ifirst+1, maxfill);
@@ -621,6 +623,7 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
 
     // TODO: non-SIMPLE schur preconditioners
     MatGetDiagonal(matvec[0],diagA00);
+    SPsetup = true;
 
     VecReciprocal(diagA00);
     MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
