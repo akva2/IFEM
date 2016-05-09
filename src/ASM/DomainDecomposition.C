@@ -270,8 +270,9 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
     int nRecv;
     adm.receive(nRecv, getPatchOwner(it.master));
     if (nRecv =! lNodes.size()) {
-      std::cerr <<"\n *** DomainDecomposition::calcGlobalNodeNumbers(): Topology error, boundary size "
-        << nRecv << ", expected " << lNodes.size() << std::endl;
+      std::cerr <<"\n *** DomainDecomposition::calcGlobalNodeNumbers(): "
+                <<" Topology error, boundary size "
+                << nRecv << ", expected " << lNodes.size() << std::endl;
       return false;
     }
     IntVec glbNodes(lNodes.size());
@@ -390,9 +391,28 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
   if (adm.getNoProcs() == 1)
     return true;
 
+  auto locLMs = sim.getPatch(1)->getLagrangeMultipliers();
+  std::vector<int> glbLMs;
   std::vector<int> nEqs(blocks.size());
-  if (adm.getProcId() > 0)
+  if (adm.getProcId() > 0) {
     adm.receive(nEqs, adm.getProcId()-1);
+    int nLMs;
+    adm.receive(nLMs, adm.getProcId()-1);
+    size_t nLocLMs = 0;
+    for (size_t n = locLMs.first; n <= locLMs.second && n; ++n)
+      if (sim.getPatch(1)->getLMType(n) == 'G')
+        ++nLocLMs;
+
+    if (nLocLMs != (size_t)nLMs) {
+      std::cerr <<"\n *** DomainDecomposition::calcGlobalEqNumbers():"
+                <<" Non-matching number of multipliers "
+                << nLMs << ", expected " << nLocLMs << std::endl;
+      return false;
+    }
+
+    glbLMs.resize(nLMs);
+    adm.receive(glbLMs, adm.getProcId()-1);
+  }
 
   for (size_t block = 0; block < blocks.size(); ++block) {
     size_t size = block == 0 ? sim.getSAM()->getNoEquations() :
@@ -410,6 +430,15 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
   }
 
   std::vector<std::map<int,int>> old2new(blocks.size());
+
+  size_t n = locLMs.first;
+  for (const auto& it : glbLMs) {
+    while (sim.getPatch(1)->getLMType(n) != 'G')
+      ++n;
+    int leq = blocks[0].MLGEQ[sim.getSAM()->getEquation(n, 1)-1];
+    old2new[0][leq] = it;
+  }
+
   for (const auto& it : ghostConnections) {
     int sidx = sim.getLocalPatchIndex(it.slave);
     if (sidx < 1)
@@ -420,8 +449,9 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
     int nRecv;
     adm.receive(nRecv, getPatchOwner(it.master));
     if (nRecv =! locEqs.size()) {
-      std::cerr <<"\n *** DomainDecomposition::calcGlobalNodeNumbers(): Topology error, number of equations "
-        << nRecv << ", expected " << locEqs.size() << std::endl;
+      std::cerr <<"\n *** DomainDecomposition::calcGlobalEqNumbers():"
+                <<" Topology error, number of equations "
+                << nRecv << ", expected " << locEqs.size() << std::endl;
       return false;
     }
 
@@ -495,6 +525,18 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
       maxEqs.push_back(it.maxEq);
 
     adm.send(maxEqs, adm.getProcId()+1);
+    auto LMs = sim.getPatch(1)->getLagrangeMultipliers();
+    std::vector<int> LM;
+    for (size_t n = LMs.first; n <= LMs.second && n; ++n) {
+      // TODO: > 1 dof for multipliers
+      if (sim.getPatch(1)->getLMType(n) == 'G') {
+        int eq = sim.getSAM()->getEquation(n, 1);
+        if (eq > 0)
+          LM.push_back(blocks[0].MLGEQ[eq-1]);
+      }
+    }
+    adm.send((int)LM.size(), adm.getProcId()+1);
+    adm.send(LM, adm.getProcId()+1);
   }
 
   for (const auto& it : ghostConnections) {

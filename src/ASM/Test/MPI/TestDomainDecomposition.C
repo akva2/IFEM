@@ -12,11 +12,32 @@
 
 #include "DomainDecomposition.h"
 #include "SAM.h"
+#include "ASMbase.h"
 #include "SIM2D.h"
 #include "SIM3D.h"
 #include "IFEM.h"
 #include "gtest/gtest.h"
 #include <fstream>
+
+
+class TestGlobalLMSIM : public SIM2D {
+public:
+  TestGlobalLMSIM(unsigned char n1 = 2, bool check = false) :
+    SIM2D(n1, check) {}
+
+protected:
+  bool preprocessBeforeAsmInit(int& nnod)
+  {
+    ++nnod;
+    for (int p = 1; p <= this->getNoPatches(); ++p) {
+      int idx = this->getLocalPatchIndex(p);
+      if (idx > 0)
+        this->getPatch(idx)->addGlobalLagrangeMultipliers({nnod}, 1);
+    }
+
+    return true;
+  }
+};
 
 
 typedef std::vector<int> IntVec;
@@ -87,6 +108,36 @@ TEST_P(TestDomainDecomposition2D, SetupSingleBasis)
   B = readIntVector(str.str());
   check_intvectors_equal(dd.getMLGEQ(), B);
   ASSERT_EQ(dd.getMaxDOF(), 2*dd.getMaxNode());
+}
+
+
+TEST_P(TestDomainDecomposition2D, SetupSingleBasisGlobalLM)
+{
+  TestGlobalLMSIM sim(2);
+  std::stringstream str;
+  str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_orient";
+  str << GetParam() << ".xinp";
+  sim.read(str.str().c_str());
+  sim.preprocess();
+
+  const ProcessAdm& adm = sim.getProcessAdm();
+  // TODO: unnecessary cast and setup call after integration.
+  DomainDecomposition& dd = const_cast<DomainDecomposition&>(adm.dd);
+  dd.setup(adm, sim);
+
+  str.str("");
+  str << "src/ASM/Test/refdata/DomainDecomposition_MPI_2D_4_orient";
+  str << GetParam() << "_eqs" << adm.getProcId() << ".ref";
+  IntVec B = readIntVector(str.str());
+  if (adm.getProcId() == 0)
+    B.push_back(17);
+  else {
+    for (auto& it : B)
+      if (it > 16)
+        ++it;
+    B.push_back(17);
+  }
+  check_intvectors_equal(dd.getMLGEQ(), B);
 }
 
 
