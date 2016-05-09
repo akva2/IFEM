@@ -75,7 +75,7 @@ public:
       } else if (orient == 5) {
         auto it = nodes.begin();
         for (int n = 0; n < dim2; ++n) {
-          int idx = dim1-n-1;
+          int idx = dim2-n-1;
           for (int i = 0; i < dim1; ++i, ++it, idx += dim1)
             *it = idx;
         }
@@ -564,7 +564,8 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
           dofType = cb == 1 ? 'D' : 'P'+cb-2;
           std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
           blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
-          // hack. stick multipliers in the second block. Correct thing to do for average pressure constraint in Stokes.
+          // Hack: stick multipliers in the second block.
+          // Correct thing to do for average pressure constraint in Stokes.
           if (i == 1) {
             tmp = sam->getEquations('L', 1);
             blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
