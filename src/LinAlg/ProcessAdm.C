@@ -36,7 +36,7 @@ ProcessAdm::ProcessAdm(MPI_Comm& mpi_comm) : cout(std::cout)
   MPI_Comm_rank(comm,&myPid);
   MPI_Comm_size(comm,&nProc);
   cout = IFEM::cout;
-  parallel = true;
+  parallel = nProc > 1;
 #else
   MPI_Comm_dup(PETSC_COMM_SELF,&comm);
   myPid = 0;
