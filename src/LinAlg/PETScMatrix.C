@@ -168,9 +168,6 @@ PETScMatrix::~PETScMatrix ()
   for (auto& it : matvec)
     MatDestroy(&it);
 
-  if (SPsetup)
-    MatDestroy(&Sp);
-
   for (auto& it : isvec)
     ISDestroy(&it);
 
@@ -609,38 +606,32 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
       std::cerr << "** PETSCMatrix ** Only two blocks supported for now." << std::endl;
       return false;
     }
+    solParams.setupSchurComplement(matvec);
     PCSetType(pc,PCFIELDSPLIT);
-    PetscInt m1, m2, n1, n2, nsplit;
+    PetscInt nsplit;
     KSP  *subksp;
     PC   subpc[2];
-    Vec diagA00;
-    MatGetLocalSize(matvec[0],&m1,&n1);
-    MatGetLocalSize(matvec[3],&m2,&n2);
-    if (adm.isParallel())
-      VecCreateMPI(*adm.getCommunicator(),m1,PETSC_DETERMINE,&diagA00);
+
+    PCFieldSplitSetIS(pc,"u",isvec[0]);
+    PCFieldSplitSetIS(pc,"p",isvec[1]);
+    PCFieldSplitSetType(pc,PC_COMPOSITE_SCHUR);
+    if (solParams.getStringValue("schur") == "lower")
+      PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_LOWER);
+    else if (solParams.getStringValue("schur") == "full")
+      PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_FULL);
+    else if (solParams.getStringValue("schur") == "diag")
+      PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_DIAG);
     else
-      VecCreateSeq(PETSC_COMM_SELF,m1,&diagA00);
+      PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
 
-    // TODO: non-SIMPLE schur preconditioners
-    MatGetDiagonal(matvec[0],diagA00);
-    SPsetup = true;
-
-    VecReciprocal(diagA00);
-    Mat tmp;
-    MatConvert(matvec[1], MATSAME, MAT_INITIAL_MATRIX, &tmp);
-    MatDiagonalScale(tmp, diagA00, PETSC_NULL);
-    Mat tmp2;
-    MatMatMult(matvec[2], tmp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &tmp2);
-    MatConvert(matvec[3], MATSAME, MAT_INITIAL_MATRIX, &Sp);
-    PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_DIAG);
 //    MatCreateSchurComplement(matvec[0],matvec[0],matvec[1],matvec[2],matvec[3],&Sp);
     PCSetFromOptions(pc);
     PCSetUp(pc);
     PCFieldSplitGetSubKSP(pc,&nsplit,&subksp);
 #if PETSC_VERSION_MINOR < 5
-    KSPSetOperators(subksp[1],Sp,Sp,SAME_PRECONDITIONER);
+    KSPSetOperators(subksp[1],solParams.getSchurComplement(),solParams.getSchurComplement(),SAME_PRECONDITIONER);
 #else
-    KSPSetOperators(subksp[1],Sp,Sp);
+    KSPSetOperators(subksp[1],solParams.getSchurComplement(),solParams.getSchurComplement());
     KSPSetReusePreconditioner(subksp[1], PETSC_TRUE);
 #endif
 

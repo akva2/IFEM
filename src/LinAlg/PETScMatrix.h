@@ -195,8 +195,6 @@ protected:
   LinAlg::LinearSystemType linsysType; //!< Linear system type
   IS glob2LocEq = nullptr; //!< Index set for global-to-local equations.
   std::vector<Mat> matvec; //!< Blocks for block matrices.
-  Mat Sp; //!< Schur block with fieldsplit preconditioners.
-  bool SPsetup = false; //!< True if Sp was set up
 
   std::vector<IS> isvec; //!< Index sets for blocks.
   std::vector<std::array<int,3>> glb2Blk; //!< Maps matrix entries in CSC order to block matrix entries.

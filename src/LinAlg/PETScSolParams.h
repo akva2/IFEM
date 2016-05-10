@@ -53,6 +53,12 @@ public:
     params(spar), adm(padm)
   {}
 
+  ~PETScSolParams()
+  {
+    if (SPsetup)
+      MatDestroy(&Sp);
+  }
+
   //! \brief Set up preconditioner parameters for PC object
   //! \param pc Preconditioner to configure
   //! \param block Block this preconditioner applies to
@@ -76,6 +82,13 @@ public:
 
   //! \brief Get string setting
   std::string getStringValue(const std::string& key) const { return params.getStringValue(key); }
+
+  //! \brief Setup Schur complement matrix.
+  //! \param matvec Vector with the 4 matrix blocks in row order
+  void setupSchurComplement(const std::vector<Mat>& matvec);
+
+  //! \brief Get Schur complement.
+  const Mat& getSchurComplement() const { return Sp; }
 
 protected:
   //! \brief Set directional smoother
@@ -130,6 +143,9 @@ protected:
 
   const LinSolParams& params; //!< Reference to linear solver parameters.
   const ProcessAdm& adm;      //!< Reference to process administrator.
+
+  Mat Sp; //!< Schur complement.
+  bool SPsetup = false; //!< True if Sp was set up
 };
 
 #endif
