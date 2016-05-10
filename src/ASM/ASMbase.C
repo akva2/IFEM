@@ -21,6 +21,10 @@
 #include "Utilities.h"
 #include <algorithm>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 
 bool ASMbase::fixHomogeneousDirichlet = true;
 
@@ -190,7 +194,7 @@ bool ASMbase::addLagrangeMultipliers (size_t iel, const IntVec& mGLag,
 
     // Update the nodal range (1-based indices) of the Lagrange multipliers
     if (myLMs.first == 0)
-      myLMs.first = myLMs.second = node = node+1;
+      myLMs.first = myLMs.second = node+1;
     else if (node+1 < myLMs.first)
     {
       std::cerr <<" *** ASMbase::addLagrangeMultipliers: Node "<< node+1
@@ -199,10 +203,10 @@ bool ASMbase::addLagrangeMultipliers (size_t iel, const IntVec& mGLag,
       return false;
     }
     else if (node >= myLMs.second)
-      myLMs.second = node = node+1;
+      myLMs.second = node+1;
 
-    myLMTypes.resize(node-myLMs.first+1);
-    myLMTypes[node-myLMs.first] = 'L';
+    myLMTypes.resize(node-myLMs.first+2);
+    myLMTypes[node+1-myLMs.first] = 'L';
 
     // Extend the element connectivity table
     myMNPC[iel-1].push_back(node);
@@ -229,7 +233,7 @@ bool ASMbase::addGlobalLagrangeMultipliers(const IntVec& mGLag,
 
     // Update the nodal range (1-based indices) of the Lagrange multipliers
     if (myLMs.first == 0)
-      myLMs.first = myLMs.second = node = node+1;
+      myLMs.first = myLMs.second = node+1;
     else if (node+1 < myLMs.first)
     {
       std::cerr <<" *** ASMbase::addGlobalLagrangeMultiplier: Node "<< node+1
@@ -238,10 +242,10 @@ bool ASMbase::addGlobalLagrangeMultipliers(const IntVec& mGLag,
       return false;
     }
     else if (node >= myLMs.second)
-      myLMs.second = node = node+1;
+      myLMs.second = node+1;
 
-    myLMTypes.resize(node-myLMs.first+1);
-    myLMTypes[node-myLMs.first] = 'G';
+    myLMTypes.resize(node+2-myLMs.first);
+    myLMTypes[node+1-myLMs.first] = 'G';
 
     // Extend the element connectivity table
     for (auto& it : myMNPC)
@@ -249,6 +253,11 @@ bool ASMbase::addGlobalLagrangeMultipliers(const IntVec& mGLag,
   }
 
   nLag = nnLag;
+
+#ifdef USE_OPENMP
+  // Cannot do multithreaded assembly of a global equation.
+  omp_set_num_threads(1);
+#endif
 
   return true;
 }
