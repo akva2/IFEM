@@ -156,8 +156,8 @@ bool LinSolParams::read (const TiXmlElement* elem)
       addValue("gmres_restart_iterations", value);
     else if ((value = utl::getValue(child,"pc")))
       addValue("pc", value);
-    else if ((value = utl::getValue(child,"schurpc")))
-      addValue("schurpc", value);
+    else if ((value = utl::getValue(child,"schur")))
+      addValue("schur", value);
     else if (!strcasecmp(child->Value(),"block")) {
       blocks.resize(++parseblock);
       blocks.back().read(child);
