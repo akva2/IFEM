@@ -152,7 +152,7 @@ public:
 
 protected:
   ISTL::Mat A; //!< The actual ISTL matrix
-  ISTL::Operator op; //!< The matrix adapter
+  std::unique_ptr<ISTL::Operator> op; //!< The matrix adapter
   std::unique_ptr<ISTL::InverseOperator> solver; //!< Solver to use
   std::unique_ptr<ISTL::Preconditioner> pre; //!< Preconditioner to use
   const ProcessAdm&   adm;             //!< Process administrator

@@ -110,7 +110,7 @@ Real ISTLVector::Linfnorm() const
 
 ISTLMatrix::ISTLMatrix (const ProcessAdm& padm, const LinSolParams& spar,
                         LinAlg::LinearSystemType ltype) :
- SparseMatrix(SUPERLU, 1), op(A), adm(padm),
+ SparseMatrix(SUPERLU, 1), adm(padm),
  solParams(spar, adm), linsysType(ltype)
 {
   LinAlgInit::increfs();
@@ -121,7 +121,7 @@ ISTLMatrix::ISTLMatrix (const ProcessAdm& padm, const LinSolParams& spar,
 
 
 ISTLMatrix::ISTLMatrix (const ISTLMatrix& B) :
-  op(A), adm(B.adm), solParams(B.solParams.get(), B.adm)
+  adm(B.adm), solParams(B.solParams.get(), B.adm)
 {
   A = B.A;
 
@@ -140,6 +140,7 @@ ISTLMatrix::~ISTLMatrix ()
 void ISTLMatrix::initAssembly (const SAM& sam, bool b)
 {
   SparseMatrix::initAssembly(sam, b);
+  SparseMatrix::preAssemble(sam, b);
 
   std::vector<std::set<int>> dofc;
   sam.getDofCouplings(dofc);
@@ -160,11 +161,12 @@ void ISTLMatrix::initAssembly (const SAM& sam, bool b)
     for (const auto& it : dofc[i])
       A.addindex(i, it-1);
   A.endindices();
+
+  A = 0;
 }
 
 bool ISTLMatrix::beginAssembly()
 {
-  this->optimiseSLU();
   for (size_t j = 0; j < cols(); ++j)
     for (int i = IA[j]; i < IA[j+1]; ++i)
       A[JA[i]][j] = SparseMatrix::A[i];
@@ -192,7 +194,7 @@ void ISTLMatrix::init ()
 bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 {
   if (!pre)
-    std::tie(solver, pre) = solParams.setupPC(A, op);
+    std::tie(solver, pre, op) = solParams.setupPC(A);
 
   ISTLVector* Bptr = dynamic_cast<ISTLVector*>(&B);
   if (!Bptr || !solver || !pre)
@@ -218,7 +220,7 @@ bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 bool ISTLMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
 {
   if (!pre)
-    std::tie(solver, pre) = solParams.setupPC(A, op);
+    std::tie(solver, pre, op) = solParams.setupPC(A);
 
   const ISTLVector* Bptr = dynamic_cast<const ISTLVector*>(&b);
   if (!Bptr || ! solver || !pre)
