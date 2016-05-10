@@ -21,6 +21,150 @@
 #include <dune/istl/paamg/amg.hh>
 
 
+/*! This implements a Schur-decomposition based preconditioner for the
+ *  block system
+ *  [A   B]
+ *  [C   D]
+ *  
+ *  The preconditioner is
+ *  [Apre  ]
+ *  [     P]
+ *  Here Apre is some preconditioner for A and P some preconditioner for
+ *  S = B^Tdiag(A)^-1B
+!*/
+
+class BlockPreconditioner : public Dune::Preconditioner<ISTL::Vec,ISTL::Vec> {
+  public:
+    // define the category
+    enum {
+      //! \brief The category the preconditioner is part of.
+      category=Dune::SolverCategory::sequential
+    };
+
+    //! \brief Constructor
+    //! \param[in] A The system matrix
+    //! \param[in] dd Domain decomposition
+    BlockPreconditioner(const Matrix& A, const DomainDecomposition& dd_) :
+      dd(dd_) {}
+
+    //! \brief Destructor
+    virtual ~BlockPreconditioner()
+    {
+    }
+
+    //! \brief Preprocess preconditioner
+    virtual void pre(ISTL::Vec& x, ISTL::Vec& b)
+    {
+      ISTL::Vec tempx, tempb;
+      for (size_t block = 0; block < dd.getNoBlocks(); ++block) {
+        ISTL::Vec tempx, tempb;
+        tempx.resize(dd.getBlockEqs(block).size());
+        tempb.resize(dd.getBlockEqs(block).size());
+        size_t i = 0;
+        for (auto& it : dd.getBlockEqs(block))
+          tempx[i] = x[it], tempb[i++] = b[it];
+
+        blockPre[block]->pre(tempx, tempb);
+
+        i = 0;
+        for (auto& it : dd.getBlockEqs(block))
+          x[it] = tempx[i], b[it] = tempb[i++];
+      }
+    }
+
+    //! \brief Applies the preconditioner
+    //! \param[out] v The resulting vector
+    //! \param[in] d The vector to apply the preconditioner to
+    virtual void apply(ISTL::Vec& v, const ISTL::Vec& d)
+    {
+      for (size_t block = dd.getNoBlocks()-1; block >= 0; --block) {
+        ISTL::Vec tempx, tempb;
+        tempx.resize(dd.getBlockEqs(block).size());
+        tempb.resize(dd.getBlockEqs(block).size());
+        size_t i = 0;
+        for (auto& it : dd.getBlockEqs(block))
+          tempb[i++] = d[it];
+
+        blockPre[block]->apply(tempx, tempb);
+
+        i = 0;
+        for (auto& it : dd.getBlockEqs(block))
+          v[it] = tempx[i++];
+      }
+    }
+
+    //! \brief Post-process function
+    virtual void post(ISTL::Vec& x)
+    {
+      // Not necessary?
+      return;
+
+//      ISTL::Vec tempx, tempb;
+//      for (size_t block = 0; block < dd.getNoBlocks(); ++block) {
+//        ISTL::Vec tempx, tempb;
+//        tempx.resize(dd.getBlockEqs(block).size());
+//        size_t i = 0;
+//        for (auto& it : dd.getBlockEqs(block))
+//          tempx[i++] = x[it];
+
+//        blockPre[block].post(tempx);
+
+//        i = 0;
+//        for (auto& it : dd.getBlockEqs(block))
+//          x[it] = tempx[i++];
+//      }
+    }
+  protected:
+    //! \brief Build block from block equations.
+    static void extractBlock(ISTL::Mat& B, const ISTL::Mat& A,
+                             const std::vector<int>& eqs_row,
+                             const std::vector<int>& eqs_col)
+    {
+      size_t sum=0;
+      std::vector<std::set<int>> adj;
+      adj.resize(eqs_row.size());
+      size_t i = 0;
+      for (auto& it3 : eqs_row) {
+        auto it = A.begin()+it3;
+        for (auto it2 = it->begin(); it2 != it->end(); ++it2) {
+          auto pos = std::find(eqs_col.begin(), eqs_col.end(), it2.index());
+          if (pos != eqs_col.end()) {
+            adj[i].insert(std::distance(eqs_col.begin(), pos));
+            ++sum;
+          }
+        }
+        ++i;
+      }
+      B.setSize(eqs_row.size(), eqs_col.size(), sum);
+      B.setBuildMode(ISTL::Mat::random);
+
+      for (size_t i = 0; i < adj.size(); i++)
+        B.setrowsize(i,adj[i].size());
+      B.endrowsizes();
+
+      for (size_t i = 0; i < adj.size(); i++) {
+        std::set<int>::iterator setend = adj[i].end();
+        for (std::set<int>::iterator setit = adj[i].begin();
+            setit != setend; ++setit) {
+          B.addindex(i,*setit);
+        }
+      }
+      B.endindices();
+      B = 0;
+      for (auto it = B.begin(); it != B.end(); ++it)
+        for (auto it2 = it->begin(); it2 != it->end(); ++it2)
+          *it2 = A[eqs_row[it.index()]][eqs_col[it2.index()]];
+    }
+
+
+    //! \brief The preconditioners 
+    std::vector<std::unique_ptr<Dune::Preconditioner<ISTL::Vec,ISTL::Vec>>> blockPre;
+    std::vector<ISTL::Mat> blocks; //!< Matrix blocks
+
+    const DomainDecomposition& dd; //!< Domain decomposition
+};
+
+
 /*! \brief Helper template for setting up a solver with the appropriate
            preconditioner type.
     \details We cannot instance using dynamic polymorphism, the solver need
@@ -54,10 +198,13 @@ static Dune::InverseOperator<ISTL::Vec,ISTL::Vec>*
 
 
 std::tuple<std::unique_ptr<ISTL::InverseOperator>,
-           std::unique_ptr<ISTL::Preconditioner>> ISTLSolParams::setupPC(ISTL::Mat& A, ISTL::Operator& op)
+           std::unique_ptr<ISTL::Preconditioner>,
+           std::unique_ptr<ISTL::Operator>> ISTLSolParams::setupPC(ISTL::Mat& A)
 {
   std::unique_ptr<ISTL::InverseOperator> solver;
   std::unique_ptr<ISTL::Preconditioner> pre;
+  std::unique_ptr<ISTL::Operator> op;
+
   std::string prec = solParams.getBlock(0).getStringValue("pc");
   if (prec == "ilu") {
     if (solParams.getBlock(0).getIntValue("ilu_fill_level") == 0) {

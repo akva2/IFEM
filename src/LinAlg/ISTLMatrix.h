@@ -81,8 +81,9 @@ public:
 
   Vec& getVector() { return x; }
   const Vec& getVector() const { return x; }
+
 protected:
-  Dune::BlockVector<Dune::FieldVector<double,1>> x;
+  ISTL::Vec x; //!< ISTL vector
   const ProcessAdm& adm;  //!< Process administrator
 };
 
