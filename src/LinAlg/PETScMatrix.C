@@ -610,7 +610,7 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
       return false;
     }
     PCSetType(pc,PCFIELDSPLIT);
-    PetscInt m1, m2, n1, n2, nr, nc, nsplit;
+    PetscInt m1, m2, n1, n2, nsplit;
     KSP  *subksp;
     PC   subpc[2];
     Vec diagA00;
@@ -626,17 +626,13 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
     SPsetup = true;
 
     VecReciprocal(diagA00);
-    MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
-    MatMatMult(matvec[2],matvec[1],MAT_INITIAL_MATRIX,PETSC_DEFAULT,&Sp);
-    VecReciprocal(diagA00);
-    MatDiagonalScale(matvec[1],diagA00,PETSC_NULL);
-    VecDestroy(&diagA00);
-    MatGetSize(Sp,&nr,&nc);
-    MatAXPY(Sp,-1.0,matvec[3],DIFFERENT_NONZERO_PATTERN);
-    PCFieldSplitSetIS(pc,"u",isvec[0]);
-    PCFieldSplitSetIS(pc,"p",isvec[1]);
-    PCFieldSplitSetType(pc,PC_COMPOSITE_SCHUR);
-    PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
+    Mat tmp;
+    MatConvert(matvec[1], MATSAME, MAT_INITIAL_MATRIX, &tmp);
+    MatDiagonalScale(tmp, diagA00, PETSC_NULL);
+    Mat tmp2;
+    MatMatMult(matvec[2], tmp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &tmp2);
+    MatConvert(matvec[3], MATSAME, MAT_INITIAL_MATRIX, &Sp);
+    PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_DIAG);
 //    MatCreateSchurComplement(matvec[0],matvec[0],matvec[1],matvec[2],matvec[3],&Sp);
     PCSetFromOptions(pc);
     PCSetUp(pc);
