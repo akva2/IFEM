@@ -54,7 +54,8 @@ public:
   //! \brief Constructor
   //! \param[in] A The system matrix
   //! \param[in] dd Domain decomposition
-  BlockPreconditioner(const ISTL::Mat& A, const DomainDecomposition& dd_);
+  BlockPreconditioner(const ISTL::Mat& A, const DomainDecomposition& dd_,
+                      const std::string& schurType);
 
   //! \brief Destructor
   virtual ~BlockPreconditioner()
@@ -145,9 +146,11 @@ protected:
   //! \param A Matrix to construct preconditioner for
   //! \param op Matrix adaptor to use (used with AMG)
   //! \param block Block to read settings from
+  //! \param solver Solver object to instance. nullptr to do nothing.
   ISTL::Preconditioner* setupPCInternal(ISTL::Mat& A,
                                         ISTL::Operator& op,
-                                        size_t block);
+                                        size_t block,
+                                        std::unique_ptr<ISTL::InverseOperator>* solver);
 
   const LinSolParams& solParams; //!< Reference to linear solver parameters.
   const ProcessAdm& adm;      //!< Reference to process administrator.

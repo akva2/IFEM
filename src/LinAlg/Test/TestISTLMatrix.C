@@ -61,7 +61,7 @@ class InspectBlockPreconditioner : public ISTL::BlockPreconditioner {
 public:
   InspectBlockPreconditioner(const ISTL::Mat& A,
                              const DomainDecomposition& dd) :
-    ISTL::BlockPreconditioner(A, dd) {}
+    ISTL::BlockPreconditioner(A, dd, "upper") {}
 
   void extractBlock(ISTL::Mat& B, const ISTL::Mat& A,
                     const std::set<int>& eqs_row,

@@ -160,6 +160,7 @@ void ISTLMatrix::initAssembly (const SAM& sam, bool b)
   for (size_t i = 0; i < dofc.size(); ++i)
     for (const auto& it : dofc[i])
       A.addindex(i, it-1);
+
   A.endindices();
 
   A = 0;

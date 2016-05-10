@@ -20,6 +20,12 @@
 #include "dune/istl/bcrsmatrix.hh"
 #include "dune/istl/preconditioners.hh"
 #include "dune/istl/solvers.hh"
+#ifdef HAVE_SUPERLU
+#include <dune/istl/superlu.hh>
+#endif
+#ifdef HAVE_UMFPACK
+#include <dune/istl/umfpack.hh>
+#endif
 
 namespace ISTL
 {
@@ -28,6 +34,29 @@ namespace ISTL
   typedef Dune::MatrixAdapter<Mat,Vec,Vec> Operator;           //!< Linear operator abstraction
   typedef Dune::InverseOperator<Vec, Vec> InverseOperator;     //!< Linear system inversion abstraction
   typedef Dune::Preconditioner<Vec,Vec> Preconditioner;        //!< Preconditioner abstraction
+
+  /*! \brief Wrapper template to avoid memory leaks */
+
+  template<template<class M> class Pre>
+  class IOp2Pre : public Dune::InverseOperator2Preconditioner<Pre<ISTL::Mat>, Dune::SolverCategory::sequential> {
+    typedef Dune::InverseOperator2Preconditioner<Pre<ISTL::Mat>, Dune::SolverCategory::sequential> SolverType;
+  public:
+    IOp2Pre(Pre<ISTL::Mat>* iop) : SolverType(*iop)
+    {
+      m_op.reset(iop);
+    }
+  protected:
+    std::unique_ptr<Pre<ISTL::Mat>> m_op;
+  };
+
+#if defined(HAVE_UMFPACK)
+  typedef Dune::UMFPack<ISTL::Mat> LUType;
+  typedef IOp2Pre<Dune::UMFPack> LU;
+#elif defined(HAVE_SPUERLU)
+  typedef Dune::SuperLUk<ISTL::Mat> LUType;
+  typedef IOp2Pre<Dune::SuperLU> LU;
+#endif
+
 }
 #endif
 
