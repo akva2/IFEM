@@ -21,6 +21,7 @@
 #include <dune/istl/preconditioners.hh>
 #include <dune/istl/solvers.hh>
 #include <dune/istl/schwarz.hh>
+#include <dune/istl/owneroverlapcopy.hh>
 #ifdef HAVE_SUPERLU
 #include <dune/istl/superlu.hh>
 #endif
@@ -32,14 +33,11 @@ namespace ISTL
 {
   typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>> Mat; //!< A sparse system matrix
   typedef Dune::BlockVector<Dune::FieldVector<double,1>> Vec;  //!< A vector
-//  typedef Dune::AssembledLinearOperator<Mat,Vec,Vec> Operator; //!< Linear operator abstraction
   typedef Dune::MatrixAdapter<Mat,Vec,Vec> Operator;      //!< A serial matrix operator
   typedef Dune::InverseOperator<Vec, Vec> InverseOperator;     //!< Linear system inversion abstraction
   typedef Dune::Preconditioner<Vec,Vec> Preconditioner;        //!< Preconditioner abstraction
-  typedef Dune::OverlappingSchwarzOperator<Mat,Vec,Vec,Dune::OwnerOverlapCopyCommunication<int,int>> ParMatrixAdapter; //!< A parallel matrix operator
 
   /*! \brief Wrapper template to avoid memory leaks */
-
   template<template<class M> class Pre>
   class IOp2Pre : public Dune::InverseOperator2Preconditioner<Pre<ISTL::Mat>, Dune::SolverCategory::sequential> {
     typedef Dune::InverseOperator2Preconditioner<Pre<ISTL::Mat>, Dune::SolverCategory::sequential> SolverType;
@@ -55,8 +53,8 @@ namespace ISTL
 #if defined(HAVE_UMFPACK)
   typedef Dune::UMFPack<ISTL::Mat> LUType;
   typedef IOp2Pre<Dune::UMFPack> LU;
-#elif defined(HAVE_SPUERLU)
-  typedef Dune::SuperLUk<ISTL::Mat> LUType;
+#elif defined(HAVE_SUPERLU)
+  typedef Dune::SuperLU<ISTL::Mat> LUType;
   typedef IOp2Pre<Dune::SuperLU> LU;
 #endif
 

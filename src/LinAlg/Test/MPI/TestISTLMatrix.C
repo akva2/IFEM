@@ -1,17 +1,18 @@
 //==============================================================================
 //!
-//! \file TestPETScMatrix.C
+//! \file TestISTLMatrix.C
 //!
 //! \date Apr 27 2016
 //!
 //! \author Arne Morten Kvarving / SINTEF
 //!
-//! \brief Unit tests for parallel PETSc matrices
+//! \brief Unit tests for parallel ISTL matrices
 //!
 //==============================================================================
 
 #include "AlgEqSystem.h"
 #include "ISTLMatrix.h"
+#include "ISTLSolParams.h"
 #include "SIM2D.h"
 #include "ASMs2D.h"
 #include "IntegrandBase.h"
@@ -75,46 +76,35 @@ TEST(TestISTLMatrix, Assemble)
   sim.getMatrix()->beginAssembly();
   sim.getMatrix()->endAssembly();
 
-  IFEM::cout << "past haere" << std::endl;
-
   // now inspect the matrix
   const ProcessAdm& adm = sim.getProcessAdm();
   ISTL::Mat& mat = static_cast<ISTLMatrix*>(sim.getMatrix())->getMatrix();
   ISTL::Vec b(mat.N()), b2(mat.N());
 
   try {
-  Dune::IndexInfoFromGrid<int, int> index;
-  for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i) {
-    int gid = adm.dd.getGlobalEq(i+1);
+    Dune::OwnerOverlapCopyCommunication<int,int> comm(*adm.getCommunicator());
+    comm.indexSet().beginResize();
+    typedef Dune::ParallelLocalIndex<Dune::OwnerOverlapCopyAttributeSet::AttributeSet> LI;
+    for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i) {
+      int gid = adm.dd.getGlobalEq(i+1);
+      comm.indexSet().add(gid-1, LI(i, gid >= adm.dd.getMinEq() ?
+                                       Dune::OwnerOverlapCopyAttributeSet::owner :
+                                       Dune::OwnerOverlapCopyAttributeSet::overlap));
+    }
+    comm.indexSet().endResize();
+    comm.remoteIndices().setIncludeSelf(true);
+    comm.remoteIndices().template rebuild<false>();
 
-    index.addLocalIndex(std::make_tuple(gid-1, i, gid >= adm.dd.getMinEq() ? 
-						  Dune::OwnerOverlapCopyAttributeSet::owner :
-                                                  Dune::OwnerOverlapCopyAttributeSet::overlap));
-  }
-  Dune::OwnerOverlapCopyCommunication<int,int> comm(index, *adm.getCommunicator());
-  IFEM::cout << "past hare" << std::endl;
-  ISTL::ParMatrixAdapter op(mat, comm);
+    ISTL::ParMatrixAdapter op(mat, comm);
 
-  IFEM::cout << "past ehre" << std::endl;
-
-  b = 1.0;
-  op.apply(b, b2);
-  for(auto& it : b2)
-    IFEM::cout << it << " ";
-  IFEM::cout << std::endl;
-  comm.addOwnerOverlapToAll(b2,b2);
-  for(auto& it : b2)
-    IFEM::cout << it << " ";
-  IFEM::cout << std::endl;
+    b = 1.0;
+    op.apply(b, b2);
   } catch (Dune::ISTLError e) {
-    IFEM::cout << e << std::endl;
+    std::cerr << e << std::endl;
+    ASSERT_TRUE(false);
   }
 
-  if (adm.getProcId() < 1) {
   IntVec v = readIntVector("src/LinAlg/Test/refdata/petsc_matrix_diagonal.ref");
-  for (int i = adm.dd.getMinEq(); i <= adm.dd.getMaxEq(); ++i) {
-    IFEM::cout << "check " << i-1 << " " << v[i-1] << " " << i-adm.dd.getMinEq() << " " << b2[i-adm.dd.getMinEq()] << std::endl;
-    ASSERT_FLOAT_EQ(v[i-1], b2[i-adm.dd.getMinEq()]);
-  }
-  }
+  for (size_t i = 1; i <= adm.dd.getMLGEQ().size(); ++i)
+    ASSERT_FLOAT_EQ(v[adm.dd.getGlobalEq(i)-1], b2[i-1]);
 }

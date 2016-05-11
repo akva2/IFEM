@@ -226,10 +226,8 @@ void BlockPreconditioner::subtractMatrices(ISTL::Mat& A, const ISTL::Mat& B,
 template<class Prec>
 static ISTL::InverseOperator* setupWithPreType(const LinSolParams& solParams,
                                                ISTL::Operator& op,
-                                               ISTL::Preconditioner& prec)
+                                               Prec& pre)
 {
-  Prec& pre = static_cast<Prec&>(prec);
-
   std::string type = solParams.getStringValue("type");
   double rtol = solParams.getDoubleValue("rtol");
   int maxits = solParams.getIntValue("maxits");
@@ -282,7 +280,7 @@ static ISTL::Preconditioner* setupAMG(const LinSolParams& params,
 
   auto result = new AMG(op, crit, args);
   if (solver)
-    solver->reset(setupWithPreType<AMG>(params, op, *result));
+    solver->reset(setupWithPreType(params, op, *result));
 
   return result;
 }
@@ -327,7 +325,7 @@ static ISTL::Preconditioner* setupAMG2_full(const LinSolParams& params, size_t b
   Dune::shared_ptr<FineSmoother> fsp(fsmooth);
   auto result = new AMG2(op, fsp, policy, coarsePolicy);
   if (solver)
-    solver->reset(setupWithPreType<AMG2>(params, op, *result));
+    solver->reset(setupWithPreType(params, op, *result));
 
   return result;
 }
@@ -370,6 +368,20 @@ static ISTL::Preconditioner* setupAMG2(const LinSolParams& params, size_t block,
 #endif
 
 
+/*! \brief Conditionally setup a KSP */
+template<class Type>
+static ISTL::Preconditioner*
+setupSolver(Type* pre,
+            ISTL::Operator& op,
+            const LinSolParams& solParams,
+            std::unique_ptr<ISTL::InverseOperator>* solver)
+{
+  if (solver)
+    solver->reset(setupWithPreType(solParams, op, *pre));
+
+  return pre;
+}
+
 ISTL::Preconditioner* ISTLSolParams::setupPCInternal(ISTL::Mat& A,
                                                      ISTL::Operator& op,
                                                      size_t block,
@@ -378,20 +390,27 @@ ISTL::Preconditioner* ISTLSolParams::setupPCInternal(ISTL::Mat& A,
   std::string prec = solParams.getBlock(block).getStringValue("pc");
   if (prec == "ilu") {
     int fill_level = solParams.getBlock(block).getIntValue("ilu_fill_level");
-    if (fill_level == 0)
-      return new Dune::SeqILU0<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1.0);
-    else
-      return new Dune::SeqILUn<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, fill_level, 1.0);
+    if (fill_level == 0) {
+      return setupSolver(new Dune::SeqILU0<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1.0),
+                                 op, solParams, solver);
+    } else
+      return setupSolver(new Dune::SeqILUn<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, fill_level, 1.0),
+                         op, solParams, solver);
   } else if (prec == "lu")
-    return new ISTL::LU(new ISTL::LUType(A));
+    return setupSolver(new ISTL::LU(new ISTL::LUType(A)),
+                       op, solParams, solver);
   else if (prec == "sor")
-    return new Dune::SeqSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0);
+    return setupSolver(new Dune::SeqSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0),
+                       op, solParams, solver);
   else if (prec == "ssor")
-    return new Dune::SeqSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0);
+    return setupSolver(new Dune::SeqSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0),
+                       op, solParams, solver);
   else if (prec == "jacobi")
-    return new Dune::SeqJac<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0);
+    return setupSolver(new Dune::SeqJac<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0),
+                       op, solParams, solver);
  else if (prec == "gs")
-    return new Dune::SeqGS<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0);
+    return setupSolver(new Dune::SeqGS<ISTL::Mat,ISTL::Vec,ISTL::Vec>(A, 1, 1.0),
+                       op, solParams, solver);
   else if (prec == "asm" || prec == "asmlu") {
     size_t nx = solParams.getBlock(block).getIntValue("nx");
     nx = std::max(1ul, nx);
@@ -430,15 +449,17 @@ ISTL::Preconditioner* ISTLSolParams::setupPCInternal(ISTL::Mat& A,
         for (const auto& it : locSubdDofs[i])
           ddofs[i].insert(it);
 
-      return new Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec,
-                                             Dune::AdditiveSchwarzMode,
-                                             ISTL::LUType>(A, ddofs);
+      return setupSolver(new Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec,
+                                                         Dune::AdditiveSchwarzMode,
+                                                         ISTL::LUType>(A, ddofs),
+                         op, solParams, solver);
     } else {
       Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec>::subdomain_vector ddofs(locSubdDofs.size());
       for (size_t i = 0; i < locSubdDofs.size(); ++i)
         ddofs[i].insert(locSubdDofs[i].begin(), locSubdDofs[i].end());
 
-      return new Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec>(A, ddofs);
+      return setupSolver(new Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec>(A, ddofs),
+                         op, solParams, solver);
     }
   } else if (prec == "amg" || prec == "gamg") {
     if (solParams.getBlock(block).getStringValue("multigrid_smoother") !=
@@ -490,7 +511,7 @@ std::tuple<std::unique_ptr<ISTL::InverseOperator>,
     for (size_t i = 0; i < adm.dd.getNoBlocks(); ++i)
       bpre->getBlockPre(i).reset(setupPCInternal(bpre->getBlock(i),
                                                  bpre->getBlockOp(i), i, nullptr));
-    solver.reset(setupWithPreType<ISTL::BlockPreconditioner>(solParams, *op, *pre));
+    solver.reset(setupWithPreType(solParams, *op, *bpre));
   } else {
 #ifdef HAVE_MPI
     if (adm.isParallel()) {
@@ -498,39 +519,16 @@ std::tuple<std::unique_ptr<ISTL::InverseOperator>,
       for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i)
         index.addLocalIndex(std::make_tuple(adm.dd.getGlobalEq(i+1), i, 0));
       Dune::OwnerOverlapCopyCommunication<int,int> comm(index, *adm.getCommunicator());
-      ISTL::ParMatrixAdapter* nop = new ISTL::ParMatrixAdapter(A, comm);
+      //ISTL::ParMatrixAdapter* nop = new ISTL::ParMatrixAdapter(A, comm);
       //op.reset(nop);
       //pre.reset(setupPCInternal(A, *nop, 0, &solver));
     } else
 #endif
-   {
-     ISTL::Operator* nop = new ISTL::Operator(A);
-     op.reset(nop);
-     pre.reset(setupPCInternal(A, *nop, 0, &solver));
-   }
-
-    std::string prec = solParams.getBlock(0).getStringValue("pc");
-    if (prec == "ilu") {
-      if (solParams.getBlock(0).getIntValue("ilu_fill_level") == 0)
-        solver.reset(setupWithPreType<Dune::SeqILU0<ISTL::Mat,ISTL::Vec,ISTL::Vec>>(solParams, *op, *pre));
-      else
-        solver.reset(setupWithPreType<Dune::SeqILUn<ISTL::Mat,ISTL::Vec,ISTL::Vec>>(solParams, *op, *pre));
-    } else if (prec == "sor")
-      solver.reset(setupWithPreType<Dune::SeqSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec>>(solParams, *op, *pre));
-    else if (prec == "ssor")
-      solver.reset(setupWithPreType<Dune::SeqSSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec>>(solParams, *op, *pre));
-    else if (prec == "jacobi")
-      solver.reset(setupWithPreType<Dune::SeqJac<ISTL::Mat,ISTL::Vec,ISTL::Vec>>(solParams, *op, *pre));
-    else if (prec == "gs")
-      solver.reset(setupWithPreType<Dune::SeqGS<ISTL::Mat,ISTL::Vec,ISTL::Vec>>(solParams, *op, *pre));
-    else if (prec == "asm")
-      solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec>>(solParams, *op, *pre));
-    else if (prec == "asmlu")
-      solver.reset(setupWithPreType<Dune::SeqOverlappingSchwarz<ISTL::Mat, ISTL::Vec,
-                                                                Dune::AdditiveSchwarzMode, Dune::SuperLU<ISTL::Mat>>>(solParams, *op, *pre));
-    else if (prec == "lu")
-      solver.reset(setupWithPreType<ISTL::LU>(solParams, *op, *pre));
-    // already setup for AMG
+    {
+      ISTL::Operator* nop = new ISTL::Operator(A);
+      op.reset(nop);
+      pre.reset(setupPCInternal(A, *nop, 0, &solver));
+    }
   }
 
   return std::make_tuple(std::move(solver), std::move(pre), std::move(op));

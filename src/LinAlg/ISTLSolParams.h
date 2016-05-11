@@ -17,6 +17,8 @@
 #define _ISTL_SOLPARAMS_H
 
 #include "ISTLSupport.h"
+#include <dune/istl/operators.hh>
+#include <dune/istl/solvercategory.hh>
 
 #include <iostream>
 #include <set>
@@ -35,10 +37,10 @@ class ProcessAdm;
  *  [C   D]
  *
  *  The preconditioner is
- *  [Apre  ]
+ *  [Apre B]
  *  [     P]
  *  Here Apre is some preconditioner for A and P some preconditioner for
- *  S = D - C*diag(A)^-1*B
+ *  S = D - C*diag(A)^-1*B. The B block may be dropped.
 !*/
 
 namespace ISTL {
@@ -109,6 +111,102 @@ protected:
   std::vector<ISTL::Mat> blocks; //!< Matrix blocks
   const DomainDecomposition& dd; //!< Domain decomposition
 };
+
+#ifdef HAVE_MPI
+/**
+ * \brief An overlapping schwarz operator.
+ *
+ * This operator represents a parallel matrix product using
+ * sequential data structures together with a parallel index set
+ * describing an overlapping domain decomposition and the communication.
+ * \tparam M The type of the sequential matrix to use,
+ * e.g. BCRSMatrix or another matrix type fulfilling the
+ * matrix interface of ISTL.
+ * \tparam X The type of the sequential vector to use for the left hand side,
+ * e.g. BlockVector or another type fulfilling the ISTL
+ * vector interface.
+ * \tparam Y The type of the sequential vector to use for the right hand side,
+ * e..g. BlockVector or another type fulfilling the ISTL
+ * vector interface.
+ * \tparam C The type of the communication object.
+ * This must either be OwnerOverlapCopyCommunication or a type
+ * implementing the same interface.
+ *
+ * This is a modified version which does summation of the vector after evaluation.
+ */
+template<class M, class X, class Y, class C>
+class OverlappingSchwarzOperator : public Dune::AssembledLinearOperator<M,X,Y>
+{
+public:
+  //! \brief The type of the matrix we operate on.
+  //!
+  //! E.g. BCRSMatrix or another matrix type fulfilling the
+  //! matrix interface of ISTL
+  typedef M matrix_type;
+  //! \brief The type of the domain.
+  //!
+  //! E.g. BlockVector or another type fulfilling the ISTL
+  //! vector interface.
+  typedef X domain_type;
+  //! \brief The type of the range.
+  //!
+  //! E.g. BlockVector or another type fulfilling the ISTL
+  //! vector interface.
+  typedef Y range_type;
+  //! \brief The field type of the range
+  typedef typename X::field_type field_type;
+  //! \brief The type of the communication object.
+  //!
+  //! This must either be OwnerOverlapCopyCommunication or a type
+  //! implementing the same interface.
+  typedef C communication_type;
+
+  enum {
+    //! \brief The solver category.
+    category=Dune::SolverCategory::overlapping
+  };
+
+  /**
+   * @brief constructor: just store a reference to a matrix.
+   *
+   * @param A The assembled matrix.
+   * @param com The communication object for syncing overlap and copy
+   * data points. (E.~g. OwnerOverlapCopyCommunication )
+   */
+  OverlappingSchwarzOperator (const matrix_type& A, const communication_type& com)
+    : _A_(A), communication(com)
+  {}
+
+  //! apply operator to x:  \f$ y = A(x) \f$
+  virtual void apply (const X& x, Y& y) const
+  {
+//    Y y2(y.size());
+    _A_.umv(x,y);
+    communication.addOwnerOverlapToAll(y,y);
+  }
+
+  //! apply operator to x, scale and add:  \f$ y = y + \alpha A(x) \f$
+  virtual void applyscaleadd (field_type alpha, const X& x, Y& y) const
+  {
+    Y y2(y.size());
+    _A_.usmv(alpha, x, y2);
+    y = 0;
+    communication.addOwnerOverlapToAll(y2,y);
+  }
+
+  //! get the sequential assembled linear operator.
+  virtual const matrix_type& getmat () const
+  {
+    return _A_;
+  }
+
+private:
+  const matrix_type& _A_;
+  const communication_type& communication;
+};
+
+typedef OverlappingSchwarzOperator<ISTL::Mat,ISTL::Vec,ISTL::Vec,Dune::OwnerOverlapCopyCommunication<int,int>> ParMatrixAdapter;
+#endif
 
 }
 
