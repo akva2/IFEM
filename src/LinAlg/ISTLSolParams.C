@@ -224,10 +224,9 @@ void BlockPreconditioner::subtractMatrices(ISTL::Mat& A, const ISTL::Mat& B,
              call the solver in the interface class scope afterwards.
  */
 template<class Prec>
-static Dune::InverseOperator<ISTL::Vec,ISTL::Vec>*
-  setupWithPreType(const LinSolParams& solParams,
-                   ISTL::Operator& op,
-                   ISTL::Preconditioner& prec)
+static ISTL::InverseOperator* setupWithPreType(const LinSolParams& solParams,
+                                               ISTL::Operator& op,
+                                               ISTL::Preconditioner& prec)
 {
   Prec& pre = static_cast<Prec&>(prec);
 
@@ -484,9 +483,8 @@ std::tuple<std::unique_ptr<ISTL::InverseOperator>,
     return std::make_tuple(nullptr, nullptr, nullptr);
   }
 
-  op.reset(new ISTL::Operator(A));
-
   if (solParams.getNoBlocks() > 1) {
+    op.reset(new ISTL::Operator(A));
     ISTL::BlockPreconditioner* bpre = new ISTL::BlockPreconditioner(A, adm.dd, solParams.getStringValue("schur"));
     pre.reset(bpre);
     for (size_t i = 0; i < adm.dd.getNoBlocks(); ++i)
@@ -494,7 +492,23 @@ std::tuple<std::unique_ptr<ISTL::InverseOperator>,
                                                  bpre->getBlockOp(i), i, nullptr));
     solver.reset(setupWithPreType<ISTL::BlockPreconditioner>(solParams, *op, *pre));
   } else {
-    pre.reset(setupPCInternal(A, *op, 0, &solver));
+#ifdef HAVE_MPI
+    if (adm.isParallel()) {
+        Dune::IndexInfoFromGrid<int, int> index;
+      for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i)
+        index.addLocalIndex(std::make_tuple(adm.dd.getGlobalEq(i+1), i, 0));
+      Dune::OwnerOverlapCopyCommunication<int,int> comm(index, *adm.getCommunicator());
+      ISTL::ParMatrixAdapter* nop = new ISTL::ParMatrixAdapter(A, comm);
+      //op.reset(nop);
+      //pre.reset(setupPCInternal(A, *nop, 0, &solver));
+    } else
+#endif
+   {
+     ISTL::Operator* nop = new ISTL::Operator(A);
+     op.reset(nop);
+     pre.reset(setupPCInternal(A, *nop, 0, &solver));
+   }
+
     std::string prec = solParams.getBlock(0).getStringValue("pc");
     if (prec == "ilu") {
       if (solParams.getBlock(0).getIntValue("ilu_fill_level") == 0)
