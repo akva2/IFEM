@@ -110,6 +110,11 @@ if(NOT PETSC_FOUND)
                    ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScSolParams.C)
 endif()
 
+if(NOT ISTL_FOUND)
+  list(APPEND IFEM_SRCS src/LinAlg/ISTLMatrix.C
+                        src/LinAlg/ISTLSolParams.C)
+endif()
+
 if(LRSPLINE_FOUND OR LRSpline_FOUND)
   file(GLOB LR_SRCS ${PROJECT_SOURCE_DIR}/src/ASM/LR/*.C)
   list(APPEND IFEM_SRCS ${LR_SRCS})
