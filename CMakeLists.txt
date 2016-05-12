@@ -101,13 +101,13 @@ file(GLOB IFEM_SRCS ${PROJECT_SOURCE_DIR}/src/IFEM.C
 string(REGEX REPLACE "${PROJECT_SOURCE_DIR}/src/ASM/ASMs.DInterpolate.C" "" IFEM_SRCS "${IFEM_SRCS}")
 
 if(NOT PETSC_FOUND)
-  list(REMOVE_ITEM IFEM_SRCS
-                   ${PROJECT_SOURCE_DIR}/src/ASM/SAMpatchPara.C
-                   ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScBlockMatrix.C
+  list(REMOVE_ITEM IFEM_SRCS 
+                   ${PROJECT_SOURCE_DIR}/src/ASM/SAMpatchPETSc.C
                    ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScMatrix.C
                    ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScPCPerm.C
                    ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScPCProd.C
-                   ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScPCScale.C)
+                   ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScPCScale.C
+                   ${PROJECT_SOURCE_DIR}/src/LinAlg/PETScSolParams.C)
 endif()
 
 if(LRSPLINE_FOUND OR LRSpline_FOUND)
