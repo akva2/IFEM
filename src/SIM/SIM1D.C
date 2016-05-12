@@ -541,7 +541,7 @@ bool SIM1D::createFEMmodel (char)
 }
 
 
-ASMbase* SIM1D::createDefaultGeometry (const TiXmlElement* geo) const
+std::string SIM1D::createDefaultG2 (const TiXmlElement* geo) const
 {
   std::string g2("100 1 0 0\n");
   g2.append(1,'0'+nsd);
@@ -587,8 +587,14 @@ ASMbase* SIM1D::createDefaultGeometry (const TiXmlElement* geo) const
     g2.append(" 1.0");
   g2.append("\n");
 
-  std::istringstream unitLine(g2);
-  return this->readPatch(unitLine,0,{nf});
+  return g2;
+}
+
+
+ASMbase* SIM1D::createDefaultGeometry (const TiXmlElement* geo) const
+{
+  std::istringstream unitLine(createDefaultG2(geo));
+  return this->readPatch(unitLine,1,{nf});
 }
 
 
