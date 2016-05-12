@@ -101,8 +101,10 @@ public:
   { return nullptr; }
   virtual bool readPatches(std::istream&,SIMdependency::PatchVec&,const char*) const
   { return false; }
-  virtual ASMbase* createDefaultGeometry(const TiXmlElement*) const
-  { return nullptr; }
+  virtual PatchVec createDefaultGeometry(const TiXmlElement*) const
+  { return PatchVec(); }
+  TopologySet createDefaultTopologySets(const TiXmlElement*) const { return TopologySet(); }
+  bool createDefaultTopology(const TiXmlElement*) { return false; }
 };
 
 

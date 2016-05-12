@@ -578,10 +578,26 @@ std::string SIM1D::createDefaultG2 (const TiXmlElement* geo) const
 }
 
 
-ASMbase* SIM1D::createDefaultGeometry (const TiXmlElement* geo) const
+SIM1D::PatchVec SIM1D::createDefaultGeometry (const TiXmlElement* geo) const
 {
   std::istringstream unitLine(createDefaultG2(geo));
-  return this->readPatch(unitLine,1,{nf});
+  PatchVec result;
+  this->readPatches(unitLine,result,"\t");
+  return result;
+}
+
+
+TopologySet SIM1D::createDefaultTopologySets(const TiXmlElement* geo) const
+{
+  TopologySet result;
+  result["Vertex1"].insert(TopItem(1,1,0));
+  result["Vertex2"].insert(TopItem(1,2,0));
+  result["Boundary"].insert(TopItem(1,1,0));
+  result["Boundary"].insert(TopItem(1,2,0));
+  result["Corners"].insert(TopItem(1,1,0));
+  result["Corners"].insert(TopItem(1,2,0));
+
+  return result;
 }
 
 
