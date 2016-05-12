@@ -49,6 +49,15 @@ macro(IFEM_add_unittests IFEM_PATH)
                     ${IFEM_PATH}
                     IFEM
                     ${IFEM_LIBRARIES} ${IFEM_DEPLIBS})
+
+  # Parallel unit tests. These are grouped under one CTest
+  if(MPI_FOUND)
+    set(TEST_SRCS ${IFEM_PATH}/src/ASM/Test/MPI/TestDomainDecomposition.C)
+    add_executable(IFEM-MPI-test EXCLUDE_FROM_ALL ${IFEM_PATH}/src/IFEM-test.C ${TEST_SRCS})
+    target_link_libraries(IFEM-MPI-test ${IFEM_LIBRARIES} ${IFEM_DEPLIBS} gtest)
+    add_test(NAME MPI-tests WORKING_DIRECTORY ${IFEM_PATH} COMMAND ${MPIEXEC} -np 4 $<TARGET_FILE:IFEM-MPI-test>)
+    list(APPEND TEST_APPS IFEM-MPI-test)
+  endif()
 endmacro()
 
 function(IFEM_add_test name binary)
