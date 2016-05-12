@@ -17,10 +17,10 @@
 
 void SIMgeneric::createDefaultModel ()
 {
-  if (!myModel.empty()) return;
-
-  nGlPatches = 1;
-  myModel.resize(1,this->createDefaultGeometry(nullptr));
+  if (myModel.empty()) {
+    nGlPatches = 1;
+    myModel = this->createDefaultGeometry(nullptr);
+  }
 }
 
 

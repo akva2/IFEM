@@ -516,7 +516,14 @@ bool SIMbase::parse (const TiXmlElement* elem)
       result = false;
   }
 
-  // Create the default geometry of no patchfile is specified
+  // parse partitioning first
+  if (!strcasecmp(elem->Value(),"geometry")) {
+    for (const TiXmlElement* part = elem->FirstChildElement("partitioning");
+                             part; part = part->NextSiblingElement("partitioning"))
+      result &= this->parseGeometryTag(part);
+  }
+
+  // Create the default geometry if no patchfile is specified
   if (myModel.empty() && !strcasecmp(elem->Value(),"geometry"))
     if (this->getNoParamDim() > 0 && !elem->FirstChildElement("patchfile"))
     {
@@ -524,7 +531,14 @@ bool SIMbase::parse (const TiXmlElement* elem)
       if (this->getNoParamDim() > 1) IFEM::cout <<"^"<< this->getNoParamDim();
       IFEM::cout << std::endl;
       nGlPatches = 1;
-      myModel.resize(1,this->createDefaultGeometry(elem));
+      myModel = this->createDefaultGeometry(elem);
+      bool sets=false;
+      utl::getAttribute(elem,"sets",sets);
+      if (sets)
+        for (auto& it : this->createDefaultTopologySets(elem))
+          myEntitys[it.first] = it.second;
+
+      geoTag = new TiXmlElement(*elem);
     }
 
   if (!strcasecmp(elem->Value(),"linearsolver")) {
@@ -842,6 +856,12 @@ bool SIMbase::createFEMmodel (char resetNumb)
       return false;
     else if (myModel[i]->isShared() && resetNumb == 'Y')
       myModel[i]->setGlobalNodeNums(IntVec());
+  }
+
+  if (geoTag) {
+    this->createDefaultTopology(geoTag);
+    delete geoTag;
+    geoTag = nullptr;
   }
 
   return true;
