@@ -59,6 +59,11 @@ macro(IFEM_add_unittests IFEM_PATH)
     list(REMOVE_ITEM TEST_SOURCES ${IFEM_PATH}/src/LinAlg/Test/TestPETScMatrix.C)
   endif()
 
+  if(NOT ISTL_FOUND)
+    list(REMOVE_ITEM TEST_SOURCES ${IFEM_PATH}/src/LinAlg/Test/TestISTLMatrix.C)
+    list(REMOVE_ITEM TEST_SOURCES ${IFEM_PATH}/src/LinAlg/Test/TestISTLPETScMatrix.C)
+  endif()
+
   IFEM_add_test_app("${TEST_SOURCES}"
                     ${IFEM_PATH}
                     IFEM
@@ -69,6 +74,9 @@ macro(IFEM_add_unittests IFEM_PATH)
     set(TEST_SRCS ${IFEM_PATH}/src/ASM/Test/MPI/TestDomainDecomposition.C)
     if(PETSC_FOUND)
       list(APPEND TEST_SRCS ${IFEM_PATH}/src/LinAlg/Test/MPI/TestPETScMatrix.C)
+    endif()
+    if(ISTL_FOUND)
+      list(APPEND TEST_SRCS ${IFEM_PATH}/src/LinAlg/Test/MPI/TestISTLMatrix.C)
     endif()
     add_executable(IFEM-MPI-test EXCLUDE_FROM_ALL ${IFEM_PATH}/src/IFEM-test.C ${TEST_SRCS})
     target_link_libraries(IFEM-MPI-test ${IFEM_LIBRARIES} ${IFEM_DEPLIBS} gtest)
