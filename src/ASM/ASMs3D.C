@@ -1373,7 +1373,8 @@ double ASMs3D::getParametricVolume (int iel) const
   if (MNPC[iel-1].empty())
     return 0.0;
 
-  int inod1 = MNPC[iel-1].back();
+  int cnod = svol->order(0)*svol->order(1)*svol->order(2);
+  int inod1 = MNPC[iel-1][cnod-1];
 #ifdef INDEX_CHECK
   if (inod1 < 0 || (size_t)inod1 >= nnod)
   {
@@ -1403,7 +1404,8 @@ double ASMs3D::getParametricArea (int iel, int dir) const
   if (MNPC[iel-1].empty())
     return 0.0;
 
-  int inod1 = MNPC[iel-1].back();
+  int cnod = svol->order(0)*svol->order(1)*svol->order(2);
+  int inod1 = MNPC[iel-1][cnod-1];
 #ifdef INDEX_CHECK
   if (inod1 < 0 || (size_t)inod1 >= nnod)
   {
@@ -1478,10 +1480,10 @@ bool ASMs3D::getElementCoordinates (Matrix& X, int iel) const
 #endif
 
   const IntVec& mnpc = MNPC[iel-1];
-  X.resize(3,mnpc.size());
+  X.resize(3,svol->order(0)*svol->order(1)*svol->order(2));
 
   RealArray::const_iterator cit = svol->coefs_begin();
-  for (size_t n = 0; n < mnpc.size(); n++)
+  for (size_t n = 0; n < X.cols(); n++)
   {
     int ip = this->coeffInd(mnpc[n])*svol->dimension();
     if (ip < 0) return false;
@@ -2512,7 +2514,7 @@ bool ASMs3D::integrateEdge (Integrand& integrand, int lEdge,
 
 	// Get element edge length in the parameter space
 	double dS = 0.0;
-	int ip = MNPC[iel-1].back();
+	int ip = MNPC[iel-1][p1*p2*p3-1];
 #ifdef INDEX_CHECK
 	if (ip < 0 || (size_t)ip >= nnod) return false;
 #endif
