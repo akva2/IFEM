@@ -12,6 +12,7 @@
 //==============================================================================
 
 #include "XMLWriter.h"
+#include "ASMbase.h"
 #include "GlbForceVec.h"
 #include "SIMbase.h"
 #include "IntegrandBase.h"
@@ -207,17 +208,23 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
     usedescription = true;
   }
 
+  int gbasis = sim->getPatch(1)->getGeometryBasis();
   int cmps = entry.second.ncmps>0?entry.second.ncmps:prob->getNoFields(1);
 
-  std::string basisname;
-  if (prefix.empty())
-    basisname = sim->getName()+"-1";
-  else
-    basisname = prefix+sim->getName()+"-1";
+  auto&& basisName = [prefix,sim](int b)
+  {
+    std::stringstream str;
+    if (!prefix.empty())
+      str << prefix << "-";
+
+    str << sim->getName() << "-" << b;
+
+    return str.str();
+  };
 
   // restart vector
   if (results & DataExporter::RESTART) {
-    addField(prefix+"restart",entry.second.description,basisname,
+    addField(prefix+"restart",entry.second.description,"",
              cmps,sim->getNoPatches(),"restart");
   }
 
@@ -225,14 +232,12 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
     if (sim->mixedProblem())
     {
       // primary solution vector
-      addField(prefix+entry.first,entry.second.description,basisname,
+      addField(prefix+entry.first,entry.second.description,"",
                0,sim->getNoPatches(),"restart");
 
       // primary solution fields
       for (int b=1; b <= sim->getNoBasis(); ++b) {
-        std::stringstream str;
-        str << sim->getName() << "-" << b;
-        addField(prefix+prob->getField1Name(10+b),"primary",str.str(),
+        addField(prefix+prob->getField1Name(10+b),"primary",basisName(b),
                  sim->getNoFields(b),sim->getNoPatches(),
                  "field",results & DataExporter::ONCE?true:false);
       }
@@ -242,7 +247,7 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
       // primary solution
       addField(usedescription ? entry.second.description:
                                 prefix+prob->getField1Name(11),
-               entry.second.description,basisname,
+               entry.second.description,basisName(1),
                cmps,sim->getNoPatches(),"field",results & DataExporter::ONCE?true:false);
     }
   }
@@ -251,7 +256,7 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
     if (sim->mixedProblem())
     {
       // primary solution vector
-      addField(prefix+entry.first,entry.second.description,basisname,
+      addField(prefix+entry.first,entry.second.description,basisName(1),
                prob->getNoFields(1),sim->getNoPatches(),"displacement");
     }
     else
@@ -259,7 +264,7 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
       // primary solution
       addField(usedescription ? entry.second.description:
                                 prefix+prob->getField1Name(11),
-               entry.second.description,basisname,
+               entry.second.description,basisName(1),
                prob->getNoFields(1),sim->getNoPatches(), "displacement");
     }
   }
@@ -268,7 +273,7 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
   size_t i, j;
   if (results & DataExporter::SECONDARY)
     for (j = 0; j < prob->getNoFields(2); j++)
-      addField(prefix+prob->getField2Name(j),"secondary", basisname,
+      addField(prefix+prob->getField2Name(j),"secondary",basisName(gbasis),
                1,sim->getNoPatches());
 
   // norms
@@ -280,7 +285,7 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
         for (j = 1; j <= norm->getNoFields(i); ++j) {
           if (norm->hasElementContributions(i,j))
             addField(prefix+norm->getName(i,j,(i>1&&m_prefix)?m_prefix[i-2]:0),"knotspan wise norm",
-                     basisname,1,sim->getNoPatches(),"knotspan");
+                     basisName(gbasis),1,sim->getNoPatches(),"knotspan");
         }
       }
       delete norm;
@@ -289,7 +294,7 @@ void XMLWriter::writeSIM (int level, const DataEntry& entry, bool,
 
   if (results & DataExporter::EIGENMODES) {
     const std::vector<Mode>* vec = static_cast<const std::vector<Mode>* >(entry.second.data2);
-    addField(prefix+"eigenmode", "eigenmode", sim->getName()+"-1", vec->size(), sim->getNoPatches(), "eigenmodes");
+    addField(prefix+"eigenmode", "eigenmode", basisName(1), vec->size(), sim->getNoPatches(), "eigenmodes");
   }
 }
 

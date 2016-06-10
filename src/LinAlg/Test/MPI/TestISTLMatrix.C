@@ -79,10 +79,12 @@ TEST(TestISTLMatrix, AssembleMPI)
   // now inspect the matrix
   const ProcessAdm& adm = sim.getProcessAdm();
   ISTL::Mat& mat = static_cast<ISTLMatrix*>(sim.getMatrix())->getMatrix();
-  ISTL::Vec b(mat.N()), b2(mat.N());
+  ISTL::Vec b(mat.N()), b2(mat.N()), b3(mat.N()), b4(mat.N());
+  double dot = 0.0;
 
   try {
-    Dune::OwnerOverlapCopyCommunication<int,int> comm(*adm.getCommunicator());
+    typedef Dune::OwnerOverlapCopyCommunication<int,int> Comm;
+    Comm comm(*adm.getCommunicator());
     comm.indexSet().beginResize();
     typedef Dune::ParallelLocalIndex<Dune::OwnerOverlapCopyAttributeSet::AttributeSet> LI;
     for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i) {
@@ -96,15 +98,35 @@ TEST(TestISTLMatrix, AssembleMPI)
     comm.remoteIndices().template rebuild<false>();
 
     ISTL::ParMatrixAdapter op(mat, comm);
+    Dune::OverlappingSchwarzScalarProduct<ISTL::Vec,Comm> sp(comm);
 
     b = 1.0;
     op.apply(b, b2);
+    b3 = 1.0;
+    op.applyscaleadd(0.5, b, b3);
+    dot = sp.dot(b2, b2);
+//    ISTL::LU lpc(new ISTL::LUType(mat));
+//    ISTL::LU lpc(new ISTL::LUType(mat));
+    ISTL::GJ lpc(mat, 1, 1.0);
+    ISTL::pASM<ISTL::Vec,ISTL::Vec,Comm,ISTL::GJ> pc(lpc,comm);
+    Dune::RestartedGMResSolver<ISTL::Vec> cg(op, sp, pc, 1e-12, 1000, 1000, adm.getProcId()==0?2:0);
+//    Dune::CGSolver<ISTL::Vec> cg(op, sp, pc, 1e-12, 1000, adm.getProcId()==0?2:0);
+//    Dune::MINRESSolver<ISTL::Vec> cg(op, sp, pc, 1e-12, 1000, adm.getProcId()==0?2:0);
+//    Dune::BiCGSTABSolver<ISTL::Vec> cg(op, sp, pc, 1e-12, 1000, adm.getProcId()==0?2:0);
+    Dune::InverseOperatorResult r;
+    b4 = 0;
+    b = b2;
+    cg.apply(b4, b, 1e-14, r);
+    IFEM::cout << b4 << std::endl;
   } catch (Dune::ISTLError e) {
     std::cerr << e << std::endl;
     ASSERT_TRUE(false);
   }
 
   IntVec v = readIntVector("src/LinAlg/Test/refdata/petsc_matrix_diagonal.ref");
-  for (size_t i = 1; i <= adm.dd.getMLGEQ().size(); ++i)
+  for (size_t i = 1; i <= adm.dd.getMLGEQ().size(); ++i) {
     ASSERT_FLOAT_EQ(v[adm.dd.getGlobalEq(i)-1], b2[i-1]);
+    ASSERT_FLOAT_EQ(1.0+0.5*v[adm.dd.getGlobalEq(i)-1], b3[i-1]);
+  }
+  ASSERT_FLOAT_EQ(dot, 196);
 }

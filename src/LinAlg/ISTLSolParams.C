@@ -28,6 +28,7 @@
 
 namespace ISTL {
 
+
 BlockPreconditioner::BlockPreconditioner(const ISTL::Mat& A,
                                          const DomainDecomposition& dd_,
                                          const std::string& schurType) :
@@ -217,9 +218,9 @@ void BlockPreconditioner::subtractMatrices(ISTL::Mat& A, const ISTL::Mat& B,
              access to the real type for the preconditioner. We can however
              call the solver in the interface class scope afterwards.
  */
-template<class Prec>
+template<class Prec, class Operator>
 static ISTL::InverseOperator* setupWithPreType(const LinSolParams& solParams,
-                                               ISTL::Operator& op,
+                                               Operator& op,
                                                Prec& pre)
 {
   std::string type = solParams.getStringValue("type");
@@ -243,9 +244,9 @@ static ISTL::InverseOperator* setupWithPreType(const LinSolParams& solParams,
 
 /*! \brief Helper template for setting up an AMG preconditioner with a given smoother */
 
-template<class Smoother>
+template<class Smoother, class Operator>
 static ISTL::Preconditioner* setupAMG(const LinSolParams& params,
-                                      size_t block, ISTL::Operator& op,
+                                      size_t block, Operator& op,
                                       std::unique_ptr<ISTL::InverseOperator>* solver)
 {
   // The coupling metric used in the AMG
@@ -255,7 +256,7 @@ static ISTL::Preconditioner* setupAMG(const LinSolParams& params,
   // The coarsening criterion used in the AMG
   typedef Dune::Amg::CoarsenCriterion<CritBase> Criterion;
   Criterion crit;
-  typedef typename Dune::Amg::AMG<ISTL::Operator, ISTL::Vec, Smoother> AMG;
+  typedef typename Dune::Amg::AMG<Operator, ISTL::Vec, Smoother> AMG;
   typename AMG::SmootherArgs args;
   args.relaxationFactor = 1.0;
   args.iterations = std::max(1, params.getBlock(block).getIntValue("multigrid_no_smooth"));
@@ -284,19 +285,19 @@ static ISTL::Preconditioner* setupAMG(const LinSolParams& params,
 /*! \brief Helper template for setting up a AMG preconditioner
  *!        with fine smoother differing from the other levels */
 
-template<class Smoother, class FineSmoother>
+template<class Smoother, class FineSmoother, class Operator>
 static ISTL::Preconditioner* setupAMG2_full(const LinSolParams& params, size_t block,
-                                            ISTL::Operator& op,
+                                            Operator& op,
                                             std::unique_ptr<ISTL::InverseOperator>* solver,
                                             FineSmoother* fsmooth)
 {
   typedef Dune::Amg::FirstDiagonal CouplingMetric;
   typedef Dune::Amg::SymmetricCriterion<ISTL::Mat,CouplingMetric> CritBase;
   typedef Dune::Amg::CoarsenCriterion<CritBase> Criterion;
-  typedef Dune::Amg::AggregationLevelTransferPolicy<ISTL::Operator,Criterion> TransferPolicy;
-  typedef Dune::Amg::OneStepAMGCoarseSolverPolicy<ISTL::Operator,Smoother,Criterion> CoarsePolicy;
+  typedef Dune::Amg::AggregationLevelTransferPolicy<Operator,Criterion> TransferPolicy;
+  typedef Dune::Amg::OneStepAMGCoarseSolverPolicy<Operator,Smoother,Criterion> CoarsePolicy;
   typedef typename Dune::Amg::SmootherTraits<Smoother>::Arguments SmootherArgs;
-  typedef typename Dune::Amg::TwoLevelMethod<ISTL::Operator, CoarsePolicy, FineSmoother> AMG2;
+  typedef typename Dune::Amg::TwoLevelMethod<Operator, CoarsePolicy, FineSmoother> AMG2;
 
   SmootherArgs args;
   args.relaxationFactor = 1.0;
@@ -325,9 +326,9 @@ static ISTL::Preconditioner* setupAMG2_full(const LinSolParams& params, size_t b
 }
 
 
-template<class FineSmoother>
+template<class FineSmoother, class Operator>
 static ISTL::Preconditioner* setupAMG2_smoother(const LinSolParams& params, size_t block,
-                                                ISTL::Operator& op,
+                                                Operator& op,
                                                 std::unique_ptr<ISTL::InverseOperator>* solver,
                                                 FineSmoother* fsmooth)
 {
@@ -347,8 +348,9 @@ static ISTL::Preconditioner* setupAMG2_smoother(const LinSolParams& params, size
 }
 
 
+template<class Operator>
 static ISTL::Preconditioner* setupAMG2(const LinSolParams& params, size_t block,
-                                       ISTL::Operator& op, std::unique_ptr<ISTL::InverseOperator>* solver)
+                                       Operator& op, std::unique_ptr<ISTL::InverseOperator>* solver)
 {
   std::string smoother = params.getBlock(block).getStringValue("multigrid_finesmoother");
   if (params.getBlock(block).getStringValue("multigrid_finesmoother") == "ilu") {
@@ -372,10 +374,10 @@ static ISTL::Preconditioner* setupAMG2(const LinSolParams& params, size_t block,
 
 
 /*! \brief Conditionally setup a KSP */
-template<class Type>
+template<class Type, class Op>
 static ISTL::Preconditioner*
 setupSolver(Type* pre,
-            ISTL::Operator& op,
+            Op& op,
             const LinSolParams& solParams,
             std::unique_ptr<ISTL::InverseOperator>* solver)
 {
@@ -385,17 +387,26 @@ setupSolver(Type* pre,
   return pre;
 }
 
-ISTL::Preconditioner* ISTLSolParams::setupPCInternal(ISTL::Mat& A,
-                                                     ISTL::Operator& op,
-                                                     size_t block,
-                                                     std::unique_ptr<ISTL::InverseOperator>* solver)
+
+//! \brief Internal helper function for setting up a preconditioner.
+//! \param A Matrix to construct preconditioner for
+//! \param op Matrix adaptor to use (used with AMG)
+//! \param block Block to read settings from
+//! \param solver Solver object to instance. nullptr to do nothing.
+template<class Operator>
+static ISTL::Preconditioner* setupPCInternal(ISTL::Mat& A,
+                                             Operator& op,
+                                             size_t block,
+                                             std::unique_ptr<ISTL::InverseOperator>* solver,
+                                             const LinSolParams& solParams,
+                                             const ProcessAdm& adm)
 {
   std::string prec = solParams.getBlock(block).getStringValue("pc");
   if (prec == "ilu") {
     int fill_level = solParams.getBlock(block).getIntValue("ilu_fill_level");
-    if (fill_level == 0)
+    if (fill_level == 0) {
       return setupSolver(new ISTL::ILU0(A, 1.0), op, solParams, solver);
-    else
+    } else
       return setupSolver(new ISTL::ILUn(A, fill_level, 1.0),
                          op, solParams, solver);
   } else if (prec == "lu")
@@ -466,6 +477,7 @@ ISTL::Preconditioner* ISTLSolParams::setupPCInternal(ISTL::Mat& A,
 }
 
 
+
 std::tuple<std::unique_ptr<ISTL::InverseOperator>,
            std::unique_ptr<ISTL::Preconditioner>,
            std::unique_ptr<ISTL::Operator>> ISTLSolParams::setupPC(ISTL::Mat& A)
@@ -480,29 +492,44 @@ std::tuple<std::unique_ptr<ISTL::InverseOperator>,
   }
 
   if (solParams.getNoBlocks() > 1) {
-    op.reset(new ISTL::Operator(A));
+    ISTL::MatrixAdapter* nop = new ISTL::MatrixAdapter(A);
+    op.reset(nop);
     ISTL::BlockPreconditioner* bpre = new ISTL::BlockPreconditioner(A, adm.dd, solParams.getStringValue("schur"));
     pre.reset(bpre);
     for (size_t i = 0; i < adm.dd.getNoBlocks(); ++i)
       bpre->getBlockPre(i).reset(setupPCInternal(bpre->getBlock(i),
-                                                 bpre->getBlockOp(i), i, nullptr));
-    solver.reset(setupWithPreType(solParams, *op, *bpre));
+                                                 bpre->getBlockOp(i), i,
+                                                 nullptr, solParams, adm));
+    solver.reset(setupWithPreType(solParams, *nop, *bpre));
   } else {
 #ifdef HAVE_MPI
     if (adm.isParallel()) {
-        Dune::IndexInfoFromGrid<int, int> index;
-      for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i)
-        index.addLocalIndex(std::make_tuple(adm.dd.getGlobalEq(i+1), i, 0));
-      Dune::OwnerOverlapCopyCommunication<int,int> comm(index, *adm.getCommunicator());
-      //ISTL::ParMatrixAdapter* nop = new ISTL::ParMatrixAdapter(A, comm);
-      //op.reset(nop);
-      //pre.reset(setupPCInternal(A, *nop, 0, &solver));
+      typedef Dune::OwnerOverlapCopyCommunication<int,int> Comm;
+      Comm* comm = new Comm(*adm.getCommunicator());
+      comm->indexSet().beginResize();
+      typedef Dune::ParallelLocalIndex<Dune::OwnerOverlapCopyAttributeSet::AttributeSet> LI;
+      for (size_t i = 0; i < adm.dd.getMLGEQ().size(); ++i) {
+        int gid = adm.dd.getGlobalEq(i+1);
+        comm->indexSet().add(gid-1, LI(i, gid >= adm.dd.getMinEq() ?
+                                         Dune::OwnerOverlapCopyAttributeSet::owner :
+                                         Dune::OwnerOverlapCopyAttributeSet::overlap));
+      }
+      comm->indexSet().endResize();
+      comm->remoteIndices().setIncludeSelf(true);
+      comm->remoteIndices().template rebuild<false>();
+      ISTL::ParMatrixAdapter* nop = new ISTL::ParMatrixAdapter(A, *comm);
+      op.reset(nop);
+      auto pc = new Dune::ParSSOR<ISTL::Mat,ISTL::Vec,ISTL::Vec,Comm>(A, 1, 1.0, *comm);
+      pre.reset(pc);
+      auto* Sp = new Dune::OverlappingSchwarzScalarProduct<ISTL::Vec,Comm>(*comm);
+
+      solver.reset(new Dune::CGSolver<ISTL::Vec>(*nop, *Sp, *pc, 1e-6, 1000, adm.getProcId()==0?2:0));
     } else
 #endif
     {
-      ISTL::Operator* nop = new ISTL::Operator(A);
+      ISTL::MatrixAdapter* nop = new ISTL::MatrixAdapter(A);
       op.reset(nop);
-      pre.reset(setupPCInternal(A, *nop, 0, &solver));
+      pre.reset(setupPCInternal(A, *nop, 0, &solver, solParams, adm));
     }
   }
 

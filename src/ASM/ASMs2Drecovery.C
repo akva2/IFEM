@@ -117,10 +117,12 @@ Go::SplineSurface* ASMs2D::projectSolution (const IntegrandBase& integrnd) const
 {
   PROFILE2("ASMs2D::projectSolution");
 
+  char basis = this->getGeometryBasis();
+
   // Compute parameter values of the result sampling points (Greville points)
   std::array<RealArray,2> gpar;
   for (int dir = 0; dir < 2; dir++)
-    if (!this->getGrevilleParameters(gpar[dir],dir))
+    if (!this->getGrevilleParameters(gpar[dir],dir,basis))
       return nullptr;
 
   // Evaluate the secondary solution at all sampling points
@@ -136,16 +138,16 @@ Go::SplineSurface* ASMs2D::projectSolution (const IntegrandBase& integrnd) const
   // other projection schemes later.
 
   RealArray weights;
-  if (surf->rational())
-    surf->getWeights(weights);
+  if (getBasis(basis)->rational())
+    getBasis(basis)->getWeights(weights);
 
   const Vector& vec = sValues;
-  return Go::SurfaceInterpolator::regularInterpolation(surf->basis(0),
-						       surf->basis(1),
+  return Go::SurfaceInterpolator::regularInterpolation(getBasis(basis)->basis(0),
+						       getBasis(basis)->basis(1),
 						       gpar[0], gpar[1],
 						       const_cast<Vector&>(vec),
 						       sValues.rows(),
-						       surf->rational(),
+						       getBasis(basis)->rational(),
 						       weights);
 }
 

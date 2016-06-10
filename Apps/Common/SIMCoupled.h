@@ -135,6 +135,13 @@ public:
     S2.registerFields(exporter);
   }
 
+  //! \brief Registers the field vectors for restart support.
+  void registerRestartFields(DataExporter& exporter)
+  {
+    S1.registerRestartFields(exporter);
+    S2.registerRestartFields(exporter);
+  }
+
   //! \brief Set the initial conditions for the simulators
   void setInitialConditions()
   {

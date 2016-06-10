@@ -300,10 +300,7 @@ bool HDF5Writer::readSIM (int level, const DataEntry& entry)
   bool ok = true;
 #ifdef HAS_HDF5
   std::string name;
-  if (sim->mixedProblem())
-    name = entry.first;
-  else
-    name = entry.second.description + " restart";
+  name = entry.first;
 
   for (int i = 0; i < sim->getNoPatches() && ok; ++i) {
     std::stringstream str;

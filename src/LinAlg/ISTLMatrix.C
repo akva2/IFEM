@@ -137,6 +137,8 @@ ISTLMatrix::~ISTLMatrix ()
 }
 
 
+#include "IFEM.h"
+
 void ISTLMatrix::initAssembly (const SAM& sam, bool b)
 {
   SparseMatrix::initAssembly(sam, b);
@@ -151,20 +153,17 @@ void ISTLMatrix::initAssembly (const SAM& sam, bool b)
     sum += it.size();
 
   A.setSize(rows(), cols(), sum);
-  A.setBuildMode(ISTL::Mat::random);
+  A.setBuildMode(ISTL::Mat::row_wise);
 
-  for (size_t i = 0; i < dofc.size(); ++i)
-    A.setrowsize(i,dofc[i].size());
-  A.endrowsizes();
-
-  for (size_t i = 0; i < dofc.size(); ++i)
-    for (const auto& it : dofc[i])
-      A.addindex(i, it-1);
-
-  A.endindices();
+  size_t r = 0;
+  auto end = A.createend();
+  for (auto row = A.createbegin(); row != end; ++row, ++r)
+    for (const auto& it : dofc[r])
+      row.insert(it-1);
 
   A = 0;
 }
+
 
 bool ISTLMatrix::beginAssembly()
 {
@@ -194,8 +193,10 @@ void ISTLMatrix::init ()
 
 bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 {
+  std::cout << "hol" << std::endl;
   if (!pre)
     std::tie(solver, pre, op) = solParams.setupPC(A);
+  std::cout << "hal" << std::endl;
 
   ISTLVector* Bptr = dynamic_cast<ISTLVector*>(&B);
   if (!Bptr || !solver || !pre)
@@ -220,8 +221,10 @@ bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 
 bool ISTLMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
 {
+  std::cout << "hoi" << std::endl;
   if (!pre)
     std::tie(solver, pre, op) = solParams.setupPC(A);
+  std::cout << "hai" << std::endl;
 
   const ISTLVector* Bptr = dynamic_cast<const ISTLVector*>(&b);
   if (!Bptr || ! solver || !pre)

@@ -101,7 +101,7 @@ bool DataExporter::dumpTimeLevel (const TimeStep* tp, bool geometryUpdated)
   if (tp && tp->step == m_last_step)
     return true;
 
-  if (tp && tp->step % m_ndump && tp->step % m_ndump > m_order)
+  if (tp && tp->step % m_ndump)
     return true;
 
   if (tp)

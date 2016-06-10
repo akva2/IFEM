@@ -34,7 +34,8 @@ namespace ISTL
 {
   typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>> Mat; //!< A sparse system matrix
   typedef Dune::BlockVector<Dune::FieldVector<double,1>> Vec;  //!< A vector
-  typedef Dune::MatrixAdapter<Mat,Vec,Vec> Operator;      //!< A serial matrix operator
+  typedef Dune::MatrixAdapter<Mat,Vec,Vec> MatrixAdapter;      //!< A serial matrix operator
+  typedef Dune::AssembledLinearOperator<Mat,Vec,Vec> Operator; //!< A matrix operator
   typedef Dune::InverseOperator<Vec, Vec> InverseOperator;     //!< Linear system inversion abstraction
   typedef Dune::Preconditioner<Vec,Vec> Preconditioner;        //!< Preconditioner abstraction
 

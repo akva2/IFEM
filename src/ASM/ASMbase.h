@@ -230,6 +230,8 @@ public:
   const IntVec& getMyNodeNums() const { return myMLGN; }
   //! \brief Returns number of bases
   virtual size_t getNoBasis() const { return 1; }
+  //! \brief Returns basis geometry is defined on.
+  virtual char getGeometryBasis() const { return 1; }
   //! \brief Returns the total number of nodes in this patch.
   virtual size_t getNoNodes(int basis = 0) const;
   //! \brief Returns the total number of elements in this patch.

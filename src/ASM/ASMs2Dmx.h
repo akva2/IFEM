@@ -73,6 +73,8 @@ public:
   //! \param[in] inod 1-based node index local to current patch
   virtual Vec3 getCoord(size_t inod) const;
 
+  //! \brief Returns basis geometry is defined on.
+  char getGeometryBasis() const override { return geoBasis; }
   //! \brief Returns the number of bases.
   virtual size_t getNoBasis() const { return m_basis.size(); }
   //! \brief Returns the total number of nodes in this patch.
