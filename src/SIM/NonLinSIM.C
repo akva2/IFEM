@@ -21,6 +21,9 @@
 #include "tinyxml.h"
 #include <sstream>
 #include <iomanip>
+#include "DataExporter.h"
+#include "HDF5Writer.h"
+#include "XMLWriter.h"
 
 using namespace SIM;
 
@@ -201,6 +204,14 @@ ConvStatus NonLinSIM::solveStep (TimeStep& param, SolutionMode mode,
       model.getProcessAdm().cout << std::setprecision(oldPrec);
   }
 
+  DataExporter exporter(false);
+  HDF5Writer h5w("residual", model.getProcessAdm());
+  XMLWriter xw("residual", model.getProcessAdm());
+  exporter.registerWriter(&h5w);
+  exporter.registerWriter(&xw);
+  exporter.registerField("residual", "residual", DataExporter::SIM, -DataExporter::PRIMARY);
+  exporter.setFieldValue("residual", &model, &residual);
+
   param.iter = 0;
   alpha = 1.0;
   if (fromIni) // Always solve from initial configuration
@@ -225,7 +236,7 @@ ConvStatus NonLinSIM::solveStep (TimeStep& param, SolutionMode mode,
   if (!model.solveSystem(linsol,msgLevel-1))
     return FAILURE;
 
-  while (param.iter <= maxit)
+  while (param.iter <= maxit) {
     switch (this->checkConvergence(param))
       {
       case CONVERGED:
@@ -275,6 +286,8 @@ ConvStatus NonLinSIM::solveStep (TimeStep& param, SolutionMode mode,
 
 	poorConvg = false;
       }
+    exporter.dumpTimeLevel();
+  }
 
   return DIVERGED;
 }
