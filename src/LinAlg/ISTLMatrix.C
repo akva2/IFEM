@@ -193,10 +193,8 @@ void ISTLMatrix::init ()
 
 bool ISTLMatrix::solve (SystemVector& B, bool newLHS, Real*)
 {
-  std::cout << "hol" << std::endl;
   if (!pre)
     std::tie(solver, pre, op) = solParams.setupPC(A);
-  std::cout << "hal" << std::endl;
 
   ISTLVector* Bptr = dynamic_cast<ISTLVector*>(&B);
   if (!Bptr || !solver || !pre)
