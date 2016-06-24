@@ -56,6 +56,7 @@ macro(IFEM_add_unittests IFEM_PATH)
   file(GLOB TEST_SOURCES ${IFEM_PATH}/src/Utility/Test/*.C;${IFEM_PATH}/src/ASM/Test/*.C;${IFEM_PATH}/src/LinAlg/Test/*.C;${IFEM_PATH}/src/SIM/Test/*.C)
   if(NOT PETSC_FOUND)
     list(REMOVE_ITEM TEST_SOURCES ${IFEM_PATH}/src/LinAlg/Test/TestPETScMatrix.C)
+    list(REMOVE_ITEM TEST_SOURCES ${IFEM_PATH}/src/LinAlg/Test/TestISTLPETScMatrix.C)
   endif()
 
   if(NOT ISTL_FOUND)
