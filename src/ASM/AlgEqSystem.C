@@ -15,6 +15,8 @@
 #include "ElmMats.h"
 #include "SAM.h"
 
+#include <cassert>
+
 
 bool AlgEqSystem::init (SystemMatrix::Type mtype, const LinSolParams* spar,
 			size_t nmat, size_t nvec, bool withReactions,
@@ -179,6 +181,53 @@ bool AlgEqSystem::assemble (const LocalIntegral* elmObj, int elmId)
 
   if (!status)
     std::cerr <<" *** AlgEqSystem::assemble: Failure for element "<< elmId
+	      <<": size(A)="<< A.size() <<","<< elMat->A.size()
+	      <<" size(b)="<< b.size() <<","<< elMat->b.size() << std::endl;
+  return status;
+}
+
+
+bool AlgEqSystem::assemble (const LocalIntegral* elmObj, int elmId1, int elmId2)
+{
+  const ElmMats* elMat = dynamic_cast<const ElmMats*>(elmObj);
+  if (!elMat)
+    return false; // Logic error, shouldn't happen...
+  else if (elMat->empty())
+    return true; // Silently ignore if no element matrices
+
+  bool status = true;
+  if (A.size() == 1 && !b.empty())
+  {
+    // The algebraic system consists of one system matrix and one RHS-vector.
+    // Extract the element-level Newton matrix and associated RHS-vector for
+    // general time-dependent and/or nonlinear problems.
+    IntVec meen1, meen2;
+    if (!sam.getElmEqns(meen1, elmId1))
+      return false;
+    if (!sam.getElmEqns(meen2, elmId2))
+      return false;
+
+    RealArray b1 = RealArray(elMat->getRHSVector().begin(),
+                             elMat->getRHSVector().begin()+meen1.size());
+    RealArray b2 = RealArray(elMat->getRHSVector().begin()+meen1.size(),
+                             elMat->getRHSVector().end());
+    status = sam.assembleSystem(*b.front(), b1, elmId1, nullptr);
+    status &= sam.assembleSystem(*b.front(), b2, elmId2, nullptr);
+    if (status && elMat->withLHS) // we have LHS element matrices
+    {
+      std::copy(meen2.begin(), meen2.end(), std::back_inserter(meen1));
+      status = A.front()._A->assemble(elMat->getNewtonMatrix(), sam, *b.front(), meen1);
+    }
+  }
+  else
+  {
+    std::cerr << "Not implemented for multiple system matrices" << std::endl;
+    assert(0);
+  }
+
+  if (!status)
+    std::cerr <<" *** AlgEqSystem::assemble: Failure for element ("
+              << elmId1 << "," << elmId2 << ")"
 	      <<": size(A)="<< A.size() <<","<< elMat->A.size()
 	      <<" size(b)="<< b.size() <<","<< elMat->b.size() << std::endl;
   return status;

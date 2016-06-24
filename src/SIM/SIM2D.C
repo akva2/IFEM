@@ -75,7 +75,7 @@ bool SIM2D::addConnection(int master, int slave, int mEdge, int sEdge,
   int lmaster = getLocalPatchIndex(master);
   int lslave = getLocalPatchIndex(slave);
 
-  if (lmaster > 0 && lslave > 0)
+  if (lmaster > 0 && lslave > 0 && !opt.nitsche)
   {
     IFEM::cout <<"\tConnecting P"<< lslave <<" E"<< sEdge
                <<" to P"<< lmaster <<" E"<< mEdge

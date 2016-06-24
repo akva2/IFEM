@@ -66,6 +66,7 @@ public:
 
 public:
   ASM::Discretization discretization; //!< Spatial discretization option
+  bool nitsche; //!< True if nitsche is used to connect multi-patch models
 
   int nGauss[2]; //!< Gaussian quadrature rules
 

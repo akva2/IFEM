@@ -825,6 +825,196 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
 }
 
 
+// TODO: Assumes matching boundaries with no degenerated elements for now!
+bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
+                          ASMbase& neigh, int nlIndex,
+                          bool reverse,
+			  GlobalIntegral& glInt,
+			  const TimeDomain& time)
+{
+  if (!surf) return true; // silently ignore empty patches
+
+  ASMs2Dmx& neighbor = static_cast<ASMs2Dmx&>(neigh);
+
+  PROFILE2("ASMs2Dmx::integrate(N)");
+
+  bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
+
+  // Get Gaussian quadrature points and weights
+  const double* xg = GaussQuadrature::getCoord(nGauss);
+  const double* wg = GaussQuadrature::getWeight(nGauss);
+  if (!xg || !wg) return false;
+
+  // Find the parametric direction of the edge normal {-2,-1, 1, 2}
+  const int edgeDir = (lIndex+1)/(lIndex%2 ? -2 : 2);
+
+  const int t1 = abs(edgeDir);   // Tangent direction normal to the patch edge
+  const int t2 = 3-abs(edgeDir); // Tangent direction along the patch edge
+
+  // Compute parameter values of the Gauss points along the whole patch edge
+  std::array<Matrix,2> gpar;
+  for (short int d = 0; d < 2; d++)
+    if (-1-d == edgeDir)
+    {
+      gpar[d].resize(1,1);
+      gpar[d].fill(d == 0 ? surf->startparam_u() : surf->startparam_v());
+    }
+    else if (1+d == edgeDir)
+    {
+      gpar[d].resize(1,1);
+      gpar[d].fill(d == 0 ? surf->endparam_u() : surf->endparam_v());
+    }
+    else
+      this->getGaussPointParameters(gpar[d],d,nGauss,xg);
+
+  // Evaluate basis function derivatives at all integration points
+  std::vector<std::vector<Go::BasisDerivsSf>> splinex(m_basis.size());
+#pragma omp parallel for schedule(static)
+  for (size_t i = 0; i < m_basis.size(); ++i)
+    m_basis[i]->computeBasisGrid(gpar[0],gpar[1],splinex[i]);
+
+  const int p1 = surf->order_u();
+  const int p2 = surf->order_v();
+  const int n1 = surf->numCoefs_u();
+  const int n2 = surf->numCoefs_v();
+
+  std::vector<size_t> elem_sizes;
+  for (auto& it : m_basis)
+    elem_sizes.push_back(it->order_u()*it->order_v());
+
+  for (auto& it : neighbor.m_basis)
+    elem_sizes.push_back(it->order_u()*it->order_v());
+
+  std::map<char,size_t>::const_iterator iit = firstBp.find(lIndex);
+  size_t firstp = iit == firstBp.end() ? 0 : iit->second;
+
+  MxFiniteElement fe(elem_sizes);
+  fe.xi = fe.eta = edgeDir < 0 ? -1.0 : 1.0;
+  fe.u = gpar[0](1,1);
+  fe.v = gpar[1](1,1);
+
+  std::vector<Matrix> dNxdu(m_basis.size());
+  Matrix Xnod, Jac;
+  Vec4   X;
+  Vec3   normal;
+
+  // TODO: assumes no degenerated elements for now!
+  int nel1, nel2, dummy;
+  neighbor.getNoStructElms(nel1,nel2,dummy);
+
+  int niel = 1;
+  int niel_ofs = 1;
+  switch (nlIndex) {
+    case 1: niel_ofs = nel1; break;
+    case 2: niel_ofs = nel1; niel = n1; break;
+    case 4: niel = n1*(n2-1)+1; break;
+  }
+
+  // === Assembly loop over all elements on the patch edge =====================
+
+  int iel = 1;
+  for (int i2 = p2; i2 <= n2; i2++)
+    for (int i1 = p1; i1 <= n1; i1++, iel++)
+    {
+      fe.iel = MLGE[iel-1];
+      if (fe.iel < 1) continue; // zero-area element
+
+      // Skip elements that are not on current boundary edge
+      bool skipMe = false;
+      switch (edgeDir)
+	{
+	case -1: if (i1 > p1) skipMe = true; break;
+	case  1: if (i1 < n1) skipMe = true; break;
+	case -2: if (i2 > p2) skipMe = true; break;
+	case  2: if (i2 < n2) skipMe = true; break;
+	}
+      if (skipMe) continue;
+
+      // Get element edge length in the parameter space
+      double dS = this->getParametricLength(iel,t2);
+      if (dS < 0.0) return false; // topology error (probably logic error)
+
+      // Set up control point coordinates for current element
+      if (!this->getElementCoordinates(Xnod,iel)) return false;
+
+      if (useElmVtx)
+        this->getElementCorners(i1-1,i2-1,fe.XC);
+
+      // Initialize element quantities
+      LocalIntegral* A = integrand.getLocalIntegral(elem_sizes,fe.iel,true);
+      auto mnpc = MNPC[iel-1];
+      if (reverse)
+        std::copy(neighbor.MNPC[niel-1].rbegin(),
+                  neighbor.MNPC[niel-1].rend(),
+                  std::back_inserter(mnpc));
+      else
+        std::copy(neighbor.MNPC[niel-1].begin(),
+                  neighbor.MNPC[niel-1].end(),
+                  std::back_inserter(mnpc));
+      bool ok = integrand.initElementBou(mnpc,elem_sizes,nb,*A);
+
+
+      // --- Integration loop over all Gauss points along the edge -------------
+
+      int ip = (t1 == 1 ? i2-p2 : i1-p1)*nGauss;
+      fe.iGP = firstp + ip; // Global integration point counter
+
+      for (int i = 0; i < nGauss && ok; i++, ip++, fe.iGP++)
+      {
+	// Parameter values of current integration point
+	if (gpar[0].size() > 1)
+	{
+          fe.xi = xg[i];
+	  fe.u = gpar[0](i+1,i1-p1+1);
+	}
+	if (gpar[1].size() > 1)
+	{
+          fe.eta = xg[i];
+	  fe.v = gpar[1](i+1,i2-p2+1);
+	}
+
+	// Fetch basis function derivatives at current integration point
+        for (size_t b = 0; b < m_basis.size(); ++b)
+          SplineUtils::extractBasis(splinex[b][ip],fe.basis(b+1),dNxdu[b]);
+
+	// Compute Jacobian inverse of the coordinate mapping and
+	// basis function derivatives w.r.t. Cartesian coordinates
+        fe.detJxW = utl::Jacobian(Jac,normal,fe.grad(geoBasis),Xnod,dNxdu[geoBasis-1],t1,t2);
+	if (fe.detJxW == 0.0) continue; // skip singular points
+        for (size_t b = 0; b < m_basis.size(); ++b)
+          if (b != (size_t)geoBasis-1)
+            fe.grad(b+1).multiply(dNxdu[b],Jac);
+
+	if (edgeDir < 0) normal *= -1.0;
+
+	// Cartesian coordinates of current integration point
+	X = Xnod * fe.basis(geoBasis);
+	X.t = time.t;
+
+	// Evaluate the integrand and accumulate element contributions
+	fe.detJxW *= 0.5*dS*wg[i];
+
+	ok = integrand.evalBouMx(*A,fe,time,X,normal);
+      }
+
+      // Finalize the element quantities
+      if (ok && !integrand.finalizeElementBou(*A,fe,time))
+        ok = false;
+
+      // Assembly of global system integral
+      if (ok && !glInt.assemble(A->ref(),fe.iel, neighbor.MLGE[niel-1]))
+	return false;
+
+      A->destruct();
+
+      if (!ok) return false;
+      niel += niel_ofs;
+    }
+
+  return true;
+}
+
+
 int ASMs2Dmx::evalPoint (const double* xi, double* param, Vec3& X) const
 {
   if (!surf) return -2;

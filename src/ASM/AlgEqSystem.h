@@ -74,6 +74,12 @@ public:
   //! \param[in] elmId Global number of the element associated with \a *elmObj
   virtual bool assemble(const LocalIntegral* elmObj, int elmId);
 
+  //! \brief Adds a set of element matrices into the algebraic equation system.
+  //! \param[in] elmObj Pointer to the element matrices to add into \a *this
+  //! \param[in] elmId1 Global number of the first element associated with \a *elmObj
+  //! \param[in] elmId2 Global number of the second element associated with \a *elmObj
+  virtual bool assemble(const LocalIntegral* elmObj, int elmId1, int elmId2);
+
   //! \brief Returns the number of right-hand-side vectors allocated.
   size_t getNoRHS() const { return b.size(); }
 

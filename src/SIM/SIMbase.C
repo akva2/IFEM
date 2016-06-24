@@ -1764,6 +1764,36 @@ bool SIMbase::assembleSystem (const TimeDomain& time, const Vectors& prevSol,
           }
         }
 
+    // Assemble contributions from Nitsche multi-patch connections
+    if (it->second->hasNitscheTerms()) {
+      for (size_t pidx = 1; pidx <= myModel.size() && ok; ++pidx) {
+        int gpIdx = nGlPatches != (int)myModel.size() ? myPatches[pidx-1] : pidx;
+        for (auto& ddIt : adm.dd.ghostConnections) {
+          if (ddIt.master > gpIdx) // sorted - we are done
+            break;
+          if (ddIt.master == gpIdx) {
+            if (msgLevel > 1)
+              IFEM::cout <<"\nAssembling Nitsche matrix terms for boundary "
+                         << ddIt.midx <<" on P"<< pidx
+                         <<  " / boundary " << ddIt.sidx << " on P"
+                         << getLocalPatchIndex(ddIt.slave) << std::endl;
+            ok &= this->extractPatchSolution(it->second,prevSol,pidx);
+            ASMbase& spch = *this->getPatch(ddIt.slave);
+            if (!prevSol.empty()) {
+              it->second->getSolutions().resize(it->second->getNoSolutions()+1);
+              spch.extractNodeVec(prevSol.front(),
+                                  it->second->getSolutions().back());
+            }
+            ok &= getPatch(pidx)->integrate(*it->second, ddIt.midx,
+                                            spch,
+                                            ddIt.sidx,
+                                            ddIt.orient==1?true:false,
+                                            sysQ, time);
+          }
+        }
+      }
+    }
+
     if (ok) ok = this->assembleDiscreteTerms(it->second,time);
     if (ok && &sysQ != myEqSys && isAssembling)
       ok = sysQ.finalize(newLHSmatrix);

@@ -142,7 +142,8 @@ public:
   virtual bool hasInteriorTerms() const { return true; }
   //! \brief Returns whether this integrand has explicit boundary contributions.
   virtual bool hasBoundaryTerms() const { return true; }
-
+  //! \brief Returns whether this integrand has Nitsche boundary contributions.
+  virtual bool hasNitscheTerms() const { return false; }
 
   // Secondary solution field evaluation interface
   // =============================================

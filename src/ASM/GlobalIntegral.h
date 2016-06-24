@@ -38,6 +38,13 @@ public:
   //! \param[in] elmObj The local integral object to add into \a *this.
   //! \param[in] elmId Global number of the element associated with elmObj
   virtual bool assemble(const LocalIntegral* elmObj, int elmId) { return true; }
+
+  //! \brief Adds a LocalIntegral object into a corresponding global object.
+  //! \param[in] elmObj The local integral object to add into \a *this.
+  //! \param[in] elmId1 Global number of the first element associated with elmObj
+  //! \param[in] elmId2 Global number of the second element associated with elmObj
+  virtual bool assemble(const LocalIntegral* elmObj,
+                        int elmId1, int elmId2) { return true; }
 };
 
 #endif

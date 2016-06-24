@@ -129,6 +129,16 @@ public:
   virtual bool integrate(Integrand& integrand, int lIndex,
 			 GlobalIntegral& glbInt, const TimeDomain& time);
 
+  //! \brief Evaluates a boundary Nitsche integral over a patch face/edge.
+  //! \param integrand Object with problem-specific data and methods
+  //! \param[in] lIndex Local index of the boundary face/edge
+  //! \param glbInt The integrated quantity
+  //! \param[in] time Parameters for nonlinear/time-dependent simulations
+  virtual bool integrate (Integrand& integrand, int lIndex,
+                          ASMbase& neighbor, int nlIndex,
+                          bool reverse,
+			  GlobalIntegral& glInt,
+			  const TimeDomain& time);
 
   // Post-processing methods
   // =======================

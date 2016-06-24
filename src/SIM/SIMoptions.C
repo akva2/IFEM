@@ -31,6 +31,7 @@
 SIMoptions::SIMoptions ()
 {
   discretization = ASM::Spline;
+  nitsche = false;
   solver = SystemMatrix::SPARSE;
 #ifdef USE_OPENMP
   num_threads_SLU = omp_get_max_threads();
@@ -103,6 +104,7 @@ bool SIMoptions::parseDiscretizationTag (const TiXmlElement* elem)
       else if (discr == "lrsplines")
 	discretization = ASM::LRSpline;
     }
+    utl::getAttribute(elem,"nitsche",nitsche);
   }
 
   else if (!strcasecmp(elem->Value(),"nGauss") && elem->FirstChild()) {
