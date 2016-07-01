@@ -445,7 +445,7 @@ bool PETScMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
   if (!Xptr)
     return false;
 
-  return this->solve(Bptr->getVector(),Xptr->getVector(),newLHS,false);
+  return this->solve(Bptr->getVector(),Xptr->getVector(),newLHS,true);
 }
 
 

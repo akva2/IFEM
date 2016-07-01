@@ -107,7 +107,11 @@ std::vector<std::set<int>> DomainDecomposition::getSubdomains(int nx, int ny, in
       for (const int& iEl : subdomains[g]) {
         if (getNoBlocks() == 0) {
           IntVec eqns;
-          getSAM()->getElmEqns(eqns, it->getElmID(iEl+1));
+          int el = it->getElmID(iEl+1);
+          if (el == 0)
+            continue;
+
+          getSAM()->getElmEqns(eqns, el);
           for (auto& it : eqns) {
             if (it > 0)
               result[d].insert(it);

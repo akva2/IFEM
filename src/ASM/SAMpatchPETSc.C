@@ -19,7 +19,8 @@
 #include "ProcessAdm.h"
 
 
-SAMpatchPETSc::SAMpatchPETSc(const std::map<int,int>& g2ln, const ProcessAdm& padm) : adm(padm)
+SAMpatchPETSc::SAMpatchPETSc(const std::map<int,int>& g2ln,
+                             const ProcessAdm& padm) : adm(padm)
 {
   nProc = adm.getNoProcs();
   LinAlgInit::increfs();
@@ -35,6 +36,8 @@ SAMpatchPETSc::~SAMpatchPETSc()
     ISDestroy(&it.second.global);
   }
   dofIS.clear();
+  if (glob2LocEq)
+    ISDestroy(&glob2LocEq);
   LinAlgInit::decrefs();
 }
 
@@ -171,11 +174,11 @@ void SAMpatchPETSc::setupIS(char dofType) const
 bool SAMpatchPETSc::expandSolution(const SystemVector& solVec,
                                    Vector& dofVec, Real scaleSD) const
 {
-#ifdef HAVE_MPI
   PETScVector* Bptr = const_cast<PETScVector*>(dynamic_cast<const PETScVector*>(&solVec));
   if (!Bptr)
     return false;
 
+#ifdef HAVE_MPI
   if (adm.isParallel()) {
     if (!glob2LocEq) {
       std::vector<int> mlgeq(adm.dd.getMLGEQ());
@@ -197,13 +200,14 @@ bool SAMpatchPETSc::expandSolution(const SystemVector& solVec,
     VecGetArray(solution, &data);
     std::copy(data, data + Bptr->dim(), Bptr->getPtr());
     VecDestroy(&solution);
-  } else {
+  } else
+#endif
+  {
     PetscScalar* data;
     VecGetArray(Bptr->getVector(), &data);
     std::copy(data, data + Bptr->dim(), Bptr->getPtr());
     VecRestoreArray(Bptr->getVector(), &data);
   }
-#endif
 
   return this->SAMpatch::expandSolution(solVec, dofVec, scaleSD);
 }
