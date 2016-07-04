@@ -1014,50 +1014,42 @@ TopologySet SIM3D::createDefaultTopologySets (const TiXmlElement* geo) const
                      };
 
   size_t r = 1;
-  int patch = 0;
   for (int i = 0; i < 2; ++i, ++r)
     for (int k = 0; k < nz; ++k)
       for (int j = 0; j < ny; ++j)
-        if ((patch = this->getLocalPatchIndex(IJK2I(i,j,k))) > 0)
-          insertion(TopItem(patch,r,2), "Boundary", "Face");
+        insertion(TopItem(IJK2I(i,j,k),r,2), "Boundary", "Face");
 
   for (int j = 0; j < 2; ++j, ++r)
     for (int k = 0; k < nz; ++k)
       for (int i = 0; i < nx; ++i)
-          if ((patch = this->getLocalPatchIndex(IJK2J(i,j,k))) > 0)
-            insertion(TopItem(patch,r,2), "Boundary", "Face");
+        insertion(TopItem(IJK2J(i,j,k),r,2), "Boundary", "Face");
 
   for (int k = 0; k < 2; ++k, ++r)
     for (int j = 0; j < ny; ++j)
       for (int i = 0; i < nx; ++i)
-        if ((patch = this->getLocalPatchIndex(IJK2K(i,j,k))) > 0)
-          insertion(TopItem(patch,r,2), "Boundary", "Face");
+        insertion(TopItem(IJK2K(i,j,k),r,2), "Boundary", "Face");
 
   r = 1;
   for (int k = 0; k < 2; ++k)
     for (int j = 0; j < 2; ++j)
       for (int i = 0; i < 2; ++i, ++r)
-        if ((patch = this->getLocalPatchIndex(IJK2(i,j,k))) > 0)
-          insertion(TopItem(patch,r,0), "Corners", "Vertex");
+        insertion(TopItem(IJK2(i,j,k),r,0), "Corners", "Vertex");
 
   r = 1;
   for (int k = 0; k < 2; ++k)
     for (int i = 0; i < 2; ++i, ++r)
       for (int j = 0; j < ny; ++j)
-        if ((patch = this->getLocalPatchIndex(IJKJ(i,j,k))) > 0)
-          insertion(TopItem(patch,r,1), "Frame", "Edge");
+        insertion(TopItem(IJKJ(i,j,k),r,1), "Frame", "Edge");
 
   for (int j = 0; j < 2; ++j)
     for (int i = 0; i < 2; ++i, ++r)
       for (int k = 0; k < nz; ++k)
-        if ((patch = this->getLocalPatchIndex(IJKK(i,j,k))) > 0)
-          insertion(TopItem(patch,r,1), "Frame", "Edge");
+        insertion(TopItem(IJKK(i,j,k),r,1), "Frame", "Edge");
 
   for (int k = 0; k < 2; ++k)
     for (int j = 0; j < 2; ++j, ++r)
       for (int i = 0; i < nx; ++i)
-        if ((patch = this->getLocalPatchIndex(IJKI(i,j,k))) > 0)
-          insertion(TopItem(patch,r,1), "Frame", "Edge");
+        insertion(TopItem(IJKI(i,j,k),r,1), "Frame", "Edge");
 
   return result;
 }

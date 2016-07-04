@@ -45,23 +45,35 @@ public:
   //! \brief Functor to order ghost connections.
   class SlaveOrder {
     public:
+      SlaveOrder(const DomainDecomposition& dd_) : dd(dd_) {}
       //! \brief Compare interfaces.
       bool operator()(const Interface& A, const Interface& B) const
       {
-        if (A.master != B.master)
-          return A.master < B.master;
+        // order by master owner id first
+        if (dd.getPatchOwner(A.master) != dd.getPatchOwner(B.master))
+          return dd.getPatchOwner(A.master) < dd.getPatchOwner(B.master);
 
+        // then by lower slave owner id
+        if (dd.getPatchOwner(A.slave) != dd.getPatchOwner(B.slave))
+          return dd.getPatchOwner(A.slave) < dd.getPatchOwner(B.slave);
+
+        // then by slave id
         if (A.slave != B.slave)
           return A.slave < B.slave;
 
+        // finally by index on master
         return A.midx < B.midx;
       }
+    protected:
+      const DomainDecomposition& dd;
   };
 
   std::set<Interface, SlaveOrder> ghostConnections; //!< Connections to other processes.
 
   //! \brief Default constructor.
-  DomainDecomposition() : blocks(1) {}
+  DomainDecomposition() :
+    ghostConnections(SlaveOrder(*this)),blocks(1)
+  {}
 
   //! \brief Setup domain decomposition.
   bool setup(const ProcessAdm& adm, const SIMbase& sim);

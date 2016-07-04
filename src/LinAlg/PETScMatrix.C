@@ -207,7 +207,8 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
       int ilast  = adm.dd.getMaxEq();
       int maxfill = std::min(100, ilast-ifirst+1);
       // !!! SERIOUS OVER/UNDERALLOCATION !!!
-      PetscIntVec d_nnz(ilast-ifirst+1, maxfill), o_nnz(ilast-ifirst+1, maxfill);
+      PetscIntVec d_nnz(ilast-ifirst+1, maxfill),
+                  o_nnz(ilast-ifirst+1, maxfill);
 
   //    for (size_t i = 0; dofc.size(); ++i) {
   //      for (const auto& it : dofc[i]) {
@@ -259,7 +260,7 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     size_t blocks = solParams.getNoBlocks();
     std::vector<std::vector<PetscInt>> nnz(blocks*blocks);
     size_t k = 0;
-    for (size_t i = 0; i < blocks && !adm.isParallel(); ++i)
+    for (size_t i = 0; i < blocks; ++i)
       for (size_t j = 0; j < blocks; ++j, ++k)
         for (const auto& it : dd.getBlockEqs(i))
           nnz[k].push_back(std::min(dofc[it-1].size(), dd.getBlockEqs(j).size()));
@@ -277,13 +278,11 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
           int ilast  = adm.dd.getMaxEq(i+1);
           int icf = adm.dd.getMinEq(j+1);
           int icl  = adm.dd.getMaxEq(j+1);
-          int maxfill = std::min(std::min(100, ilast-ifirst+1), icl-icf+1);
+          int maxfill = std::min(std::min(1000, ilast-ifirst+1), icl-icf+1);
           // !!! SERIOUS OVER/UNDERALLOCATION !!!
-          PetscIntVec d_nnz(ilast-ifirst+1, maxfill),
-                      o_nnz(ilast-ifirst+1, maxfill);
+          MatMPIAIJSetPreallocation(*it,maxfill,PETSC_NULL,
+                                    maxfill,PETSC_NULL);
 
-          MatMPIAIJSetPreallocation(*it,PETSC_DEFAULT,d_nnz.data(),
-                                    PETSC_DEFAULT,o_nnz.data());
         } else
           MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz[i*blocks+j].data());
         MatSetUp(*it);

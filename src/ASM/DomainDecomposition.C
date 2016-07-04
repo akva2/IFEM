@@ -488,17 +488,18 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
   }
 
   std::vector<std::map<int,int>> old2new(blocks.size());
+  std::vector<std::vector<int>> o2nu(blocks.size());
 
   size_t n = locLMs.first;
   auto blockIt = blkLMs.begin();
   for (const auto& it : glbLMs) {
     while (sim.getPatch(1)->getLMType(n) != 'G')
       ++n;
-    int seq = sim.getSAM()->getEquation(n, 1);
+    int seq = sim.getSAM()->getEquation(sim.getPatch(1)->getNodeID(n), 1);
     int leq = blocks[0].MLGEQ[seq-1];
     old2new[0][leq] = it;
     if (blocks.size() > 1 && !blkLMs.empty()) {
-      int leq = blocks[2].MLGEQ[blocks[2].G2LEQ[seq]-1];
+      int leq = blocks[2].MLGEQ[blocks[2].G2LEQ[seq-1]-1];
       old2new[2][leq] = *blockIt;
       ++blockIt;
     }
@@ -531,10 +532,13 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
     for (size_t block = 0; block < blocks.size(); ++block) {
       std::set<int> bases;
       if (block == 0) {
+        o2nu[block].resize(sim.getSAM()->getNoEquations(), -1);
         for (size_t i = 1; i <= sim.getPatch(sidx)->getNoBasis(); ++i)
           bases.insert(i);
-      } else
+      } else {
         bases = utl::getDigits(sim.getSolParams()->getBlock(block-1).basis);
+        o2nu[block].resize(adm.dd.getBlockEqs(block-1).size(), -1);
+      }
 
       for (const int& basis : bases) {
         if (!cbasis.empty() && cbasis.find(basis) == cbasis.end())
@@ -566,6 +570,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
               continue;
 
             old2new[block][leq] = geq;
+            o2nu[block][leq-nEqs[block]-1] = 1;
           }
         }
         ofs += iter.size()*nodeDofs;
@@ -581,14 +586,13 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
     // remap the rest of our equations
     size_t size = block == 0 ? sim.getSAM()->getNoEquations() :
                                blocks[block].localEqs.size();
+    std::map<int,int> old2new2;
     for (size_t i = 1; i <= size; ++i) {
-      if (old2new[block].find(i + nEqs[block]) == old2new[block].end()) {
-        std::map<int,int> old2new2;
+      if (o2nu[block][i-1] == -1)
         old2new2[i + nEqs[block]] = ++blocks[block].maxEq;
-        for (auto& it : blocks[block].MLGEQ)
-          utl::renumber(it, old2new2, false);
-      }
     }
+    for (auto& it : blocks[block].MLGEQ)
+      utl::renumber(it, old2new2, false);
   }
 
   if (adm.getProcId() < adm.getNoProcs()-1) {
@@ -634,8 +638,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 
     IntVec glbEqs = setupEquationNumbers(sim, midx, it.midx, cbasis);
     adm.send(int(glbEqs.size()), getPatchOwner(it.slave));
-    if (glbEqs.size())
-      adm.send(glbEqs, getPatchOwner(it.slave));
+    adm.send(glbEqs, getPatchOwner(it.slave));
   }
 #endif
 
@@ -667,12 +670,14 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
 //  nsd = sim.getNoSpaceDim();
   sam = dynamic_cast<const SAMpatch*>(sim.getSAM());
 
+  IFEM::cout << "\tEstablishing global node numbers" << std::endl;
   // Establish global node numbers
   if (!calcGlobalNodeNumbers(adm, sim))
     return false;
 
   // Establish local equation mappings for each block.
   if (sim.getSolParams() && sim.getSolParams()->getNoBlocks() > 1) {
+    IFEM::cout << "\tEstablishing local block equation numbers" << std::endl;
     const LinSolParams& solParams = *sim.getSolParams();
     blocks.resize(solParams.getNoBlocks()+1);
 
@@ -702,8 +707,10 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
             for (size_t n = LMs.first; n <= LMs.second && n; ++n) {
               if (sim.getPatch(1)->getLMType(n) == 'G') {
                 int lEq = sam->getEquation(sim.getPatch(1)->getNodeID(n), 1);
-                if (lEq > 0)
+                if (lEq > 0) {
+                  IFEM::cout << "mapped local multiplier " << n << " to " << lEq << std::endl;
                   blocks[i+1].localEqs.insert(lEq);
+                }
               }
             }
           }
@@ -717,6 +724,7 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
   }
 
   // Establish global equation numbers for all blocks.
+  IFEM::cout << "\tEstablishing global equation numbers" << std::endl;
   if (!calcGlobalEqNumbers(adm, sim))
     return false;
 
@@ -724,14 +732,17 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
   if (!adm.isParallel())
     return true;
 
-  IFEM::cout << "\n >>> Domain decomposition summary <<<"
-             << "\nNumber of domains     " << adm.getNoProcs();
+  MPI_Barrier(*adm.getCommunicator());
 
   std::vector<int> nEqs(blocks.size());
   for (size_t i = 0; i < blocks.size(); ++i)
     nEqs[i] = getMaxEq(i);
 
-  MPI_Bcast(&nEqs[0], nEqs.size(), MPI_INT, adm.getNoProcs()-1, *adm.getCommunicator());
+  MPI_Bcast(&nEqs[0], nEqs.size(), MPI_INT, adm.getNoProcs()-1,
+            *adm.getCommunicator());
+
+  IFEM::cout << "\n >>> Domain decomposition summary <<<"
+             << "\nNumber of domains     " << adm.getNoProcs();
   IFEM::cout << "\nNumber of equations   " << nEqs[0] << " (" << getMaxEq()-getMinEq()+1 << " on process)";
   for (size_t i = 1; i < blocks.size(); ++i)
     IFEM::cout << "\n  Block " << i << "             " << nEqs[i]  << " (" << getMaxEq(i)-getMinEq(i)+1 << " on process)";

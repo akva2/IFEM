@@ -956,31 +956,20 @@ TopologySet SIM2D::createDefaultTopologySets (const TiXmlElement* geo) const
   int patch = 0;
   auto&& insertion = [&e5, patch](TopEntity& e, const TopItem& top) { e.insert(top); e5.insert(top); };
   for (int i = 0; i < ny; ++i) {
-    if ((patch = this->getLocalPatchIndex(i*nx+1)) > 0)
-      insertion(e1, TopItem(patch,1,1));
-    if ((patch = this->getLocalPatchIndex((i+1)*nx)) > 0)
-      insertion(e2, TopItem(patch,2,1));
+    insertion(e1, TopItem(i*nx+1,1,1));
+    insertion(e2, TopItem((i+1)*nx,2,1));
   }
   for (int i = 0; i < nx; ++i) {
-    if ((patch = this->getLocalPatchIndex(i+1)) > 0)
-      insertion(e3, TopItem(patch,3,1));
-    if ((patch = this->getLocalPatchIndex(nx*(ny-1)+1+i)) > 0)
-      insertion(e4, TopItem(patch,4,1));
+    insertion(e3, TopItem(i+1,3,1));
+    insertion(e4, TopItem(nx*(ny-1)+1+i,4,1));
   }
 
   TopEntity& c = result["Corners"];
   auto&& insertionv = [&c, patch](TopEntity& e, const TopItem& top) { e.insert(top); c.insert(top); };
-  if ((patch = this->getLocalPatchIndex(1)) > 0)
-    insertionv(result["Vertex1"], TopItem(patch,1,0));
-
-  if ((patch = this->getLocalPatchIndex(nx)) > 0)
-    insertionv(result["Vertex2"], TopItem(patch,2,0));
-
-  if ((patch = this->getLocalPatchIndex(nx*(ny-1)+1)) > 0)
-    insertionv(result["Vertex3"], TopItem(patch,3,0));
-
-  if ((patch = this->getLocalPatchIndex(nx*ny)) > 0)
-    insertionv(result["Vertex4"], TopItem(patch,4,0));
+  insertionv(result["Vertex1"], TopItem(1,1,0));
+  insertionv(result["Vertex2"], TopItem(nx,2,0));
+  insertionv(result["Vertex3"], TopItem(nx*(ny-1)+1,3,0));
+  insertionv(result["Vertex4"], TopItem(nx*ny,4,0));
 
   return result;
 }

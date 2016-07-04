@@ -1088,6 +1088,7 @@ bool SIMbase::preprocess (const IntVec& ignored, bool fixDup)
   if (!static_cast<SAMpatch*>(mySam)->init(myModel,ngnod))
     return false;
 
+  IFEM::cout << "Establishing domain decomposition" << std::endl;
   if (!adm.dd.setup(adm,*this))
   {
     std::cerr <<"\n *** SIMbase::preprocess(): Error establishing domain decomposition." << std::endl;
