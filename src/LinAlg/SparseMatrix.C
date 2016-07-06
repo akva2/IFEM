@@ -12,6 +12,7 @@
 //==============================================================================
 
 #include "SparseMatrix.h"
+#include "IFEM.h"
 #include "SAM.h"
 #if defined(HAS_SUPERLU_MT)
 #include "slu_mt_ddefs.h"
@@ -680,8 +681,8 @@ void SparseMatrix::preAssemble(const SAM& sam, bool delayLocking)
     for (auto it = dofc[i].begin(); it != dofc[i].end(); ++it)
       (*this)(i+1,*it) = 0.0;
 
-  std::cout <<"\nPre-computing sparsity pattern for system matrix ("
-            << nrow <<"x"<< ncol <<"): nNZ = "<< this->size() << std::endl;
+  IFEM::cout <<"\nPre-computing sparsity pattern for system matrix ("
+             << nrow <<"x"<< ncol <<"): nNZ = "<< this->size() << std::endl;
 
   editable = 'V'; // Temporarily lock the sparsity pattern
   if (delayLocking)
