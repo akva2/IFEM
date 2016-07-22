@@ -953,8 +953,15 @@ TopologySet SIM2D::createDefaultTopologySets (const TiXmlElement* geo) const
   TopEntity& e3 = result["Edge3"];
   TopEntity& e4 = result["Edge4"];
   TopEntity& e5 = result["Boundary"];
-  int patch = 0;
-  auto&& insertion = [&e5, patch](TopEntity& e, const TopItem& top) { e.insert(top); e5.insert(top); };
+
+  auto&& insertion = [this, &e5](TopEntity& e, TopItem top)
+  {
+    if ((top.patch = this->getLocalPatchIndex(top.patch)) > 0) {
+      e.insert(top);
+      e5.insert(top);
+    }
+  };
+
   for (int i = 0; i < ny; ++i) {
     insertion(e1, TopItem(i*nx+1,1,1));
     insertion(e2, TopItem((i+1)*nx,2,1));
@@ -965,7 +972,14 @@ TopologySet SIM2D::createDefaultTopologySets (const TiXmlElement* geo) const
   }
 
   TopEntity& c = result["Corners"];
-  auto&& insertionv = [&c, patch](TopEntity& e, const TopItem& top) { e.insert(top); c.insert(top); };
+  auto&& insertionv = [this,&c](TopEntity& e, TopItem top)
+  {
+    if ((top.patch = this->getLocalPatchIndex(top.patch)) > 0) {
+      e.insert(top);
+      c.insert(top);
+    }
+  };
+
   insertionv(result["Vertex1"], TopItem(1,1,0));
   insertionv(result["Vertex2"], TopItem(nx,2,0));
   insertionv(result["Vertex3"], TopItem(nx*(ny-1)+1,3,0));
