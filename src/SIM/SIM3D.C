@@ -1003,14 +1003,18 @@ TopologySet SIM3D::createDefaultTopologySets (const TiXmlElement* geo) const
   TopologySet result;
 
   // insertion lambda
-  auto&& insertion = [&result](const TopItem& top,
-                               const std::string& glob,
-                               const std::string& type)
+  auto&& insertion = [this,&result](TopItem top,
+                                    const std::string& glob,
+                                    const std::string& type)
                      {
                        std::stringstream str;
                        str << type << top.item;
-                       result[str.str()].insert(top);
-                       result[glob].insert(top);
+                       TopEntity& topI = result[str.str()];
+                       TopEntity& globI = result[glob];
+                       if ((top.patch = this->getLocalPatchIndex(top.patch)) > 0) {
+                         topI.insert(top);
+                         globI.insert(top);
+                       }
                      };
 
   size_t r = 1;
