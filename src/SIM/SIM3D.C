@@ -55,10 +55,18 @@ bool SIM3D::addConnection(int master, int slave, int mFace, int sFace,
   if (lmaster > 0 && lslave > 0) {
     IFEM::cout <<"\tConnecting P"<< lslave <<" F"<< sFace
                <<" to P"<< lmaster <<" F"<< mFace
-               <<" orient "<< orient << std::endl;
+               <<" orient "<< orient;
+    if (basis != 0)
+      IFEM::cout << " (basis " << basis << ")";
+    IFEM::cout << std::endl;
     ASMs3D* spch = static_cast<ASMs3D*>(myModel[lslave-1]);
     ASMs3D* mpch = static_cast<ASMs3D*>(myModel[lmaster-1]);
-    if (!spch->connectPatch(sFace,*mpch,mFace,orient,basis,coordCheck))
+    if (basis != 0) {
+      auto bases = utl::getDigits(basis);
+      for (int& b : bases)
+        if (!spch->connectPatch(sFace,*mpch,mFace,orient,b,coordCheck))
+          return false;
+    } else if (!spch->connectPatch(sFace,*mpch,mFace,orient,basis,coordCheck))
       return false;
   } else
     adm.dd.ghostConnections.insert(DomainDecomposition::Interface{master, slave,
@@ -924,50 +932,44 @@ bool SIM3D::createDefaultTopology (const TiXmlElement* geo)
         if (!addConnection(IJK(i,j,k), IJK(i,j,k+1), 6, 5, 0))
           return false;
 
-  if (periodic_x > 0) {
-    auto bases = utl::getDigits(periodic_x);
-    for (int b : bases) {
-      for (int k = 0; k < nz; ++k)
-        for (int j = 0; j < ny; ++j)
-          if (nx > 1) {
-            if (!addConnection(IJK(0,j,k), IJK(nx-1,j,k), 1, 2, 0, b, false))
-              return false;
-          } else {
-            IFEM::cout <<"\tPeriodic I-direction P"<< IJK(0,j,k) << std::endl;
-            static_cast<ASMs3D*>(myModel[IJK(0,j,k)-1])->closeFaces(1,b);
-          }
-    }
-  }
-
-  if (periodic_y) {
-    auto bases = utl::getDigits(periodic_y);
-    for (int b : bases) {
-      for (int k = 0; k < nz; ++k)
-        for (int i = 0; i < nx; ++i)
-          if (ny > 1) {
-            if (!addConnection(IJK(i,0,k), IJK(i,ny-1,k), 3, 4, 0, b, false))
-              return false;
-           } else {
-            IFEM::cout <<"\tPeriodic J-direction P"<< IJK(i,0,k) << std::endl;
-            static_cast<ASMs3D*>(myModel[IJK(i,0,k)-1])->closeFaces(2,b);
-           }
-    }
-  }
-
-  if (periodic_z) {
-    auto bases = utl::getDigits(periodic_z);
-    for (int b : bases) {
+  if (periodic_x > 0)
+    for (int k = 0; k < nz; ++k)
       for (int j = 0; j < ny; ++j)
-        for (int i = 0; i < nx; ++i)
-          if (nz > 1) {
-            if (!addConnection(IJK(i,j,0), IJK(i,j,nz-1), 5, 6, 0, b, false))
-              return false;
-          } else {
-            IFEM::cout <<"\tPeriodic K-direction P"<< IJK(i,j,0) << std::endl;
+        if (nx > 1) {
+          if (!addConnection(IJK(0,j,k), IJK(nx-1,j,k), 1, 2, 0, periodic_x, false))
+            return false;
+        } else {
+          IFEM::cout <<"\tPeriodic I-direction P"<< IJK(0,j,k) << std::endl;
+          auto bases = utl::getDigits(periodic_y);
+          for (int b : bases)
+            static_cast<ASMs3D*>(myModel[IJK(0,j,k)-1])->closeFaces(1,b);
+        }
+
+  if (periodic_y)
+    for (int k = 0; k < nz; ++k)
+      for (int i = 0; i < nx; ++i)
+        if (ny > 1) {
+          if (!addConnection(IJK(i,0,k), IJK(i,ny-1,k), 3, 4, 0, periodic_y, false))
+            return false;
+         } else {
+          IFEM::cout <<"\tPeriodic J-direction P"<< IJK(i,0,k) << std::endl;
+          auto bases = utl::getDigits(periodic_y);
+          for (int b : bases)
+            static_cast<ASMs3D*>(myModel[IJK(i,0,k)-1])->closeFaces(2,b);
+        }
+
+  if (periodic_z)
+    for (int j = 0; j < ny; ++j)
+      for (int i = 0; i < nx; ++i)
+        if (nz > 1) {
+          if (!addConnection(IJK(i,j,0), IJK(i,j,nz-1), 5, 6, 0, periodic_z, false))
+            return false;
+        } else {
+          IFEM::cout <<"\tPeriodic K-direction P"<< IJK(i,j,0) << std::endl;
+          auto bases = utl::getDigits(periodic_y);
+          for (int b : bases)
             static_cast<ASMs3D*>(myModel[IJK(i,j,0)-1])->closeFaces(3,b);
-          }
-    }
-  }
+        }
 
   return true;
 }
