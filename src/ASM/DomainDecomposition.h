@@ -69,6 +69,7 @@ public:
   };
 
   std::set<Interface, SlaveOrder> ghostConnections; //!< Connections to other processes.
+  void printGhostConnections();
 
   //! \brief Default constructor.
   DomainDecomposition() :

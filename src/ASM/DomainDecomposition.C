@@ -91,6 +91,18 @@ protected:
 };
 
 
+void DomainDecomposition::printGhostConnections()
+{
+  IFEM::cout << "ghostConnections:\n";
+  for (const auto& it : ghostConnections) {
+    IFEM::cout << "  Interface: master/idx=" << it.master << "/" << it.midx <<
+                      ", slave/idx=" << it.slave << "/" << it.sidx <<
+                      ", orient=" << it.orient << ", dim=" << it.dim <<
+                      ", basis=" << it.basis << std::endl;
+  }
+}
+
+
 std::vector<std::set<int>> DomainDecomposition::getSubdomains(int nx, int ny, int nz,
                                                               int overlap, size_t block) const
 {
@@ -377,6 +389,9 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
     adm.send(glbNodes, getPatchOwner(it.slave));
   }
 #endif
+
+  if (SIMinput::msgLevel>2)
+    printGhostConnections();
 
   return true;
 }
