@@ -379,7 +379,7 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
 
     std::vector<int> glbNodes;
     for (size_t b = 1; b <= sim.getPatch(midx)->getNoBasis(); ++b)
-      if (cbasis.empty() || cbasis.find(it.basis) != cbasis.end())
+      if (cbasis.empty() || cbasis.find(b) != cbasis.end())
         sim.getPatch(midx)->getBoundaryNodes(it.midx, glbNodes, b);
 
     for (size_t i = 0; i < glbNodes.size(); ++i)
