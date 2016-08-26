@@ -63,7 +63,7 @@ bool SIM3D::addConnection(int master, int slave, int mFace, int sFace,
     ASMs3D* mpch = static_cast<ASMs3D*>(myModel[lmaster-1]);
     if (basis != 0) {
       auto bases = utl::getDigits(basis);
-      for (int& b : bases)
+      for (const int& b : bases)
         if (!spch->connectPatch(sFace,*mpch,mFace,orient,b,coordCheck))
           return false;
     } else if (!spch->connectPatch(sFace,*mpch,mFace,orient,basis,coordCheck))
