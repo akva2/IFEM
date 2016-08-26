@@ -189,7 +189,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
   // Set correct number of rows and columns for matrix.
   MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
-  MPI_Barrier(*adm.getCommunicator());
 
   // Allocate sparsity pattern
   std::vector<std::set<int>> dofc;
