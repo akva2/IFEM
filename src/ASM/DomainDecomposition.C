@@ -91,18 +91,6 @@ protected:
 };
 
 
-void DomainDecomposition::printGhostConnections()
-{
-  IFEM::cout << "ghostConnections:\n";
-  for (const auto& it : ghostConnections) {
-    IFEM::cout << "  Interface: master/idx=" << it.master << "/" << it.midx <<
-                      ", slave/idx=" << it.slave << "/" << it.sidx <<
-                      ", orient=" << it.orient << ", dim=" << it.dim <<
-                      ", basis=" << it.basis << std::endl;
-  }
-}
-
-
 std::vector<std::set<int>> DomainDecomposition::getSubdomains(int nx, int ny, int nz,
                                                               int overlap, size_t block) const
 {
@@ -388,10 +376,8 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
     adm.send(int(glbNodes.size()), getPatchOwner(it.slave));
     adm.send(glbNodes, getPatchOwner(it.slave));
   }
-#endif
 
-  if (SIMinput::msgLevel>2)
-    printGhostConnections();
+#endif
 
   return true;
 }
@@ -694,8 +680,18 @@ int DomainDecomposition::getGlobalEq(int lEq, size_t idx) const
 bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
 {
 #ifdef HAVE_MPI
-  if (adm.isParallel())
+  if (adm.isParallel()) {
     IFEM::cout << "Establishing domain decomposition" << std::endl;
+
+#if SP_DEBUG > 1
+  IFEM::cout << "  Ghost connections:\n";
+  for (const auto& it : ghostConnections) {
+    IFEM::cout << "    Interface: master/idx=" << it.master << "/" << it.midx <<
+                  ", slave/idx=" << it.slave << "/" << it.sidx <<
+                  ", orient=" << it.orient << ", dim=" << it.dim <<
+                  ", basis=" << it.basis << std::endl;
+#endif
+  }
 #endif
 
   sam = dynamic_cast<const SAMpatch*>(sim.getSAM());
