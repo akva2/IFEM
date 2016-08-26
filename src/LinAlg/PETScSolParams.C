@@ -286,6 +286,9 @@ void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
       noSmooth = params.getBlock(iBlock).getIntValue("multigrid_no_smooth");;
     }
 
+    if (smoother.empty())
+      smoother = "ilu";
+
     KSPSetTolerances(preksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,noSmooth);
     KSPGetPC(preksp,&prepc);
 
