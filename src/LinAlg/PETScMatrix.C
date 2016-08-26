@@ -195,15 +195,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
   std::vector<std::set<int>> dofc;
   sam.getDofCouplings(dofc);
 
-  // a horrible heuristic for now
-  auto fillHeuristic = [](int size)
-  {
-    if (size < 5000)
-      return std::min(100, size);
-
-    return 1000;
-  };
-
   if (matvec.empty()) {
     // Set correct number of rows and columns for matrix.
     MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
@@ -214,10 +205,31 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     if (adm.isParallel()) {
       int ifirst = adm.dd.getMinEq();
       int ilast  = adm.dd.getMaxEq();
-      // !!! SERIOUS OVER/UNDERALLOCATION !!!
-      int maxfill = fillHeuristic(ilast-ifirst+1);
-      PetscIntVec d_nnz(ilast-ifirst+1, maxfill),
-                  o_nnz(ilast-ifirst+1, maxfill);
+      PetscIntVec d_nnz(neq, 0);
+      IntVec o_nnz_g(adm.dd.getNoGlbEqs(), 0);
+      for (int i = 0; i < samp->getNoEquations(); ++i) {
+        int eq = adm.dd.getGlobalEq(i+1);
+        if (eq >= adm.dd.getMinEq() && eq <= adm.dd.getMaxEq()) {
+          for (const auto& it : dofc[i]) {
+            int g = adm.dd.getGlobalEq(it);
+            if (g > 0) {
+              if (g < adm.dd.getMinEq() || g > adm.dd.getMaxEq())
+                ++o_nnz_g[eq-1];
+              else
+                ++d_nnz[eq-adm.dd.getMinEq()];
+            }
+          }
+        } else
+          o_nnz_g[eq-1] += dofc[i].size();
+      }
+
+      adm.allReduceAsSum(o_nnz_g);
+
+      PetscIntVec o_nnz(o_nnz_g.begin()+ifirst-1, o_nnz_g.begin()+ilast);
+
+      // TODO: multiplier cause big overallocation due to no multiplicity handling
+      for (auto& it : o_nnz)
+        it = std::min(it, adm.dd.getNoGlbEqs());
 
       MatMPIAIJSetPreallocation(A,PETSC_DEFAULT,d_nnz.data(),
                                   PETSC_DEFAULT,o_nnz.data());
@@ -250,54 +262,8 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 #endif
   } else {
-    // nnz per block
     const DomainDecomposition& dd = adm.dd;
     size_t blocks = solParams.getNoBlocks();
-    auto it = matvec.begin();
-
-    for (size_t i = 0; i < blocks; ++i)
-      for (size_t j = 0; j < blocks; ++j, ++it) {
-        int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
-        int ncols = dd.getMaxEq(j+1)-dd.getMinEq(j+1)+1;
-        MatSetSizes(*it, nrows, ncols,
-                    PETSC_DETERMINE, PETSC_DETERMINE);
-        MatSetFromOptions(*it);
-        if (adm.isParallel()) {
-          int ifirst = adm.dd.getMinEq(i+1);
-          int ilast  = adm.dd.getMaxEq(i+1);
-          int icf = adm.dd.getMinEq(j+1);
-          int icl  = adm.dd.getMaxEq(j+1);
-          // !!! SERIOUS OVER/UNDERALLOCATION !!!
-          int maxfill = std::min(fillHeuristic(ilast-ifirst+1), icl-icf+1);
-          MatMPIAIJSetPreallocation(*it,maxfill,PETSC_NULL,
-                                    maxfill,PETSC_NULL);
-
-        } else {
-          std::vector<PetscInt> nnz;
-          nnz.reserve(dd.getBlockEqs(i).size());
-          for (const auto& it : dd.getBlockEqs(i))
-            nnz.push_back(std::min(dofc[it-1].size(), dd.getBlockEqs(j).size()));
-
-          MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz.data());
-        }
-
-        MatSetUp(*it);
-      }
-
-    isvec.resize(adm.dd.getNoBlocks());
-    // index sets
-    for (size_t i = 0; i < isvec.size(); ++i) {
-      std::vector<int> blockEq;
-      blockEq.reserve(dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1);
-      for (auto& it : dd.getBlockEqs(i)) {
-        int eq = dd.getGlobalEq(it);
-        if (eq >= dd.getMinEq())
-          blockEq.push_back(eq-1);
-      }
-
-      ISCreateGeneral(*adm.getCommunicator(),blockEq.size(),
-                      blockEq.data(),PETSC_COPY_VALUES,&isvec[i]);
-    }
 
     // map from sparse matrix indices to block matrix indices
     glb2Blk.resize(SparseMatrix::A.size());
@@ -335,6 +301,94 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
         }
         glb2Blk[i][0] = iblk*solParams.getNoBlocks() + jblk;
       }
+    }
+
+    if (adm.isParallel()) {
+      std::vector<PetscIntVec> d_nnz(blocks*blocks);
+      std::vector<IntVec> o_nnz_g(blocks*blocks);
+      size_t k = 0;
+      for (size_t i = 0; i < blocks; ++i)
+        for (size_t j = 0; j < blocks; ++j, ++k) {
+          d_nnz[k].resize(dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1);
+          o_nnz_g[k].resize(dd.getNoGlbEqs(i+1));
+        }
+
+      for (int i = 0; i < sam.getNoEquations(); ++i) {
+        int blk = eq2b[i][0]+1;
+        int row = eq2b[i][1]+1;
+        int grow = dd.getGlobalEq(row, blk);
+
+        if (grow >= dd.getMinEq(blk) && grow <= dd.getMaxEq(blk)) {
+          for (const auto& it : dofc[i]) {
+            int cblk = eq2b[it-1][0]+1;
+            int col = eq2b[it-1][1]+1;
+            int gcol = dd.getGlobalEq(col, cblk);
+            if (gcol >= dd.getMinEq(cblk) && gcol <= dd.getMaxEq(cblk))
+              ++d_nnz[(blk-1)*blocks + cblk-1][grow-dd.getMinEq(blk)];
+            else
+              ++o_nnz_g[(blk-1)*blocks + cblk-1][grow-1];
+          }
+        } else {
+          for (const auto& it : dofc[i]) {
+            int cblk = eq2b[it-1][0]+1;
+            ++o_nnz_g[(blk-1)*blocks+cblk-1][grow-1];
+          }
+        }
+      }
+
+      k = 0;
+      for (size_t i = 0; i < blocks; ++i) {
+        for (size_t j = 0; j < blocks; ++j, ++k) {
+          int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
+          int ncols = dd.getMaxEq(j+1)-dd.getMinEq(j+1)+1;
+          MatSetSizes(matvec[k], nrows, ncols,
+                      PETSC_DETERMINE, PETSC_DETERMINE);
+          MatSetFromOptions(matvec[k]);
+          adm.allReduceAsSum(o_nnz_g[k]);
+          PetscIntVec o_nnz(o_nnz_g[k].begin()+dd.getMinEq(i+1)-1, o_nnz_g[k].begin()+dd.getMaxEq(i+1));
+
+          // TODO: multiplier cause big overallocation due to no multiplicity handling
+          for (auto& it : o_nnz)
+            it = std::min(it, dd.getNoGlbEqs(k));
+
+          MatMPIAIJSetPreallocation(matvec[k],PETSC_DEFAULT,d_nnz[k].data(),
+                                              PETSC_DEFAULT,o_nnz.data());
+          MatSetUp(matvec[k]);
+        }
+      }
+    } else {
+      auto it = matvec.begin();
+      for (size_t i = 0; i < blocks; ++i) {
+        for (size_t j = 0; j < blocks; ++j, ++it) {
+          std::vector<PetscInt> nnz;
+          nnz.reserve(dd.getBlockEqs(i).size());
+          for (const auto& it2 : dd.getBlockEqs(i))
+            nnz.push_back(std::min(dofc[it2-1].size(), dd.getBlockEqs(j).size()));
+
+          int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
+          int ncols = dd.getMaxEq(j+1)-dd.getMinEq(j+1)+1;
+          MatSetSizes(*it, nrows, ncols,
+                      PETSC_DETERMINE, PETSC_DETERMINE);
+
+          MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz.data());
+          MatSetUp(*it);
+        }
+      }
+    }
+
+    isvec.resize(dd.getNoBlocks());
+    // index sets
+    for (size_t i = 0; i < isvec.size(); ++i) {
+      std::vector<int> blockEq;
+      blockEq.reserve(dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1);
+      for (auto& it : dd.getBlockEqs(i)) {
+        int eq = dd.getGlobalEq(it);
+        if (eq >= dd.getMinEq())
+          blockEq.push_back(eq-1);
+      }
+
+      ISCreateGeneral(*adm.getCommunicator(),blockEq.size(),
+                      blockEq.data(),PETSC_COPY_VALUES,&isvec[i]);
     }
 
     MatCreateNest(*adm.getCommunicator(),solParams.getNoBlocks(),isvec.data(),
