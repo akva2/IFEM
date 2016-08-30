@@ -44,7 +44,10 @@ public:
   //! \brief Functor to order ghost connections.
   class SlaveOrder {
     public:
+      //! \brief The constructor initializes the DomainDecomposition reference.
       SlaveOrder(const DomainDecomposition& dd_) : dd(dd_) {}
+      //! \brief Hide ill-formed default assignment operator.
+      SlaveOrder& operator=(const SlaveOrder&) { return *this; }
       //! \brief Compare interfaces.
       bool operator()(const Interface& A, const Interface& B) const
       {
@@ -70,9 +73,7 @@ public:
   std::set<Interface, SlaveOrder> ghostConnections; //!< Connections to other processes.
 
   //! \brief Default constructor.
-  DomainDecomposition() :
-    ghostConnections(SlaveOrder(*this)),blocks(1)
-  {}
+  DomainDecomposition() : ghostConnections(SlaveOrder(*this)), blocks(1) {}
 
   //! \brief Setup domain decomposition.
   bool setup(const ProcessAdm& adm, const SIMbase& sim);
