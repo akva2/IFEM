@@ -70,7 +70,7 @@ bool XMLInputBase::readXML (const char* fileName, bool verbose)
   }
 
   if (verbose)
-    IFEM::cout <<"\nParsing input file "<< fileName << std::endl;
+    IFEM::cout <<"\nParsing input file yo "<< fileName << std::endl;
 
   this->injectIncludeFiles(const_cast<TiXmlElement*>(tag));
 
@@ -78,10 +78,14 @@ bool XMLInputBase::readXML (const char* fileName, bool verbose)
   if (!handlePriorityTags(doc.RootElement(),parsed,verbose))
     return false;
 
+  for (const auto& it : parsed)
+    IFEM::cout << it << " ";
+
+  IFEM::cout << std::endl;
   for (tag = tag->FirstChildElement(); tag; tag = tag->NextSiblingElement())
     if (std::find(parsed.begin(),parsed.end(),tag) == parsed.end()) {
       if (verbose)
-        IFEM::cout <<"\nParsing <"<< tag->Value() <<">"<< std::endl;
+        IFEM::cout <<"\nParsing <"<< tag->Value() <<">" << " " << tag << std::endl;
       if (!this->parse(tag)) {
         std::cerr <<" *** SIMinput::read: Failure occured while parsing \""
                   << tag->Value() <<"\""<< std::endl;
@@ -101,12 +105,14 @@ bool XMLInputBase::handlePriorityTags (const TiXmlElement* base,
                                        bool verbose)
 {
   const char** q = this->getPrioritizedTags();
+  if (!q)
+  IFEM::cout << "got no prio tags!!" << std::endl;
   if (!q) return true; // No prioritized tags defined
 
   for (const TiXmlElement* elem = 0; *q; q++)
     if ((elem = base->FirstChildElement(*q))) {
       if (verbose)
-        IFEM::cout <<"\nParsing <"<< elem->Value() <<">"<< std::endl;
+        IFEM::cout <<"\nParsing <"<< elem->Value() <<">"<< " MEHMEH" << std::endl;
       if (!this->parse(elem)) {
         std::cerr <<" *** SIMinput::read: Failure occured while parsing \""
                   << elem->Value() <<"\""<< std::endl;

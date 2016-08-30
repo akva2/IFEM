@@ -108,6 +108,7 @@ bool SIM2D::parseGeometryTag (const TiXmlElement* elem)
       uppatch = myModel.size();
     utl::getAttribute(elem,"upperpatch",uppatch);
 
+    IFEM::cout << "hmm " << nGlPatches << " " << lowpatch << " " << uppatch << std::endl;
     if (lowpatch < 1 || uppatch > nGlPatches)
     {
       std::cerr <<" *** SIM2D::parse: Invalid patch indices, lower="
@@ -200,6 +201,7 @@ bool SIM2D::parseGeometryTag (const TiXmlElement* elem)
       utl::getAttribute(child,"periodic",periodic);
       utl::getAttribute(child,"dim",dim);
 
+      IFEM::cout << "gurgl " << nGlPatches << std::endl;
       if (master == slave ||
           master < 1 || master > nGlPatches ||
           slave  < 1 || slave  > nGlPatches)
@@ -798,9 +800,6 @@ void SIM2D::clonePatches (const PatchVec& patches,
       myModel.push_back(pch->clone(nf));
 
   g2l = &glb2locN;
-
-  if (nGlPatches == 0)
-    nGlPatches = myModel.size();
 }
 
 

@@ -140,11 +140,13 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
       std::ifstream isp(file);
       this->readPatches(isp,myModel,"\t");
 
-      if ((nGlPatches = myModel.size()) == 0)
+      if (myModel.empty())
       {
         std::cerr <<" *** SIMbase::parse: No patches read"<< std::endl;
         return false;
       }
+      if (myPatches.empty())
+        nGlPatches = myModel.size();
     }
   }
 
@@ -178,13 +180,14 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
     }
   }
 
-  else if (!strcasecmp(elem->Value(),"partitioning")) {
+  else if (!strcasecmp(elem->Value(),"partitioning") && myPatches.empty()) {
     int proc = 0;
     if (!utl::getAttribute(elem,"procs",proc))
       return false;
     else if (proc != adm.getNoProcs()) // silently ignore
       return true;
     IFEM::cout <<"\tNumber of partitions: "<< proc << std::endl;
+    IFEM::cout << "we shouldnt be here twice" << std::endl;
 
     nGlPatches = 0;
     const TiXmlElement* part = elem->FirstChildElement("part");
@@ -207,6 +210,7 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
     if (myPatches.empty() && utl::getAttribute(elem,"nperproc",proc)) {
       for (int j = 1; j <= proc; j++)
         myPatches.push_back(adm.getProcId()*proc+j);
+      IFEM::cout << "adm " << adm.getNoProcs() << std::endl;
       nGlPatches = adm.getNoProcs()*proc;
       for (int i = 1; i <= nGlPatches; ++i)
         adm.dd.setPatchOwner(i, (i-1) / proc);

@@ -89,7 +89,7 @@ public:
   virtual bool parse(const TiXmlElement* elem);
 
   //! \brief Returns a list of prioritized XML-tags.
-  virtual const char** getPrioritizedTags() const;
+  virtual const char** getPrioritizedTags() const override;
 
 protected:
   //! \brief Parses the "set" attribute of a material XML-tag.
