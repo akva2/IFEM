@@ -103,7 +103,7 @@ public:
   int getMinEq(size_t idx = 0) const { return blocks[idx].minEq; }
   //! \brief Get last equation owned by this process.
   int getMaxEq(size_t idx = 0) const { return blocks[idx].maxEq; }
-  //!!< \brief Get total number of equations in a block
+  //!< \brief Get total number of equations in a block
   int getNoGlbEqs(size_t idx = 0) const { return blocks[idx].nGlbEqs; }
   //! \brief Get first node owned by this process.
   int getMinNode() const { return minNode; }
