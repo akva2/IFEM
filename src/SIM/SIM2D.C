@@ -176,8 +176,8 @@ bool SIM2D::parseGeometryTag (const TiXmlElement* elem)
                   << master <<" "<< slave << std::endl;
         return false;
       }
-      int lmaster = getLocalPatchIndex(master);
-      int lslave = getLocalPatchIndex(slave);
+      int lmaster = this->getLocalPatchIndex(master);
+      int lslave = this->getLocalPatchIndex(slave);
 
       if (lmaster > 0 && lslave > 0)
       {
