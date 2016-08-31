@@ -99,9 +99,9 @@ public:
                                                       size_t g1, size_t g2, size_t g3, size_t overlap);
 
   //! \brief Get first equation owned by this process.
-  int getMinEq(size_t idx = 0) const { return blocks[idx].minEq; };
+  int getMinEq(size_t idx = 0) const { return blocks[idx].minEq; }
   //! \brief Get last equation owned by this process.
-  int getMaxEq(size_t idx = 0) const { return blocks[idx].maxEq; };
+  int getMaxEq(size_t idx = 0) const { return blocks[idx].maxEq; }
   //! \brief Get first node owned by this process.
   int getMinNode() const { return minNode; }
   //! \brief Get last node owned by this process.
