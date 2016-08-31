@@ -119,11 +119,13 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
       std::ifstream isp(file);
       this->readPatches(isp,myModel,"\t");
 
-      if ((nGlPatches = myModel.size()) == 0)
+      if (myModel.empty())
       {
         std::cerr <<" *** SIMbase::parse: No patches read"<< std::endl;
         return false;
       }
+      if (myPatches.empty())
+        nGlPatches = myModel.size();
     }
   }
 
