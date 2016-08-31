@@ -3,9 +3,9 @@
 //!
 //! \file SAMpatchPETSc.C
 //!
-//! \date Sep 6 2010
+//! \date Aug 31 2016
 //!
-//! \author Runar Holdahl / SINTEF
+//! \author Arne Morten Kvarving / SINTEF
 //!
 //! \brief Evaluation of global norms for distributed models.
 //!
