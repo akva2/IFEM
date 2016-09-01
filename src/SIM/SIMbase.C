@@ -180,7 +180,7 @@ bool SIMbase::parseGeometryTag (const TiXmlElement* elem)
     }
   }
 
-  else if (!strcasecmp(elem->Value(),"partitioning")) {
+  else if (!strcasecmp(elem->Value(),"partitioning") && myPatches.empty()) {
     int proc = 0;
     if (!utl::getAttribute(elem,"procs",proc))
       return false;
@@ -530,8 +530,10 @@ bool SIMbase::parse (const TiXmlElement* elem)
       IFEM::cout <<"  Using default linear geometry basis on unit domain [0,1]";
       if (this->getNoParamDim() > 1) IFEM::cout <<"^"<< this->getNoParamDim();
       IFEM::cout << std::endl;
-      nGlPatches = 1;
       myModel = this->createDefaultGeometry(elem);
+      if (myPatches.empty())
+        nGlPatches = myModel.size();
+
       bool sets=false;
       utl::getAttribute(elem,"sets",sets);
       if (sets)
