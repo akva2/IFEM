@@ -46,6 +46,35 @@ SIM3D::SIM3D (IntegrandBase* itg, unsigned char n, bool check) : SIMgeneric(itg)
 }
 
 
+bool SIM3D::addConnection(int master, int slave, int mIdx,
+                          int sIdx, int orient, bool coordCheck)
+{
+  if (orient < 0 || orient > 7) {
+    std::cerr << "** SIM3D::addConnection ** Invalid orientation "
+              << orient <<"." << std::endl;
+    return false;
+  }
+
+  int lmaster = this->getLocalPatchIndex(master);
+  int lslave = this->getLocalPatchIndex(slave);
+  if (lmaster > 0 && lslave > 0) {
+    IFEM::cout <<"\tConnecting P"<< lslave <<" F"<< sIdx
+               <<" to P"<< lmaster <<" F"<< mIdx;
+    if (orient != 0)
+      IFEM::cout <<" orientation "<< orient << std::endl;
+    IFEM::cout << std::endl;
+
+    ASMs3D* spch = static_cast<ASMs3D*>(myModel[lslave-1]);
+    ASMs3D* mpch = static_cast<ASMs3D*>(myModel[lmaster-1]);
+    if (!spch->connectPatch(sIdx,*mpch,mIdx,orient,coordCheck))
+      return false;
+  } else
+    adm.dd.ghostConnections.insert(DomainDecomposition::Interface{master, slave, mIdx, sIdx, orient, 2});
+
+  return true;
+}
+
+
 bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
 {
   IFEM::cout <<"  Parsing <"<< elem->Value() <<">"<< std::endl;
@@ -156,26 +185,12 @@ bool SIM3D::parseGeometryTag (const TiXmlElement* elem)
                   << master <<" "<< slave << std::endl;
         return false;
       }
-<<<<<<< HEAD
-      int lmaster = this->getLocalPatchIndex(master);
-      int lslave = this->getLocalPatchIndex(slave);
-      if (lmaster > 0 && lslave > 0) {
-        IFEM::cout <<"\tConnecting P"<< lslave <<" F"<< sFace
-                   <<" to P"<< lmaster <<" F"<< mFace
-                   <<" orient "<< orient << std::endl;
-        ASMs3D* spch = static_cast<ASMs3D*>(myModel[lslave-1]);
-        ASMs3D* mpch = static_cast<ASMs3D*>(myModel[lmaster-1]);
-        if (!spch->connectPatch(sFace,*mpch,mFace,orient))
-          return false;
-      } else
-        adm.dd.ghostConnections.insert(DomainDecomposition::Interface{master, slave, mFace, sFace, orient, 2});
-=======
+
       if (!this->addConnection(master, slave, mFace, sFace,
                                orient, basis, !periodic)) {
         std::cerr <<" ** SIM2D::parse: Error establishing connection." << std::endl;
         return false;
       }
->>>>>>> 6fa2ef5... added: allowing specifying periodicity properly;
     }
   }
 
