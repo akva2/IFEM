@@ -47,6 +47,24 @@
       <connection master="6" mface="3" slave="8" sface="4" periodic="true"/>
     </topology>
 
+    <topologysets>
+      <set name="fix" type="face">
+        <item patch="1">5</item>
+        <item patch="2">5</item>
+        <item patch="3">5</item>
+        <item patch="4">5</item>
+        <item patch="5">6</item>
+        <item patch="6">6</item>
+        <item patch="7">6</item>
+        <item patch="8">6</item>
+      </set>
+    </topologysets>
   </geometry>
+
+<!--
+  <boundaryconditions>
+    <dirichlet set="fix" basis="1"/>
+  </boundaryconditions>
+-->
 
 </simulation>
