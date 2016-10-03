@@ -12,11 +12,13 @@
 //==============================================================================
 
 #include "SplineFields2D.h"
+#include "SplineFields2Dmx.h"
 #include "SplineFields3D.h"
 #include "LagrangeFields2D.h"
 #include "LagrangeFields3D.h"
 #include "ASMs2DLag.h"
 #include "ASMs3DLag.h"
+#include "ASMs2Dmx.h"
 
 
 Fields* Fields::create (const ASMbase* pch, const RealArray& v,
@@ -24,6 +26,9 @@ Fields* Fields::create (const ASMbase* pch, const RealArray& v,
 {
   const ASMs2DLag* pl2 = dynamic_cast<const ASMs2DLag*>(pch);
   if (pl2) return new LagrangeFields2D(pl2,v,basis,name);
+
+  const ASMs2Dmx* ps2mx = dynamic_cast<const ASMs2Dmx*>(pch);
+  if (basis > 10 && ps2mx) return new SplineFields2Dmx(ps2mx,v,basis,name);
 
   const ASMs2D* ps2 = dynamic_cast<const ASMs2D*>(pch);
   if (ps2) return new SplineFields2D(ps2,v,basis,name);

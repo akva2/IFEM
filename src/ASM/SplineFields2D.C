@@ -117,6 +117,7 @@ bool SplineFields2D::gradFE (const FiniteElement& fe, Matrix& grad) const
   if (basis != surf)
   {
     // Mixed formulation, the solution uses a different basis than the geometry
+#pragma omp critical
     basis->computeBasis(fe.u,fe.v,spline);
 
     const size_t nbf = basis->order_u()*basis->order_v();

@@ -36,9 +36,11 @@ SplineField2D::SplineField2D (const ASMs2D* patch,
   nelm = (n1-p1+1)*(n2-p2+1);
 
   // Ensure the values array has compatible length, pad with zeros if necessary
-  values.resize(nno);
-  RealArray::const_iterator end = v.size() > nno ? v.begin()+nno : v.end();
-  std::copy(v.begin(),end,values.begin());
+  auto vit = v.begin();
+  for (char i = 1; i < nbasis; ++i)
+    vit += patch->getNoNodes(i)*patch->getNoFields(i);
+  RealArray::const_iterator end = v.size() > nno ? vit+nno : v.end();
+  std::copy(vit,end,std::back_inserter(values));
 }
 
 
@@ -220,7 +222,7 @@ bool SplineField2D::hessianFE(const FiniteElement& fe, Matrix& H) const
 #pragma omp critical
   if (surf == basis) {
     surf->computeBasis(fe.u,fe.v,spline2);
-    
+
     dNdu.resize(nen,2);
     d2Ndu2.resize(nen,2,2);
     for (size_t n = 1; n <= nen; n++) {
@@ -230,29 +232,29 @@ bool SplineField2D::hessianFE(const FiniteElement& fe, Matrix& H) const
       d2Ndu2(n,1,2) = d2Ndu2(n,2,1) = spline2.basisDerivs_uv[n-1];
       d2Ndu2(n,2,2) = spline2.basisDerivs_vv[n-1];
     }
-    
+
     ASMs2D::scatterInd(surf->numCoefs_u(),surf->numCoefs_v(),
 		       uorder,vorder,spline2.left_idx,ip);
   }
   else {
     surf->computeBasis(fe.u,fe.v,spline);
-    
+
     dNdu.resize(nen,2);
     for (size_t n = 1; n <= nen; n++) {
       dNdu(n,1) = spline.basisDerivs_u[n-1];
       dNdu(n,2) = spline.basisDerivs_v[n-1];
     }
-    
+
     ASMs2D::scatterInd(surf->numCoefs_u(),surf->numCoefs_v(),
 		       uorder,vorder,spline.left_idx,ip);
   }
-  
+
   // Evaluate the Jacobian inverse
   Matrix Xnod, Jac;
   Vector Xctrl(&(*surf->coefs_begin()),surf->coefs_end()-surf->coefs_begin());
   utl::gather(ip,surf->dimension(),Xctrl,Xnod);
   utl::Jacobian(Jac,dNdX,Xnod,dNdu);
-  
+
   // Evaluate the gradient of the solution field at the given point
   if (basis != surf)
   {
