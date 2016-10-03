@@ -37,10 +37,13 @@ SplineField2D::SplineField2D (const ASMs2D* patch,
 
   // Ensure the values array has compatible length, pad with zeros if necessary
   auto vit = v.begin();
+  size_t ofs = 0;
   for (char i = 1; i < nbasis; ++i)
-    vit += patch->getNoNodes(i)*patch->getNoFields(i);
-  RealArray::const_iterator end = v.size() > nno ? vit+nno : v.end();
+    ofs += patch->getNoNodes(i)*patch->getNoFields(i);
+  vit += ofs;
+  RealArray::const_iterator end = v.size() > nno+ofs ? vit+nno : v.end();
   std::copy(vit,end,std::back_inserter(values));
+  values.resize(nno);
 }
 
 

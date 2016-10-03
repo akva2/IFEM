@@ -27,21 +27,19 @@ SplineFields2Dmx::SplineFields2Dmx (const ASMs2Dmx* patch,
   : Fields(name), surf(patch)
 {
   bases = utl::getDigits(basis);
-  for (const auto& it : bases) {
-    const int n1 = surf->getBasis(it)->numCoefs_u();
-    const int n2 = surf->getBasis(it)->numCoefs_v();
-    nno += n1*n2;
-  }
-
   nf = 2;
   auto vit = v.begin(); 
+  size_t ofs = 0;
   for (int i = 1; i < *bases.begin(); ++i)
-    vit += patch->getNoNodes(i)*patch->getNoFields(i);
+    ofs += patch->getNoNodes(i)*patch->getNoFields(i);
+  vit += ofs;
   for (const auto& it : bases) {
-    RealArray::const_iterator end = v.size() > nno ? v.begin()+nno:v.end();
-    std::copy(vit,vit+patch->getNoNodes(it)*patch->getNoFields(it),
-              std::back_inserter(values));
-    vit += patch->getNoNodes(it)*patch->getNoFields(it);
+    size_t nno = patch->getNoNodes(it)*patch->getNoFields(it);
+    RealArray::const_iterator end = v.size() > nno+ofs ? vit+nno : v.end();
+    std::copy(vit,end,std::back_inserter(values));
+    vit += nno;
+    ofs += nno;
+    values.resize(ofs);
   }
 }
 
@@ -128,7 +126,6 @@ bool SplineFields2Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   size_t row = 1;
   for (const auto& it : bases) {
     const Go::SplineSurface* basis = surf->getBasis(it);
-    // Mixed formulation, the solution uses a different basis than the geometry
 #pragma omp critical
     basis->computeBasis(fe.u,fe.v,spline);
 
@@ -146,11 +143,13 @@ bool SplineFields2Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
 		       basis->order_u(),basis->order_v(),
 		       spline.left_idx,ip);
 
-    utl::gather(ip,1,Vector(&*vit, spline.basisValues.size()),Xnod);
+    utl::gather(ip,1,Vector(&*vit, surf->getNoNodes(it)*
+                                   surf->getNoFields(it)),Xnod);
     Matrix grad2;
     grad2.multiply(Xnod,dNdX); // grad = Xnod * dNdX
     grad(row,1) = grad2(1,1);
     grad(row++,2) = grad2(1,2);
+    vit += surf->getNoNodes(it)*surf->getNoFields(it);
   }
 
   return true;
