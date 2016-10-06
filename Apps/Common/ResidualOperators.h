@@ -66,13 +66,13 @@ namespace ResidualOperators
   template<class T>
   void Divergence(Vector& EV, const FiniteElement& fe,
                   const T& dUdX, double scale=1.0,
-                  size_t cmp=1, size_t nf=1, size_t basis=1, size_t ofs=0)
+                  size_t basis=1)
   {
     for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
       double div=0.0;
       for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
         div += dUdX(k,k);
-      EV(ofs+(i-1)*nf+cmp) += scale*div*fe.basis(basis)(i)*fe.detJxW;
+      EV(i) += scale*div*fe.basis(basis)(i)*fe.detJxW;
     }
   }
 
