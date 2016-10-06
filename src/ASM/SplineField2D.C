@@ -24,7 +24,7 @@
 
 SplineField2D::SplineField2D (const ASMs2D* patch,
                               const RealArray& v, char nbasis,
-                              const char* name)
+                              char cmp, const char* name)
   : FieldBase(name), basis(patch->getBasis(nbasis)), surf(patch->getSurface())
 {
   const int n1 = basis->numCoefs_u();
@@ -36,9 +36,25 @@ SplineField2D::SplineField2D (const ASMs2D* patch,
   nelm = (n1-p1+1)*(n2-p2+1);
 
   // Ensure the values array has compatible length, pad with zeros if necessary
+  auto vit = v.begin();
+  size_t ofs = 0;
+  for (char i = 1; i < nbasis; ++i)
+    ofs += patch->getNoNodes(i)*patch->getNoFields(i);
+  vit += ofs;
+  values.reserve(nno);
+  int nf = patch->getNoFields(nbasis);
+  if (nf != 1) {
+    RealArray::const_iterator end = v.size() > nno*nf+ofs ? vit+nno*nf : v.end();
+    for (size_t i = 0; i < nno && vit != end; ++i) {
+      vit += cmp-1;
+      values.push_back(*vit);
+      vit += nf-cmp+1;
+    }
+  } else {
+    RealArray::const_iterator end = v.size() > nno+ofs ? vit+nno : v.end();
+    std::copy(vit,end,std::back_inserter(values));
+  }
   values.resize(nno);
-  RealArray::const_iterator end = v.size() > nno ? v.begin()+nno : v.end();
-  std::copy(v.begin(),end,values.begin());
 }
 
 
