@@ -126,6 +126,7 @@ bool SplineField2D::valueGrid (RealArray& val, const int* npe) const
     for (size_t i = 0; i < gpar[0].size(); i++)
     {
       Go::BasisPtsSf spline;
+#pragma omp critical
       basis->computeBasis(gpar[0][i],gpar[1][j],spline);
 
       IntVec ip;
@@ -217,8 +218,8 @@ bool SplineField2D::hessianFE(const FiniteElement& fe, Matrix& H) const
   Matrix3D d2Ndu2;
   Matrix dNdu, dNdX;
   IntVec ip;
-#pragma omp critical
   if (surf == basis) {
+#pragma omp critical
     surf->computeBasis(fe.u,fe.v,spline2);
 
     dNdu.resize(nen,2);
@@ -235,6 +236,7 @@ bool SplineField2D::hessianFE(const FiniteElement& fe, Matrix& H) const
 		       uorder,vorder,spline2.left_idx,ip);
   }
   else {
+#pragma omp critical
     surf->computeBasis(fe.u,fe.v,spline);
 
     dNdu.resize(nen,2);
