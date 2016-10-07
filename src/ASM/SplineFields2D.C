@@ -74,7 +74,9 @@ bool SplineFields2D::valueFE (const FiniteElement& fe, Vector& vals) const
 
   // Evaluate the basis functions at the given point
   Go::BasisPtsSf spline;
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
   basis->computeBasis(fe.u,fe.v,spline);
 
   // Evaluate the solution field at the given point
@@ -105,7 +107,9 @@ bool SplineFields2D::gradFE (const FiniteElement& fe, Matrix& grad) const
 
   // Evaluate the basis functions at the given point
   Go::BasisDerivsSf spline;
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
   surf->computeBasis(fe.u,fe.v,spline);
 
   const int uorder = surf->order_u();
@@ -133,7 +137,9 @@ bool SplineFields2D::gradFE (const FiniteElement& fe, Matrix& grad) const
   if (basis != surf)
   {
     // Mixed formulation, the solution uses a different basis than the geometry
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,spline);
 
     const size_t nbf = basis->order_u()*basis->order_v();
@@ -175,7 +181,9 @@ bool SplineFields2D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
   Matrix dNdu, dNdX;
   IntVec ip;
   if (surf == basis) {
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     surf->computeBasis(fe.u,fe.v,spline2);
 
     dNdu.resize(nen,2);
@@ -192,7 +200,9 @@ bool SplineFields2D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
 		       uorder,vorder,spline2.left_idx,ip);
   }
   else {
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     surf->computeBasis(fe.u,fe.v,spline);
 
     dNdu.resize(nen,2);
@@ -215,7 +225,9 @@ bool SplineFields2D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
   if (basis != surf)
   {
     // Mixed formulation, the solution uses a different basis than the geometry
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,spline2);
 
     const size_t nbf = basis->order_u()*basis->order_v();

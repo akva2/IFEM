@@ -62,7 +62,9 @@ bool SplineFields2Dmx::valueFE (const FiniteElement& fe, Vector& vals) const
   for (const auto& it : bases) {
     Go::SplineSurface* basis = surf->getBasis(it);
     Go::BasisPtsSf spline;
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,spline);
 
     // Evaluate the solution field at the given point
@@ -97,7 +99,9 @@ bool SplineFields2Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   // Evaluate the basis functions at the given point
   Go::BasisDerivsSf spline;
   const Go::SplineSurface* gsurf = surf->getBasis(ASMmxBase::geoBasis);
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
   gsurf->computeBasis(fe.u,fe.v,spline);
 
   const int uorder = gsurf->order_u();
@@ -126,7 +130,9 @@ bool SplineFields2Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   size_t row = 1;
   for (const auto& it : bases) {
     const Go::SplineSurface* basis = surf->getBasis(it);
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,spline);
 
     const size_t nbf = basis->order_u()*basis->order_v();

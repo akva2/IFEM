@@ -303,12 +303,13 @@ public:
   template<class T>
   void registerDependency(SIMSemi3D<T>* sim, const std::string& name,
                           short int nvc, const PatchVec& patches,
-                          char diffBasis = 0)
+                          char diffBasis = 0, int component=1)
   {
     for (size_t i=0;i<m_planes.size(); ++i)
-      if (diffBasis)
+      if (diffBasis || component != 1)
         m_planes[i]->registerDependency(sim->getPlane(i), name, nvc,
-                                        sim->getPlane(i)->getFEModel(), true);
+                                        sim->getPlane(i)->getFEModel(),
+                                        diffBasis, component);
       else
         m_planes[i]->registerDependency(sim->getPlane(i), name, nvc);
   }

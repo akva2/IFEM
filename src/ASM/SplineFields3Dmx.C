@@ -62,7 +62,9 @@ bool SplineFields3Dmx::valueFE (const FiniteElement& fe, Vector& vals) const
   for (const auto& it : bases) {
     Go::SplineVolume* basis = svol->getBasis(it);
     Go::BasisPts spline;
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,fe.w,spline);
 
     // Evaluate the solution field at the given point
@@ -98,7 +100,9 @@ bool SplineFields3Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   // Evaluate the basis functions at the given point
   Go::BasisDerivs spline;
   const Go::SplineVolume* gvol = svol->getBasis(ASMmxBase::geoBasis);
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
   gvol->computeBasis(fe.u,fe.v,fe.w,spline);
 
   const int uorder = gvol->order(0);
@@ -129,7 +133,9 @@ bool SplineFields3Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   size_t row = 1;
   for (const auto& it : bases) {
     const Go::SplineVolume* basis = svol->getBasis(it);
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,fe.w,spline);
 
     const size_t nbf = basis->order(0)*basis->order(1)*basis->order(2);

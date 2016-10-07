@@ -75,7 +75,9 @@ bool SplineFields3D::valueFE (const FiniteElement& fe, Vector& vals) const
 
   // Evaluate the basis functions at the given point
   Go::BasisPts spline;
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
   basis->computeBasis(fe.u,fe.v,fe.w,spline);
 
   // Evaluate the solution field at the given point
@@ -106,7 +108,9 @@ bool SplineFields3D::gradFE(const FiniteElement& fe, Matrix& grad) const
 
   // Evaluate the basis functions at the given point
   Go::BasisDerivs spline;
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
   vol->computeBasis(fe.u,fe.v,fe.w,spline);
 
   const int uorder = vol->order(0);
@@ -136,7 +140,9 @@ bool SplineFields3D::gradFE(const FiniteElement& fe, Matrix& grad) const
   if (basis != vol)
   {
     // Mixed formulation, the solution uses a different basis than the geometry
+ #ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,fe.w,spline);
 
     const size_t nbf = basis->order(0)*basis->order(1)*basis->order(2);
@@ -179,7 +185,9 @@ bool SplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
   Matrix dNdu, dNdX;
   IntVec ip;
   if (vol == basis) {
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     vol->computeBasis(fe.u,fe.v,fe.w,spline2);
 
     dNdu.resize(nen,3);
@@ -200,7 +208,9 @@ bool SplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
 		       uorder,vorder,worder,spline2.left_idx,ip);
   }
   else {
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     vol->computeBasis(fe.u,fe.v,fe.w,spline);
 
     dNdu.resize(nen,3);
@@ -223,7 +233,9 @@ bool SplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
   // Evaluate the gradient of the solution field at the given point
   if (basis != vol) {
     // Mixed formulation, the solution uses a different basis than the geometry
+#ifndef GOTOOLS_OPENMP
 #pragma omp critical
+#endif
     basis->computeBasis(fe.u,fe.v,fe.w,spline2);
 
     const size_t nbf = basis->order(0)*basis->order(1)*basis->order(2);
