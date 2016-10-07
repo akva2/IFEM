@@ -30,6 +30,12 @@ public:
   static void Advection(Matrix& EM, const FiniteElement& fe,
                         const Vec3& AC, double scale=1.0, int basis=1);
 
+  static void Advection(std::vector<Matrix>& EM, const FiniteElement& fe,
+                        const Vec3& AC, double scale=1.0, int basis=1)
+  {
+    Advection(EM[EM.size() > 1 ? 1 : 0], fe, AC, scale, basis);
+  }
+
   //! \brief Compute a (nonlinear) convection term.
   //! \param[out] EM The element matrix to add contribution to
   //! \param[in] fe The finite element to evaluate for
@@ -99,6 +105,12 @@ public:
   static void Gradient(Vector& EV, const FiniteElement& fe,
                        double scale=1.0, int basis=1);
 
+  static void Gradient(Vectors& EV, const FiniteElement& fe,
+                       double scale=1.0, int basis=1)
+  {
+    Gradient(EV[EV.size() > 1 ? 1 : 0], fe, scale, basis);
+  }
+
   //! \brief Compute a laplacian.
   //! \param[out] EM The element matrix to add contribution to
   //! \param[in] fe The finite element to evaluate for
@@ -107,6 +119,12 @@ public:
   //! \param[in] basis Basis to use
   static void Laplacian(Matrix& EM, const FiniteElement& fe,
                         double scale=1.0, bool stress=false, int basis=1);
+
+  static void Laplacian(std::vector<Matrix>& EM, const FiniteElement& fe,
+                        double scale=1.0, bool stress=false, int basis=1)
+  {
+    Laplacian(EM[EM.size() > 1 ? 1 : 0], fe, scale, stress, basis);
+  }
 
   //! \brief Compute a heteregenous coefficient laplacian.
   //! \param[out] EM The element matrix to add contribution to
@@ -124,6 +142,12 @@ public:
   static void Mass(Matrix& EM, const FiniteElement& fe,
                    double scale=1.0, int basis=1);
 
+  static void Mass(std::vector<Matrix>& EM, const FiniteElement& fe,
+                   double scale=1.0, int basis=1)
+  {
+    Mass(EM[EM.size() > 1 ? 1 : 0], fe, scale, basis);
+  }
+
   //! \brief Compute a source term.
   //! \param[out] EV The element vector to add contribution to
   //! \param[in] fe The finite element to evaluate for
@@ -133,6 +157,12 @@ public:
   static void Source(Vector& EV, const FiniteElement& fe,
                      double scale=1.0, int cmp=1, int basis=1);
 
+  static void Source(Vectors& EV, const FiniteElement& fe,
+                     double scale=1.0, int cmp=1, int basis=1)
+  {
+    Source(EV[EV.size() > 1 ? 1 : 0], fe, scale, cmp, basis);
+  }
+
   //! \brief Compute a vector-source term.
   //! \param[out] EV The element vector to add contribution to
   //! \param[in] fe The finite element to evaluate for
@@ -141,6 +171,12 @@ public:
   //! \param[in] basis Basis to use
   static void Source(Vector& EV, const FiniteElement& fe,
                      const Vec3& f, double scale=1.0, int basis=1);
+
+  static void Source(Vectors& EV, const FiniteElement& fe,
+                     const Vec3& f, double scale=1.0, int basis=1)
+  {
+    Source(EV[EV.size() > 1 ? 1 : 0], fe, f, scale, basis);
+  }
 };
 
 #endif
