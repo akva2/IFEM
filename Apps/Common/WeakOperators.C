@@ -51,8 +51,9 @@ static void DivGrad(Matrix& EM, const FiniteElement& fe,
 }
 
 
-void WeakOperators::Advection(Matrix& EM, const FiniteElement& fe,
-                              const Vec3& AC, double scale, int basis)
+void EqualOrderOperators::Weak::Advection(Matrix& EM, const FiniteElement& fe,
+                                          const Vec3& AC,
+                                          double scale, int basis)
 {
   Matrix C(fe.basis(basis).size(), fe.basis(basis).size());
   size_t ncmp = EM.rows() / C.rows();
@@ -69,22 +70,22 @@ void WeakOperators::Advection(Matrix& EM, const FiniteElement& fe,
 }
 
 
-void WeakOperators::Divergence(Matrix& EM, const FiniteElement& fe,
-                               double scale, int basis, int tbasis)
+void EqualOrderOperators::Weak::Divergence(Matrix& EM, const FiniteElement& fe,
+                                           double scale, int basis, int tbasis)
 {
   DivGrad<1>(EM,fe,scale,basis,tbasis);
 }
 
 
-void WeakOperators::Gradient(Matrix& EM, const FiniteElement& fe,
-                             double scale, int basis, int tbasis)
+void EqualOrderOperators::Weak::Gradient(Matrix& EM, const FiniteElement& fe,
+                                         double scale, int basis, int tbasis)
 {
   DivGrad<2>(EM,fe,scale,basis,tbasis);
 }
 
 
-void WeakOperators::Divergence(Vector& EV, const FiniteElement& fe,
-                               const Vec3& D, double scale, int basis)
+void EqualOrderOperators::Weak::Divergence(Vector& EV, const FiniteElement& fe,
+                                           const Vec3& D, double scale, int basis)
 {
   for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
     double div=0.0;
@@ -95,8 +96,8 @@ void WeakOperators::Divergence(Vector& EV, const FiniteElement& fe,
 }
 
 
-void WeakOperators::Gradient(Vector& EV, const FiniteElement& fe,
-                             double scale, int basis)
+void EqualOrderOperators::Weak::Gradient(Vector& EV, const FiniteElement& fe,
+                                         double scale, int basis)
 {
   size_t nsd = fe.grad(basis).cols();
   for (size_t i = 1; i <= fe.basis(basis).size(); ++i)
@@ -105,8 +106,8 @@ void WeakOperators::Gradient(Vector& EV, const FiniteElement& fe,
 }
 
 
-void WeakOperators::Laplacian(Matrix& EM, const FiniteElement& fe,
-                              double scale, bool stress, int basis)
+void EqualOrderOperators::Weak::Laplacian(Matrix& EM, const FiniteElement& fe,
+                                          double scale, bool stress, int basis)
 {
   size_t cmp = EM.rows() / fe.basis(basis).size();
   Matrix A;
@@ -122,9 +123,9 @@ void WeakOperators::Laplacian(Matrix& EM, const FiniteElement& fe,
 }
 
 
-void WeakOperators::LaplacianCoeff(Matrix& EM, const Matrix& K,
-                                   const FiniteElement& fe,
-                                   double scale, int basis)
+void EqualOrderOperators::Weak::LaplacianCoeff(Matrix& EM, const Matrix& K,
+                                               const FiniteElement& fe,
+                                               double scale, int basis)
 {
   Matrix KB;
   KB.multiply(K,fe.grad(basis),false,true).multiply(scale*fe.detJxW);
@@ -132,8 +133,8 @@ void WeakOperators::LaplacianCoeff(Matrix& EM, const Matrix& K,
 }
 
 
-void WeakOperators::Mass(Matrix& EM, const FiniteElement& fe,
-                         double scale, int basis)
+void EqualOrderOperators::Weak::Mass(Matrix& EM, const FiniteElement& fe,
+                                     double scale, int basis)
 {
   size_t ncmp = EM.rows()/fe.basis(basis).size();
   Matrix A;
@@ -143,8 +144,8 @@ void WeakOperators::Mass(Matrix& EM, const FiniteElement& fe,
 }
 
 
-void WeakOperators::Source(Vector& EV, const FiniteElement& fe,
-                           double scale, int cmp, int basis)
+void EqualOrderOperators::Weak::Source(Vector& EV, const FiniteElement& fe,
+                                       double scale, int cmp, int basis)
 {
   size_t ncmp = EV.size() / fe.basis(basis).size();
   if (cmp == 1 && ncmp == 1)
@@ -158,8 +159,8 @@ void WeakOperators::Source(Vector& EV, const FiniteElement& fe,
 }
 
 
-void WeakOperators::Source(Vector& EV, const FiniteElement& fe,
-                           const Vec3& f, double scale, int basis)
+void EqualOrderOperators::Weak::Source(Vector& EV, const FiniteElement& fe,
+                                       const Vec3& f, double scale, int basis)
 {
   size_t cmp = EV.size() / fe.basis(basis).size();
   for (size_t i = 1; i <= fe.basis(basis).size(); ++i)

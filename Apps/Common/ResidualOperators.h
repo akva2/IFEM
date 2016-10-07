@@ -30,9 +30,9 @@ namespace ResidualOperators
   //! \param[in] conservative True to use the conservative formulation
   //! \param[in] basis Basis to use
   template<class T>
-  void Convection(Vector& EV, const FiniteElement& fe,
-                  const Vec3& U, const T& dUdX, const Vec3& UC,
-                  double scale, bool conservative=false, int basis=1)
+  static void Convection(Vector& EV, const FiniteElement& fe,
+                         const Vec3& U, const T& dUdX, const Vec3& UC,
+                         double scale, bool conservative=false, int basis=1)
   {
     size_t cmp = EV.size() / fe.basis(basis).size();
     if (conservative) {
@@ -63,9 +63,9 @@ namespace ResidualOperators
   //! \param[in] scale Scaling factor for contribution
   //! \param[in] basis Basis to use
   template<class T>
-  void Divergence(Vector& EV, const FiniteElement& fe,
-                  const T& dUdX, double scale=1.0,
-                  size_t basis=1)
+  static void Divergence(Vector& EV, const FiniteElement& fe,
+                         const T& dUdX, double scale=1.0,
+                         size_t basis=1)
   {
     for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
       double div=0.0;
@@ -83,9 +83,9 @@ namespace ResidualOperators
   //! \param[in] stress Whether to add extra stress formulation terms
   //! \param[in] basis Basis to use
   template<class T>
-  void Laplacian(Vector& EV, const FiniteElement& fe,
-                 const T& dUdX, double scale=1.0,
-                 bool stress=false, int basis=1)
+  static void Laplacian(Vector& EV, const FiniteElement& fe,
+                        const T& dUdX, double scale=1.0,
+                        bool stress=false, int basis=1)
   {
     size_t cmp = EV.size() / fe.basis(basis).size();
     for (size_t i = 1;i <= fe.basis(basis).size();i++) {
