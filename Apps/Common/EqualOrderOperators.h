@@ -10,8 +10,8 @@
 //!
 //==============================================================================
 
-#ifndef WEAKOPERATORS_H_
-#define WEAKOPERATORS_H_
+#ifndef EQUAL_ORDER_OPERATORS_H
+#define EQUAL_ORDER_OPERATORS_H
 
 class Vec3;
 
@@ -49,33 +49,9 @@ public:
     //! \param[in] U  Advecting field
     //! \param[in] conservative True to use the conservative formulation
     //! \param[in] basis Basis to use
-    template<class T>
     static void Convection(Matrix& EM, const FiniteElement& fe,
-                           const Vec3& U, const T& dUdX, double scale,
-                           bool conservative=false, int basis=1)
-    {
-      size_t cmp = EM.rows() / fe.basis(basis).size();
-      if (conservative) {
-        Advection(EM, fe, U, -scale, basis);
-        for (size_t i = 1;i <= fe.basis(basis).size();i++)
-          for (size_t j = 1;j <= fe.basis(basis).size();j++) {
-            for (size_t k = 1;k <= cmp;k++) {
-              for (size_t l = 1;l <= cmp;l++)
-                EM((j-1)*cmp+l,(i-1)*cmp+k) -= scale*U[l-1]*fe.basis(basis)(i)*fe.grad(basis)(j,k)*fe.detJxW;
-            }
-          }
-      }
-      else {
-        Advection(EM, fe, U, scale, basis);
-        for (size_t i = 1;i <= fe.basis(basis).size();i++)
-          for (size_t j = 1;j <= fe.basis(basis).size();j++) {
-            for (size_t k = 1;k <= cmp;k++) {
-              for (size_t l = 1;l <= cmp;l++)
-                EM((j-1)*cmp+l,(i-1)*cmp+k) += scale*dUdX(l,k)*fe.basis(basis)(j)*fe.basis(basis)(i)*fe.detJxW;
-            }
-          }
-      }
-    }
+                           const Vec3& U, const Tensor& dUdX, double scale,
+                           bool conservative=false, int basis=1);
 
     //! \brief Compute a divergence term.
     //! \param[out] EM The element matrix to add contribution to
@@ -203,32 +179,9 @@ public:
     //! \param[in] scale Scaling factor for contribution
     //! \param[in] conservative True to use the conservative formulation
     //! \param[in] basis Basis to use
-    template<class T>
     static void Convection(Vector& EV, const FiniteElement& fe,
-                           const Vec3& U, const T& dUdX, const Vec3& UC,
-                           double scale, bool conservative=false, int basis=1)
-    {
-      size_t cmp = EV.size() / fe.basis(basis).size();
-      if (conservative) {
-        for (size_t i = 1;i <= fe.basis(basis).size();i++)
-          for (size_t k = 1;k <= cmp;k++)
-            for (size_t l = 1;l <= cmp;l++)
-              // Convection
-              EV((i-1)*cmp + k) += scale*U[k-1]*UC[l-1]*fe.grad(basis)(i,l)*fe.detJxW;
-      }
-      else {
-        for (size_t k = 1;k <= cmp;k++) {
-          // Convection
-          double conv = 0.0;
-          for (size_t l = 1;l <= cmp;l++)
-            conv += UC[l-1]*dUdX(k,l);
-          conv *= scale*fe.detJxW;
-
-          for (size_t i = 1;i <= fe.basis(basis).size();i++)
-            EV((i-1)*cmp + k) -= conv*fe.basis(basis)(i);
-        }
-      }
-    }
+                           const Vec3& U, const Tensor& dUdX, const Vec3& UC,
+                           double scale, bool conservative=false, int basis=1);
 
     //! \brief Compute a divergence term in a residual vector.
     //! \param[out] EV The element vector to add contribution to
@@ -236,18 +189,9 @@ public:
     //! \param[in] dUdX Gradient of field
     //! \param[in] scale Scaling factor for contribution
     //! \param[in] basis Basis to use
-    template<class T>
     static void Divergence(Vector& EV, const FiniteElement& fe,
-                           const T& dUdX, double scale=1.0,
-                           size_t basis=1)
-    {
-      for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
-        double div=0.0;
-        for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
-          div += dUdX(k,k);
-        EV(i) += scale*div*fe.basis(basis)(i)*fe.detJxW;
-      }
-    }
+                           const Tensor& dUdX, double scale=1.0,
+                           size_t basis=1);
 
     //! \brief Compute a laplacian term in a residual vector.
     //! \param[out] EV The element vector to add contribution to

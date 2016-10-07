@@ -6,11 +6,11 @@
 //!
 //! \author Arne Morten Kvarving / SINTEF
 //!
-//! \brief Various weak, discrete operators.
+//! \brief Various discrete equal-ordered operators.
 //!
 //==============================================================================
 
-#include "WeakOperators.h"
+#include "EqualOrderOperators.h"
 #include "FiniteElement.h"
 #include "Vec3.h"
 
@@ -33,7 +33,7 @@ static void addComponents(Matrix& EM, const Matrix& A,
 }
 
 
-//! \brief Helper applying a divergence (1) or a gradient (2) or both (0) operation
+//! \brief Helper applying a divergence (1) or a gradient (2) operation
 template<int Operation>
 static void DivGrad(Matrix& EM, const FiniteElement& fe,
             double scale, int basis, int tbasis)
@@ -67,6 +67,34 @@ void EqualOrderOperators::Weak::Advection(Matrix& EM, const FiniteElement& fe,
     }
   }
   addComponents(EM, C, ncmp, ncmp, 0);
+}
+
+
+void EqualOrderOperators::Weak::Convection(Matrix& EM, const FiniteElement& fe,
+                                           const Vec3& U, const Tensor& dUdX,
+                                           double scale, bool conservative, int basis)
+{
+  size_t cmp = EM.rows() / fe.basis(basis).size();
+  if (conservative) {
+    Advection(EM, fe, U, -scale, basis);
+    for (size_t i = 1;i <= fe.basis(basis).size();i++)
+      for (size_t j = 1;j <= fe.basis(basis).size();j++) {
+        for (size_t k = 1;k <= cmp;k++) {
+          for (size_t l = 1;l <= cmp;l++)
+            EM((j-1)*cmp+l,(i-1)*cmp+k) -= scale*U[l-1]*fe.basis(basis)(i)*fe.grad(basis)(j,k)*fe.detJxW;
+        }
+      }
+  }
+  else {
+    Advection(EM, fe, U, scale, basis);
+    for (size_t i = 1;i <= fe.basis(basis).size();i++)
+      for (size_t j = 1;j <= fe.basis(basis).size();j++) {
+        for (size_t k = 1;k <= cmp;k++) {
+          for (size_t l = 1;l <= cmp;l++)
+            EM((j-1)*cmp+l,(i-1)*cmp+k) += scale*dUdX(l,k)*fe.basis(basis)(j)*fe.basis(basis)(i)*fe.detJxW;
+        }
+      }
+  }
 }
 
 
@@ -166,4 +194,45 @@ void EqualOrderOperators::Weak::Source(Vector& EV, const FiniteElement& fe,
   for (size_t i = 1; i <= fe.basis(basis).size(); ++i)
     for (size_t k = 1; k <= cmp; ++k)
       EV(cmp*(i-1)+k) += scale*f[k-1]*fe.basis(basis)(i)*fe.detJxW;
+}
+
+
+void EqualOrderOperators::Residual::Convection(Vector& EV, const FiniteElement& fe,
+                                                const Vec3& U, const Tensor& dUdX,
+                                               const Vec3& UC, double scale,
+                                               bool conservative, int basis)
+{
+  size_t cmp = EV.size() / fe.basis(basis).size();
+  if (conservative) {
+    for (size_t i = 1;i <= fe.basis(basis).size();i++)
+      for (size_t k = 1;k <= cmp;k++)
+        for (size_t l = 1;l <= cmp;l++)
+          // Convection
+          EV((i-1)*cmp + k) += scale*U[k-1]*UC[l-1]*fe.grad(basis)(i,l)*fe.detJxW;
+  }
+  else {
+    for (size_t k = 1;k <= cmp;k++) {
+      // Convection
+      double conv = 0.0;
+      for (size_t l = 1;l <= cmp;l++)
+        conv += UC[l-1]*dUdX(k,l);
+      conv *= scale*fe.detJxW;
+
+      for (size_t i = 1;i <= fe.basis(basis).size();i++)
+        EV((i-1)*cmp + k) -= conv*fe.basis(basis)(i);
+    }
+  }
+}
+
+
+void EqualOrderOperators::Residual::Divergence(Vector& EV, const FiniteElement& fe,
+                                                const Tensor& dUdX,
+                                                double scale, size_t basis)
+{
+  for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
+    double div=0.0;
+    for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
+      div += dUdX(k,k);
+    EV(i) += scale*div*fe.basis(basis)(i)*fe.detJxW;
+  }
 }
