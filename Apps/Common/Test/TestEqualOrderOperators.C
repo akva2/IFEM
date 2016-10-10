@@ -6,11 +6,11 @@
 //!
 //! \author Arne Morten Kvarving / SINTEF
 //!
-//! \brief Tests for various mesh quality indicators
+//! \brief Tests for various discrete equal-order operators.
 //!
 //==============================================================================
 
-#include "WeakOperators.h"
+#include "EqualOrderOperators.h"
 #include "gtest/gtest.h"
 #include "FiniteElement.h"
 

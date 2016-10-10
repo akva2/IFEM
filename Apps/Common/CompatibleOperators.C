@@ -13,7 +13,7 @@
 #include "CompatibleOperators.h"
 #include "FiniteElement.h"
 #include "Vec3.h"
-#include "WeakOperators.h"
+#include "EqualOrderOperators.h"
 
 
 void CompatibleOperators::Weak::Advection(std::vector<Matrix>& EM,
