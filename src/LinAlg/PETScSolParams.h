@@ -45,12 +45,16 @@ enum SchurPrec { SIMPLE, MSIMPLER, PCD };
 
 class PETScMxV {
 public:
+  //! \brief Enumeration of integration modes
+  enum IntMode {EVALUATE_PC, EVALUATE };
+
   //! \brief Obtain the matrix to use as preconditioner.
   virtual bool evalPC(Mat& P) = 0;
 
   //! \brief Evaluate the matrix-vector product y=A*x
   virtual bool evalMxV(Vec& x, Vec& y) = 0;
 };
+
 
 extern "C" {
   //! \brief Evaluate the matrix-vector product y=A*x
