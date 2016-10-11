@@ -375,6 +375,7 @@ void PETScSolParams::setupAdditiveSchwarz(PC& pc, size_t block,
   }
 }
 
+
 void PETScSolParams::setupSchurComplement(const std::vector<Mat>& matvec)
 {
   PetscInt m1, n1;
@@ -400,4 +401,17 @@ void PETScSolParams::setupSchurComplement(const std::vector<Mat>& matvec)
   MatAXPY(Sp,-1.0,tmp2,DIFFERENT_NONZERO_PATTERN);
   MatDestroy(&tmp);
   MatDestroy(&tmp2);
+}
+
+
+extern "C" {
+
+PetscErrorCode SIMMxV(Mat A, Vec x, Vec y)
+{
+  void* p;
+  MatShellGetContext(A, &p);
+  PETScMxV* sim = static_cast<PETScMxV*>(p);
+  return sim->evalMxV(x,y) ? 0 : 1;
+}
+
 }

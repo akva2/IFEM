@@ -61,9 +61,9 @@ void EqualOrderOperators::Weak::Advection(Matrix& EM, const FiniteElement& fe,
     for (size_t j = 1; j <= fe.basis(basis).size(); ++j) {
       // Sum convection for each direction
       for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
-        C(i,j) += AC[k-1]*fe.dNdX(j,k);
+        C(i,j) += AC[k-1]*fe.grad(basis)(j,k);
 
-      C(i,j) *= scale*fe.N(i)*fe.detJxW;
+      C(i,j) *= scale*fe.basis(basis)(i)*fe.detJxW;
     }
   }
   addComponents(EM, C, ncmp, ncmp, 0);

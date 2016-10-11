@@ -180,6 +180,8 @@ bool LinSolParams::read (const TiXmlElement* elem)
       addValue("dtol", value);
     else if ((value = utl::getValue(child,"maxits")))
       addValue("maxits", value);
+    else if (!strcasecmp(child->Value(),"matrixfree"))
+      addValue("matrixfree", "1");
 
   if (parseblock == 0)
     blocks.back().read(elem);

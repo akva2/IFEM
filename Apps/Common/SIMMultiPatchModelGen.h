@@ -14,7 +14,8 @@
 #ifndef _SIM_MULTI_PATCH_MODEL_GEN_H_
 #define _SIM_MULTI_PATCH_MODEL_GEN_H_
 
-#include "SIMbase.h"
+#include "SIM2D.h"
+#include "SIM3D.h"
 
 
 /*!
@@ -41,5 +42,11 @@ protected:
   //! \param[in] geo XML element containing geometry defintion
   virtual ModelGenerator* createModelGenerator(const TiXmlElement* geo) const;
 };
+
+template<> ModelGenerator*
+SIMMultiPatchModelGen<SIM2D>::createModelGenerator(const TiXmlElement* geo) const;
+
+template<> ModelGenerator*
+SIMMultiPatchModelGen<SIM3D>::createModelGenerator(const TiXmlElement* geo) const;
 
 #endif
