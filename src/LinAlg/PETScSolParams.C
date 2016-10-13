@@ -402,11 +402,6 @@ void PETScSolParams::setupSchurComplement(const std::vector<Mat>& matvec)
   MatAXPY(Sp,-1.0,tmp2,DIFFERENT_NONZERO_PATTERN);
   MatDestroy(&tmp);
   MatDestroy(&tmp2);
-  MatView(matvec[0], PETSC_VIEWER_STDOUT_WORLD);
-  MatView(matvec[1], PETSC_VIEWER_STDOUT_WORLD);
-  MatView(matvec[2], PETSC_VIEWER_STDOUT_WORLD);
-  MatView(matvec[3], PETSC_VIEWER_STDOUT_WORLD);
-  MatView(Sp, PETSC_VIEWER_STDOUT_WORLD);
 }
 
 

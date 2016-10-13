@@ -526,9 +526,9 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     MatCreateShell(*adm.getCommunicator(), neq, neq,
                    PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
     MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&SIMMxV);
-    static MatNullSpace meh;
-    MatNullSpaceCreate(*adm.getCommunicator(),PETSC_TRUE,0,nullptr,&meh);
-    MatSetNullSpace(A, meh);
+//    static MatNullSpace meh;
+//    MatNullSpaceCreate(*adm.getCommunicator(),PETSC_TRUE,0,nullptr,&meh);
+//    MatSetNullSpace(A, meh);
     MatSetUp(A);
     mxv->evalPC(P);
 
