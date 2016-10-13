@@ -80,6 +80,15 @@ public:
     static void Gradient(Matrix& EM, const FiniteElement& fe,
                          double scale=1.0, int basis=1, int tbasis=1);
 
+    //! \brief Wrapper checking whether blocks are in use or not.
+    static void Gradient(std::vector<Matrix>& EM,
+                         const FiniteElement& fe,
+                         double scale=1.0,
+                         int basis=1, int tbasis=1)
+    {
+      Gradient(EM[EM.size() > 1 ? 1 : 0], fe, scale, basis, tbasis);
+    }
+
     //! \brief Compute a gradient term.
     //! \param[out] EV The element vector to add contribution to
     //! \param[in] fe The finite element to evaluate for

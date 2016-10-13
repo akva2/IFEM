@@ -933,8 +933,11 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
       }
 
       size_t idx = 1;
-      for (auto& it : blocks[i+1].localEqs)
+      IFEM::cout << "Equation mapping for block " << i+1 << std::endl;
+      for (auto& it : blocks[i+1].localEqs) {
         blocks[i+1].G2LEQ[it] = idx++;
+        IFEM::cout << "  " << idx-1 << " -> " << it << std::endl;
+      }
     }
   }
 

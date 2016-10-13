@@ -40,18 +40,15 @@ typedef std::vector<ISVec>       ISMat;        //!< Index set matrix
 enum SchurPrec { SIMPLE, MSIMPLER, PCD };
 
 
-/*! \brief Interface to use a simulators as a matrix-vector product
+/*! \brief Interface to use a simulator as a matrix-vector product.
 */
 
 class PETScMxV {
 public:
-  //! \brief Enumeration of integration modes
-  enum IntMode {EVALUATE_PC, EVALUATE };
-
   //! \brief Obtain the matrix to use as preconditioner.
   virtual bool evalPC(Mat& P) = 0;
 
-  //! \brief Evaluate the matrix-vector product y=A*x
+  //! \brief Evaluate the matrix-vector product y=A*x.
   virtual bool evalMxV(Vec& x, Vec& y) = 0;
 };
 

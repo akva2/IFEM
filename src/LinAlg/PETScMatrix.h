@@ -178,6 +178,8 @@ public:
 
   //! \brief Set matrix-free operator.
   void setMxV(PETScMxV* MxV) { mxv = MxV; }
+
+  PETScSolParams& getSolParams() { return solParams; }
 protected:
   //! \brief Solve a linear system
   bool solve(const Vec& b, Vec& x, bool newLHS, bool knoll);
