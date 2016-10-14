@@ -89,6 +89,9 @@ public:
                               Real scaleSD = 1.0) const;
 
 private:
+  bool expandSolution(const Vec& solVec, Vec& dofVec,
+                      int dim, Real scaleSD = 1.0) const;
+
   //! \brief Setup a parallel index set for a given dofType
   void setupIS(char dofType) const;
 

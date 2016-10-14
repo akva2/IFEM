@@ -132,11 +132,13 @@ Real PETScVector::Linfnorm() const
 
 PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar,
                           LinAlg::LinearSystemType ltype) :
- SparseMatrix(SUPERLU, 1), nsp(nullptr), adm(padm), solParams(spar, adm),
+ SparseMatrix(SUPERLU, 1), mxv(nullptr), nsp(nullptr), adm(padm), solParams(spar, adm),
  linsysType(ltype)
 {
   // Create matrix object, by default the matrix type is AIJ
-  MatCreate(*adm.getCommunicator(),&A);
+  bool matrixfree = spar.getIntValue("matrixfree") ? true : false;
+  if (!matrixfree)
+    MatCreate(*adm.getCommunicator(),&A);
 
   // Create linear solver object
   KSPCreate(*adm.getCommunicator(),&ksp);
@@ -185,9 +187,12 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
     return;
 
   // Get number of local equations in linear system
-  const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
+  bool mxv = solParams.getIntValue("matrixfree") ? true : false;
+  if (mxv)
+    return;
 
   // Set correct number of rows and columns for matrix.
+  const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
   MatSetSizes(A,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
 
   // Allocate sparsity pattern
@@ -404,6 +409,9 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
 bool PETScMatrix::beginAssembly()
 {
+  if (mxv)
+    return true;
+
   if (matvec.empty()) {
     for (size_t j = 0; j < cols(); ++j)
       for (int i = IA[j]; i < IA[j+1]; ++i)
@@ -429,6 +437,9 @@ bool PETScMatrix::beginAssembly()
 
 bool PETScMatrix::endAssembly()
 {
+  if (mxv)
+    return true;
+
   // Finalizes parallel assembly process
   MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);
   return true;
@@ -438,6 +449,8 @@ bool PETScMatrix::endAssembly()
 void PETScMatrix::init ()
 {
   SparseMatrix::init();
+  if (mxv)
+    return;
 
   // Set all matrix elements to zero
   if (matvec.empty())
@@ -507,17 +520,28 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
       setParams = true;
     }
 
+  Mat P;
+  if (mxv) {
+    const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
+    MatCreateShell(*adm.getCommunicator(), neq, neq,
+                   PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
+    MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&SIMMxV);
+    MatSetUp(A);
+    mxv->evalPC(P);
+  }
+
   if (setParams) {
 #if PETSC_VERSION_MINOR < 5
-    KSPSetOperators(ksp,A,A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
+    KSPSetOperators(ksp,A,mxv ? P : A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
 #else
-    KSPSetOperators(ksp,A,A);
+    KSPSetOperators(ksp,A,mxv ? P : A);
     KSPSetReusePreconditioner(ksp, newLHS ? PETSC_FALSE : PETSC_TRUE);
 #endif
     if (!setParameters())
       return false;
     setParams = false;
   }
+  mxv = nullptr;
   if (knoll)
     KSPSetInitialGuessKnoll(ksp,PETSC_TRUE);
   else
