@@ -513,28 +513,27 @@ bool PETScMatrix::solve (const SystemVector& b, SystemVector& x, bool newLHS)
 bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
 {
   // Reset linear solver
-  if (nLinSolves && solParams.getIntValue("gmres_restart_iterations"))
-    if (nLinSolves%solParams.getIntValue("gmres_restart_iterations") == 0) {
-      KSPDestroy(&ksp);
-      KSPCreate(*adm.getCommunicator(),&ksp);
-      setParams = true;
-    }
-
-  Mat P;
-  if (mxv) {
-    const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
-    MatCreateShell(*adm.getCommunicator(), neq, neq,
-                   PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
-    MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&SIMMxV);
-//    static MatNullSpace meh;
-//    MatNullSpaceCreate(*adm.getCommunicator(),PETSC_TRUE,0,nullptr,&meh);
-//    MatSetNullSpace(A, meh);
-    MatSetUp(A);
-    mxv->evalPC(P);
-
-  }
+//  if (nLinSolves && solParams.getIntValue("gmres_restart_iterations"))
+//    if (nLinSolves%solParams.getIntValue("gmres_restart_iterations") == 0) {
+//      KSPDestroy(&ksp);
+//      KSPCreate(*adm.getCommunicator(),&ksp);
+//      setParams = true;
+//    }
 
   if (setParams) {
+    Mat P;
+    if (mxv) {
+      const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
+      MatCreateShell(*adm.getCommunicator(), neq, neq,
+                     PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
+      MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&SIMMxV);
+      static MatNullSpace meh;
+      MatNullSpaceCreate(*adm.getCommunicator(),PETSC_TRUE,0,nullptr,&meh);
+      MatSetNullSpace(A, meh);
+      MatSetUp(A);
+      mxv->evalPC(P);
+      MatSetNullSpace(P, meh);
+    }
 #if PETSC_VERSION_MINOR < 5
     KSPSetOperators(ksp,A,mxv ? P : A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
 #else
@@ -545,7 +544,7 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
       return false;
     setParams = false;
   }
-  mxv = nullptr;
+
   if (knoll)
     KSPSetInitialGuessKnoll(ksp,PETSC_TRUE);
   else

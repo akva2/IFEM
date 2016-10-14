@@ -2555,7 +2555,7 @@ bool SIMbase::injectPatchSolution (Vector& sol, const Vector& vec,
     // Need an additional MADOF
     return pch->injectNodalVec(vec,sol,this->getMADOF(basis,nndof),basis);
   else
-    return pch->injectNodeVec(vec,sol,nndof);
+    return pch->injectNodeVec(vec,sol,nndof,basis);
 }
 
 
