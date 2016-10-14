@@ -188,8 +188,11 @@ bool AlgEqSystem::assemble (const LocalIntegral* elmObj, int elmId)
 #endif
 
     // Assembly of system right-hand-side vectors
-    for (i = 0; i < b.size() && i < elMat->b.size() && status; i++)
-      status = sam.assembleSystem(*b[i], elMat->b[i], elmId);
+    if (b.size() == 1)
+        status = sam.assembleSystem(*b.front(), elMat->getRHSVector(), elmId);
+    else
+      for (i = 0; i < b.size() && i < elMat->b.size() && status; i++)
+        status = sam.assembleSystem(*b[i], elMat->b[i], elmId);
 
     // Assembly of system coefficient matrices, possibly with right-hand-side
     // contributions too, due to multi-point constraints
