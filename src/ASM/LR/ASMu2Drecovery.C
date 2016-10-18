@@ -414,8 +414,10 @@ LR::LRSplineSurface* ASMu2D::regularInterpolation (const RealArray& upar,
     return nullptr;
   }
 
-  DenseMatrix    A(nBasis,nBasis);
-  Matrix         B(points,true);
+  SparseMatrix   A(SparseMatrix::SUPERLU);
+  A.resize(nBasis, nBasis);
+  Matrix B2(points,true); // transpose to get one vector per field
+  StdVector B(B2.ptr(), B2.size());
   Go::BasisPtsSf splineValues;
 
   // Evaluate all basis functions at all points, stored in the A-matrix
@@ -426,7 +428,8 @@ LR::LRSplineSurface* ASMu2D::regularInterpolation (const RealArray& upar,
     // optimization note:
     // without an element id, splineValues will be stored as a full dense vector
     for (size_t j = 0; j < nBasis; j++)
-      A(i+1,j+1) = splineValues.basisValues[j];
+      if (utl::trunc(splineValues.basisValues[j]) != 0.0)
+        A(i+1,j+1) = splineValues.basisValues[j];
   }
 
   // Solve for all solution components - one right-hand-side for each
@@ -435,14 +438,17 @@ LR::LRSplineSurface* ASMu2D::regularInterpolation (const RealArray& upar,
 
   // Copy all basis functions and mesh
   LR::LRSplineSurface* ans = lrspline->copy();
-  ans->rebuildDimension(B.cols());
+  ans->rebuildDimension(points.rows());
 
-  // Swap around the control point values
-  for (size_t j = 0; j < B.cols(); j++) {
-    size_t i = 0;
-    for (LR::Basisfunction* b : ans->getAllBasisfunctions())
-      b->cp()[j] = B(++i,j+1);
+  // Back to interleaved data
+  std::vector<double> interleave;
+  interleave.reserve(B.dim());
+  for (size_t i = 0; i < nBasis; ++i)
+    for (size_t j = 0; j < points.rows(); j++) {
+        interleave.push_back(B(1+j*points.cols()+i));
   }
+
+  ans->setControlPoints(interleave);
 
   return ans;
 }
