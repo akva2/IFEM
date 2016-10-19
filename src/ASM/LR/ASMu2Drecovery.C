@@ -24,6 +24,7 @@
 #include "Profiler.h"
 #include "IntegrandBase.h"
 #include <array>
+#include <fstream>
 
 
 bool ASMu2D::getGrevilleParameters (RealArray& prm, int dir) const
@@ -424,17 +425,28 @@ LR::LRSplineSurface* ASMu2D::regularInterpolation (const RealArray& upar,
   // (same row = same evaluation point)
   for (size_t i = 0; i < nBasis; i++)
   {
-    lrspline->computeBasis(upar[i],vpar[i],splineValues);
-    // optimization note:
-    // without an element id, splineValues will be stored as a full dense vector
-    for (size_t j = 0; j < nBasis; j++)
-      if (utl::trunc(splineValues.basisValues[j]) != 0.0)
-        A(i+1,j+1) = splineValues.basisValues[j];
+    int id = lrspline->getElementContaining(upar[i],vpar[i]);
+    LR::Element* el = lrspline->getElement(id);
+    std::cout << "id is " << id << std::endl;
+    lrspline->computeBasis(upar[i],vpar[i],splineValues, id);
+    auto it = splineValues.basisValues.begin();
+    std::cout << "ncoef is " << splineValues.basisValues.size() << std::endl;
+    for (auto& it2 : splineValues.basisValues)
+      std::cout << it2 << " ";
+    std::cout << std::endl;
+    for (LR::Basisfunction* b : el->support())
+      A(i+1, b->getId()+1) = *it++;
   }
+
+  std::ofstream of("A.asc");
+  A.printFull(of);
+  of.close();
 
   // Solve for all solution components - one right-hand-side for each
   if (!A.solve(B))
     return nullptr;
+
+  std::cout << B << std::endl;
 
   // Copy all basis functions and mesh
   LR::LRSplineSurface* ans = lrspline->copy();
