@@ -32,8 +32,8 @@ NonLinSIM::NonLinSIM (SIMbase& sim, CNORM n) : MultiStepSIM(sim), iteNorm(n)
   // Default solution parameters
   fromIni = iteNorm == NONE;
   maxIncr = 2;
-  maxit   = 20;
-  nupdat  = 20;
+  maxit   = 100;
+  nupdat  = 100;
   prnSlow = 0;
   rTol    = 0.000001;
   aTol    = 0.0;
