@@ -177,17 +177,26 @@ public:
   virtual bool setParameters(PETScMatrix* P = nullptr, PETScVector* Pb = nullptr);
 
   //! \brief Set matrix-free operator.
-  void setMxV(PETScMxV* MxV) { mxv = MxV; }
+  void setMxV(PETScMxV* MxV, bool ownMatrix=false)
+  { 
+    mxv = MxV;
+    mxvOwnMatrix = ownMatrix;
+  }
+
+  //! \brief Set matrix-free preconditioner.
+  void setPC(PETScPC* pc) { mfpc = pc; }
 
   PETScSolParams& getSolParams() { return solParams; }
 protected:
-  //! \brief Solve a linear system
+  //! \brief Solve a linear system.
   bool solve(const Vec& b, Vec& x, bool newLHS, bool knoll);
 
   //! \brief Disabled copy constructor.
   PETScMatrix(const PETScMatrix& A) = delete;
 
   PETScMxV*           mxv;             //!< Matrix-free operator implementation
+  bool                mxvOwnMatrix;    //!< The matrix-free operator depends on the assembled matrix
+  PETScPC*            mfpc;            //!< Matrix-free preconditioner implementation
   Mat                 A;               //!< The actual PETSc matrix
   KSP                 ksp;             //!< Linear equation solver
   MatNullSpace*       nsp;             //!< Null-space of linear operator

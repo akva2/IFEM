@@ -65,6 +65,8 @@ protected:
   SIMbase(IntegrandBase* itg = nullptr);
 
 public:
+  bool addRef = false;
+
   //! \brief The destructor frees the dynamically allocated objects.
   virtual ~SIMbase();
 

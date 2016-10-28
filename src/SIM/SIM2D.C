@@ -165,6 +165,8 @@ bool SIM2D::parseGeometryTag (const TiXmlElement* elem)
     int addu = 0, addv = 0;
     utl::getAttribute(elem,"u",addu);
     utl::getAttribute(elem,"v",addv);
+    if (addRef)
+      ++addu, ++addv;
     for (int j : patches)
       if ((pch = dynamic_cast<ASM2D*>(this->getPatch(j,true))))
       {

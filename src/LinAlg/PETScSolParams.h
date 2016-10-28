@@ -53,9 +53,22 @@ public:
 };
 
 
+/*! \brief Interface to use a simulator as a preconditioner.
+*/
+
+class PETScPC {
+public:
+  //! \brief Evaluate the y = P^-1*x
+  virtual bool eval(Vec& x, Vec& y) = 0;
+};
+
+
 extern "C" {
   //! \brief Evaluate the matrix-vector product y=A*x
-  PetscErrorCode SIMMxV(Mat A, Vec x, Vec y);
+  PetscErrorCode PETScSIMMxV(Mat A, Vec x, Vec y);
+
+  //! \brief Evaluate the preconditioner y=P^-1*x
+  PetscErrorCode PETScSIMPC(PC pc, Vec x, Vec y);
 }
 
 

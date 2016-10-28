@@ -132,8 +132,8 @@ Real PETScVector::Linfnorm() const
 
 PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar,
                           LinAlg::LinearSystemType ltype) :
- SparseMatrix(SUPERLU, 1), mxv(nullptr), nsp(nullptr), adm(padm), solParams(spar, adm),
- linsysType(ltype)
+  SparseMatrix(SUPERLU, 1), mxv(nullptr), mxvOwnMatrix(false), mfpc(nullptr), 
+  nsp(nullptr), adm(padm), solParams(spar, adm), linsysType(ltype)
 {
   // Create matrix object, by default the matrix type is AIJ
   bool matrixfree = spar.getIntValue("matrixfree") ? true : false;
@@ -188,7 +188,7 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
   // Get number of local equations in linear system
   bool mxv = solParams.getIntValue("matrixfree") ? true : false;
-  if (mxv)
+  if (mxv && !mxvOwnMatrix)
     return;
 
   // Set correct number of rows and columns for matrix.
@@ -409,7 +409,7 @@ void PETScMatrix::initAssembly (const SAM& sam, bool b)
 
 bool PETScMatrix::beginAssembly()
 {
-  if (mxv)
+  if (mxv && !mxvOwnMatrix)
     return true;
 
   if (matvec.empty()) {
@@ -437,7 +437,7 @@ bool PETScMatrix::beginAssembly()
 
 bool PETScMatrix::endAssembly()
 {
-  if (mxv)
+  if (mxv && !mxvOwnMatrix)
     return true;
 
   // Finalizes parallel assembly process
@@ -449,7 +449,7 @@ bool PETScMatrix::endAssembly()
 void PETScMatrix::init ()
 {
   SparseMatrix::init();
-  if (mxv)
+  if (mxv && !mxvOwnMatrix)
     return;
 
   // Set all matrix elements to zero
@@ -515,21 +515,26 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
   if (setParams) {
     Mat P;
     if (mxv) {
+      if (mxvOwnMatrix) {
+        matvec.resize(1);
+        MatDuplicate(A, MAT_COPY_VALUES, &matvec.front());
+      }
       const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
       MatCreateShell(*adm.getCommunicator(), neq, neq,
                      PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
-      MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&SIMMxV);
-      static MatNullSpace meh;
-      MatNullSpaceCreate(*adm.getCommunicator(),PETSC_TRUE,0,nullptr,&meh);
-      MatSetNullSpace(A, meh);
+      MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&PETScSIMMxV);
+//      static MatNullSpace meh;
+//      MatNullSpaceCreate(*adm.getCommunicator(),PETSC_TRUE,0,nullptr,&meh);
+//      MatSetNullSpace(A, meh);
       MatSetUp(A);
-      mxv->evalPC(P);
-      MatSetNullSpace(P, meh);
+      if (!mfpc)
+        mxv->evalPC(P);
+//      MatSetNullSpace(P, meh);
     }
 #if PETSC_VERSION_MINOR < 5
     KSPSetOperators(ksp,A,mxv ? P : A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
 #else
-    KSPSetOperators(ksp,A,mxv ? P : A);
+    KSPSetOperators(ksp,A,mxv && !mfpc ? P : A);
     KSPSetReusePreconditioner(ksp, newLHS ? PETSC_FALSE : PETSC_TRUE);
 #endif
     if (!setParameters())
@@ -637,7 +642,12 @@ bool PETScMatrix::setParameters(PETScMatrix* P, PETScVector* Pb)
   PC pc;
   KSPGetPC(ksp,&pc);
 
-  if (matvec.empty()) {
+  if (mfpc) {
+    PCSetType(pc,PCSHELL);
+    PCShellSetContext(pc, mfpc);
+    PCShellSetName(pc, "k-cycle preconditioner");
+    PCShellSetApply(pc, PETScSIMPC);
+  } else if (matvec.empty()) {
     solParams.setupPC(pc, 0, "", std::set<int>());
   } else {
     if (matvec.size() > 4) {
