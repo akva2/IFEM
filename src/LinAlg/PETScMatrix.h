@@ -99,6 +99,8 @@ protected:
 class PETScMatrix : public SparseMatrix
 {
 public:
+  PETScVector* hack = nullptr;
+
   //! \brief Constructor.
   PETScMatrix(const ProcessAdm& padm, const LinSolParams& spar,
               LinAlg::LinearSystemType ltype);

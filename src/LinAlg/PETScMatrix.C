@@ -485,12 +485,23 @@ bool PETScMatrix::solve (SystemVector& B, bool newLHS, Real*)
   if (!Bsptr)
     return false;
 
-  Vec x;
-  VecDuplicate(Bptr->getVector(),&x);
-  VecCopy(Bptr->getVector(),x);
+  bool result;
+  if (hack) {
+    Vec x;
+    VecDuplicate(Bptr->getVector(),&x);
+    VecCopy(Bptr->getVector(), x);
+    VecCopy(hack->getVector(), Bptr->getVector());
+    VecCopy(x, hack->getVector());
+    VecDestroy(&x);
+    result = this->solve(hack->getVector(),Bptr->getVector(),newLHS,false);
+  } else {
+    Vec x;
+    VecDuplicate(Bptr->getVector(),&x);
+    VecCopy(Bptr->getVector(),x);
 
-  bool result = this->solve(x,Bptr->getVector(),newLHS,true);
-  VecDestroy(&x);
+    result = this->solve(x,Bptr->getVector(),newLHS,true);
+    VecDestroy(&x);
+  }
 
   return result;
 }
