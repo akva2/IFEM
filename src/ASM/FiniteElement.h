@@ -114,6 +114,8 @@ public:
 protected:
   //! \brief Writes the finite element object to the given output stream.
   virtual std::ostream& write(std::ostream& os) const;
+  //! \brief Global Output stream operator.
+  friend std::ostream& operator<<(std::ostream& os, const MxFiniteElement& fe);
 
 private:
   Vectors                 Nx;
