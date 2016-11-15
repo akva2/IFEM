@@ -20,6 +20,12 @@ std::ostream& operator<< (std::ostream& os, const FiniteElement& fe)
 }
 
 
+std::ostream& operator<< (std::ostream& os, const MxFiniteElement& fe)
+{
+  return fe.write(os);
+}
+
+
 std::ostream& FiniteElement::write (std::ostream& os) const
 {
   os <<"FiniteElement: iel="<< iel <<" iGP="<< iGP <<" p="<< p
@@ -42,7 +48,7 @@ std::ostream& FiniteElement::write (std::ostream& os) const
 std::ostream& MxFiniteElement::write (std::ostream& os) const
 {
   this->FiniteElement::write(os);
-  for (size_t b = 0; b+1 < Nx.size(); b++)
+  for (size_t b = 0; b < Nx.size(); b++)
   {
     os <<"Basis "<< b+2 <<":\n";
     if (!Nx[b].empty())      os <<"N:"<< Nx[b];
