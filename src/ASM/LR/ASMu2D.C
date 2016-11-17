@@ -981,7 +981,7 @@ bool ASMu2D::integrate (Integrand& integrand,
     }
 
     // Initialize element quantities
-    LocalIntegral* A = integrand.getLocalIntegral(fe.N.size(),fe.iel);
+    LocalIntegral* A = integrand.getLocalIntegral(Xnod.cols(),fe.iel);
     if (!integrand.initElement(MNPC[iel-1],fe,X,nRed*nRed,*A)) return false;
 
     if (xr)
