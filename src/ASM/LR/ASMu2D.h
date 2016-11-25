@@ -16,6 +16,7 @@
 
 #include "ASMunstruct.h"
 #include "ASM2D.h"
+#include "LRSpline/LRSpline.h"
 #include <memory>
 
 class FiniteElement;
@@ -316,6 +317,23 @@ public:
                             const int* npe, char project = '\0') const;
 
 private:
+  //! \brief Struct representing an inhomogeneous Dirichlet boundary condition.
+  struct DirichletEdge
+  {
+    LR::LRSplineSurface *lr;   //!< Pointer to the right object (in case of multiple bases)
+    LR::parameterEdge   edg;   //!< Which edge is this
+    IntVec              MLGE;  //!< Local-to-Global Element numbers
+    IntVec              MLGN;  //!< Local-to-Global Nodal numbers
+    IntMat              MNPC;  //!< Matrix of Nodal-Point Correpondanse
+    int                 dof;   //!< Local DOF to constrain along the boundary
+    int                 code;  //!< Inhomogeneous Dirichlet condition code
+    int                 nBasis;//!< Number of basis functions with support on this edge
+
+    //! \brief Default constructor.
+    DirichletEdge(int numbBasis, int numbElements, int d = 0, int c = 0)
+    : MLGE(numbElements), MNPC(numbElements), dof(d), code(c), nBasis(numbBasis) {}
+  };
+
   //! \brief Projects the secondary solution field onto the primary basis.
   //! \param[in] integrand Object with problem-specific data and methods
   LR::LRSplineSurface* projectSolution(const IntegrandBase& integrand) const;
@@ -360,6 +378,11 @@ public:
   virtual bool globalL2projection(Matrix& sField,
                                   const IntegrandBase& integrand,
                                   bool continuous = false) const;
+
+  virtual bool edgeL2projection (const DirichletEdge& edge,
+                                 const RealFunc& values,
+                                 RealArray& result,
+                                 double time) const;
 
   //! \brief Transfers Gauss point variables from old basis to this patch.
   //! \param[in] oldBasis The LR-spline basis to transfer from
@@ -438,17 +461,6 @@ public:
   typedef std::pair<int,int> Ipair; //!< Convenience type
 
 protected:
-  //! \brief Struct representing an inhomogeneous Dirichlet boundary condition.
-  struct DirichletEdge
-  {
-    Go::SplineCurve*   curve; //!< Pointer to spline curve for the boundary
-    int                dof;   //!< Local DOF to constrain along the boundary
-    int                code;  //!< Inhomogeneous Dirichlet condition code
-    std::vector<Ipair> nodes; //!< Nodes subjected to projection on the boundary
-    //! \brief Default constructor.
-    DirichletEdge(Go::SplineCurve* sc = nullptr, int d = 0, int c = 0)
-    : curve(sc), dof(d), code(c) {}
-  };
 
   std::shared_ptr<LR::LRSplineSurface> lrspline; //!< Pointer to the LR-spline surface object
 
