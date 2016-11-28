@@ -635,20 +635,60 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
   lr->getEdgeFunctions(edgeFunctions, edge);
   lr->getEdgeElements( edgeElements,  edge);
 
+  // find the corners since these are not to be included in the L2-fitting
+  // of the inhomogenuous dirichlet boundaries; corners are interpolatory
+  // Optimization note: loop over the "edge"-conatiner to manually pick up the
+  //                    end nodes. LRspine::getEdgeFunctions() does a global search.
+  std::vector<LR::Basisfunction*> c1, c2;
+  switch (edge)
+  {
+  case LR::SOUTH:
+    lr->getEdgeFunctions(c1, LR::SOUTH_WEST);
+    lr->getEdgeFunctions(c2, LR::SOUTH_EAST);
+    break;
+  case LR::WEST:
+    lr->getEdgeFunctions(c1, LR::SOUTH_WEST);
+    lr->getEdgeFunctions(c2, LR::NORTH_WEST);
+    break;
+  case LR::EAST:
+    lr->getEdgeFunctions(c1, LR::NORTH_EAST);
+    lr->getEdgeFunctions(c2, LR::SOUTH_EAST);
+    break;
+  case LR::NORTH:
+    lr->getEdgeFunctions(c1, LR::NORTH_WEST);
+    lr->getEdgeFunctions(c2, LR::NORTH_EAST);
+    break;
+  default: return;
+  }
+
   // build up the local element/node correspondence neede by the projection
   // call on this edge by ASMu2D::updateDirichlet()
   DirichletEdge de(edgeFunctions.size(), edgeElements.size(), dof, code);
+  de.corners[0] = c1[0]->getId();
+  de.corners[1] = c2[0]->getId();
   de.edg  = edge;
   de.lr   = lr;
+  int bcode = abs(code);
 
   int j = 0;
   for (auto b : edgeFunctions )
   {
     de.MLGN[j++] = b->getId();
-    if (code <= 0)
-      this->prescribe(b->getId()+1, dof, -code);
+    // skip corners for open boundaries
+    if (open && (b->getId() == de.corners[0] || b->getId() == de.corners[1]))
+      continue;
     else
-      this->prescribe(b->getId()+1, dof, code);
+    {
+      // corners are interpolated (positive 'code')
+      if (b->getId() == de.corners[0] || b->getId() == de.corners[1])
+        this->prescribe(b->getId()+1, dof,  bcode);
+      // inhomgenuous dirichlet conditions by function evaluation (negative 'code')
+      else if (code > 0)
+        this->prescribe(b->getId()+1, dof, -bcode);
+      // (in)homgenuous constant dirichlet conditions
+      else
+        this->prescribe(b->getId()+1, dof,  bcode);
+    }
   }
 
   // build MLGE and MNPC matrix
@@ -1766,7 +1806,7 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
   std::map<int,VecFunc*>::const_iterator     vfit;
   std::map<int,int>::const_iterator          nit;
   std::vector<DirichletEdge>::const_iterator dit;
- 
+
   for (size_t i = 0; i < dirich.size(); i++)
   {
     RealArray edgeControlpoints;
@@ -1784,10 +1824,14 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
                 << std::endl;
       return false;
     }
- 
+
     // Loop over the nodes of this boundary curve
     for (nit = dirich[i].MLGN.begin(); nit != dirich[i].MLGN.end(); nit++)
     {
+      // skip corner nodes, since these are special cased (interpolatory)
+      if (nit->second == dirich[i].corners[0] ||
+          nit->second == dirich[i].corners[1])
+        continue;
       for (int dofs = dirich[i].dof; dofs > 0; dofs /= 10)
       {
         int dof = dofs%10;
@@ -1795,27 +1839,26 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
         MPC pDOF(MLGN[nit->second],dof);
         MPCIter mit = mpcs.find(&pDOF);
         if (mit == mpcs.end()) continue; // probably a deleted constraint
- 
+
 //        // Find index to the control point value for this (node,dof) in dcrv
 //        RealArray::const_iterator cit = dcrv->coefs_begin();
 //        if (dcrv->dimension() > 1) // A vector field is specified
 //          cit += (nit->first-1)*dcrv->dimension() + (dof-1);
 //        else // A scalar field is specified at this dof
 //          cit += (nit->first-1);
- 
+
         // Now update the prescribed value in the constraint equation
         (*mit)->setSlaveCoeff(edgeControlpoints[nit->first]);
  #if SP_DEBUG > 1
-          std::cout <<"Updated constraint: "<< **mit;
+        std::cout <<"Updated constraint: "<< **mit;
  #endif
       }
     }
   }
- 
+
   // The parent class method takes care of the corner nodes with direct
-  // evaluation of the Dirichlet functions (since they are interpolatory)
-  // return this->ASMbase::updateDirichlet(func,vfunc,time,g2l);
-  return true;
+  // evaluation of the Dirichlet functions; since they are interpolatory
+  return this->ASMbase::updateDirichlet(func,vfunc,time,g2l);
 }
 
 
