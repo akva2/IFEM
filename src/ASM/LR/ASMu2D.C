@@ -641,17 +641,10 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
   de.edg  = edge;
   de.lr   = lr;
 
-  // local indices are those returned by basifunction->getId() and global
-  // indices are those restricted to this edge. Those not appearing are given -1
-  de.MLGN = IntVec(lr->nBasisFunctions(), -1);
-
-  // build MLGN array
-  // optimization note: Since the MLGE vector is sparse (almost only -1) we 
-  //                    could use a stl::map<int,int> instead
   int j = 0;
   for (auto b : edgeFunctions )
   {
-    de.MLGN[b->getId()] = j++;
+    de.MLGN[j++] = b->getId();
     if (code <= 0)
       this->prescribe(b->getId()+1, dof, -code);
     else
@@ -664,7 +657,13 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
     LR::Element* el = edgeElements[i];
     de.MLGE[i] = el->getId();
     for (auto b : el->support())
-      de.MNPC[i].push_back(de.MLGN[b->getId()]);
+    {
+      de.MNPC[i].push_back(-1);
+      for (auto l2g : de.MLGN)
+        // can't do map::find, since this works on first
+        if (b->getId() == l2g.second)
+          de.MNPC[i].back() = l2g.first;
+    }
   }
   if (code > 0)
     dirich.push_back(de);
@@ -1763,8 +1762,9 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
                               const std::map<int,VecFunc*>& vfunc, double time,
                               const std::map<int,int>* g2l)
 {
-  std::map<int,RealFunc*>::const_iterator fit;
-  std::map<int,VecFunc*>::const_iterator vfit;
+  std::map<int,RealFunc*>::const_iterator    fit;
+  std::map<int,VecFunc*>::const_iterator     vfit;
+  std::map<int,int>::const_iterator          nit;
   std::vector<DirichletEdge>::const_iterator dit;
  
   for (size_t i = 0; i < dirich.size(); i++)
@@ -1786,15 +1786,13 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
     }
  
     // Loop over the nodes of this boundary curve
-    for (size_t j = 0; j<dirich[i].MLGN.size(); j++)
+    for (nit = dirich[i].MLGN.begin(); nit != dirich[i].MLGN.end(); nit++)
     {
-      if (dirich[i].MLGN[j] == -1) continue; // skip non-boundary nodes
-
       for (int dofs = dirich[i].dof; dofs > 0; dofs /= 10)
       {
         int dof = dofs%10;
         // Find the constraint equation for current (node,dof)
-        MPC pDOF(MLGN[j],dof);
+        MPC pDOF(MLGN[nit->second],dof);
         MPCIter mit = mpcs.find(&pDOF);
         if (mit == mpcs.end()) continue; // probably a deleted constraint
  
@@ -1806,7 +1804,7 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
 //          cit += (nit->first-1);
  
         // Now update the prescribed value in the constraint equation
-        (*mit)->setSlaveCoeff(edgeControlpoints[dirich[i].MLGN[j]]);
+        (*mit)->setSlaveCoeff(edgeControlpoints[nit->first]);
  #if SP_DEBUG > 1
           std::cout <<"Updated constraint: "<< **mit;
  #endif

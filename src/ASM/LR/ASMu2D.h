@@ -323,15 +323,14 @@ private:
     LR::LRSplineSurface *lr;   //!< Pointer to the right object (in case of multiple bases)
     LR::parameterEdge   edg;   //!< Which edge is this
     IntVec              MLGE;  //!< Local-to-Global Element numbers
-    IntVec              MLGN;  //!< Local-to-Global Nodal numbers
+    std::map<int,int>   MLGN;  //!< Local-to-Global Nodal numbers
     IntMat              MNPC;  //!< Matrix of Nodal-Point Correpondanse
     int                 dof;   //!< Local DOF to constrain along the boundary
     int                 code;  //!< Inhomogeneous Dirichlet condition code
-    int                 nBasis;//!< Number of basis functions with support on this edge
 
     //! \brief Default constructor.
     DirichletEdge(int numbBasis, int numbElements, int d = 0, int c = 0)
-    : MLGE(numbElements), MNPC(numbElements), dof(d), code(c), nBasis(numbBasis) {}
+    : MLGE(numbElements), MNPC(numbElements), dof(d), code(c) {}
   };
 
   //! \brief Projects the secondary solution field onto the primary basis.

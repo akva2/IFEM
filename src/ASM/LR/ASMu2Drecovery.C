@@ -468,7 +468,7 @@ bool ASMu2D::edgeL2projection (const DirichletEdge& edge,
                                RealArray& result,
                                double time) const
 {
-  size_t n = edge.nBasis;
+  size_t n = edge.MLGN.size();
   SparseMatrix A(SparseMatrix::SUPERLU);
   StdVector    B(n);
   A.resize(n,n);
@@ -592,8 +592,7 @@ bool ASMu2D::edgeL2projection (const DirichletEdge& edge,
   int i=-1;
   for (auto d : edge.MLGN) {
     i++;
-    if (d != -1)
-      std::cout << i << ": " << d << std::endl;
+    std::cout << d.first << ": " << d.second << std::endl;
   }
   std::cout <<"-------------------"<< std::endl;
   std::cout <<"---- Element-nodes (-1 is interior element nodes) -----\n";
