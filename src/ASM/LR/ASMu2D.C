@@ -1810,15 +1810,18 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
   for (size_t i = 0; i < dirich.size(); i++)
   {
     RealArray edgeControlpoints;
+    Real2DMat edgeControlmatrix;
     if ((fit = func.find(dirich[i].code)) != func.end())
       edgeL2projection(dirich[i], *fit->second, edgeControlpoints, time);
+    else if ((vfit = vfunc.find(dirich[i].code)) != vfunc.end())
+      edgeL2projection(dirich[i], *vfit->second, edgeControlmatrix, time);
     else
     {
       std::cerr <<" *** ASMu2D::updateDirichlet: Code "<< dirich[i].code
                 <<" is not associated with any function."<< std::endl;
       return false;
     }
-    if (edgeControlpoints.empty())
+    if (edgeControlpoints.empty() && edgeControlmatrix.empty())
     {
       std::cerr <<" *** ASMu2D::updateDirichlet: Projection failure."
                 << std::endl;
@@ -1840,15 +1843,11 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
         MPCIter mit = mpcs.find(&pDOF);
         if (mit == mpcs.end()) continue; // probably a deleted constraint
 
-//        // Find index to the control point value for this (node,dof) in dcrv
-//        RealArray::const_iterator cit = dcrv->coefs_begin();
-//        if (dcrv->dimension() > 1) // A vector field is specified
-//          cit += (nit->first-1)*dcrv->dimension() + (dof-1);
-//        else // A scalar field is specified at this dof
-//          cit += (nit->first-1);
-
         // Now update the prescribed value in the constraint equation
-        (*mit)->setSlaveCoeff(edgeControlpoints[nit->first]);
+        if (edgeControlpoints.empty()) // vector conditions
+          (*mit)->setSlaveCoeff(edgeControlmatrix[dof-1][nit->first]);
+        else                           //scalar condition
+          (*mit)->setSlaveCoeff(edgeControlpoints[nit->first]);
  #if SP_DEBUG > 1
         std::cout <<"Updated constraint: "<< **mit;
  #endif

@@ -379,10 +379,25 @@ public:
                                   const IntegrandBase& integrand,
                                   bool continuous = false) const;
 
-  virtual bool edgeL2projection (const DirichletEdge& edge,
-                                 const RealFunc& values,
-                                 RealArray& result,
-                                 double time) const;
+  //! \brief Projects inhomogenuous (scalar) dirichlet conditions by continuous L2-fit
+  //! \param[in] edge low-level edge information needed to do integration
+  //! \param[in] values inhomogenuous function which is to be fitted
+  //! \param[out] result fitted value in terms of control-point values
+  //! \param[in] time time used in dynamic problems
+  bool edgeL2projection (const DirichletEdge& edge,
+                         const RealFunc& values,
+                         RealArray& result,
+                         double time) const;
+
+  //! \brief Projects inhomogenuous (vector) dirichlet conditions by continuous L2-fit
+  //! \param[in] edge low-level edge information needed to do integration
+  //! \param[in] values inhomogenuous function which is to be fitted
+  //! \param[out] result fitted value in terms of control-point values
+  //! \param[in] time time used in dynamic problems
+  bool edgeL2projection (const DirichletEdge& edge,
+                         const VecFunc& values,
+                         Real2DMat& result,
+                         double time) const;
 
   //! \brief Transfers Gauss point variables from old basis to this patch.
   //! \param[in] oldBasis The LR-spline basis to transfer from
