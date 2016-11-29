@@ -597,7 +597,7 @@ bool ASMu2D::edgeL2projection (const DirichletEdge& edge,
   std::cout <<"-------------------"<< std::endl;
   std::cout <<"---- Element-nodes (-1 is interior element nodes) -----\n";
   for (auto d : edge.MNPC) {
-    for (auto c : d)
+    for (int c : d)
       std::cout << c << " ";
     std::cout << std::endl;
   }
@@ -759,7 +759,7 @@ bool ASMu2D::edgeL2projection (const DirichletEdge& edge,
   std::cout <<"-------------------"<< std::endl;
   std::cout <<"---- Element-nodes (-1 is interior element nodes) -----\n";
   for (auto d : edge.MNPC) {
-    for (auto c : d)
+    for (int c : d)
       std::cout << c << " ";
     std::cout << std::endl;
   }
