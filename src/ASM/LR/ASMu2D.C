@@ -616,6 +616,11 @@ std::vector<int> ASMu2D::getEdgeNodes (int edge, int basis) const
 
 void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
 {
+  // figure out function index offset (when using multiple basis)
+  size_t ofs = 1;
+  for (int i = 1; i < basis; i++)
+    ofs += this->getNoNodes(i);
+
   // figure out what edge we are at
   LR::parameterEdge edge;
   switch (dir) {
@@ -663,7 +668,7 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
 
   // build up the local element/node correspondence neede by the projection
   // call on this edge by ASMu2D::updateDirichlet()
-  DirichletEdge de(edgeFunctions.size(), edgeElements.size(), dof, code);
+  DirichletEdge de(edgeFunctions.size(), edgeElements.size(), dof, code, basis);
   de.corners[0] = c1[0]->getId();
   de.corners[1] = c2[0]->getId();
   de.edg  = edge;
@@ -681,13 +686,13 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
     {
       // corners are interpolated (positive 'code')
       if (b->getId() == de.corners[0] || b->getId() == de.corners[1])
-        this->prescribe(b->getId()+1, dof,  bcode);
+        this->prescribe(b->getId()+ofs, dof,  bcode);
       // inhomgenuous dirichlet conditions by function evaluation (negative 'code')
       else if (code > 0)
-        this->prescribe(b->getId()+1, dof, -bcode);
+        this->prescribe(b->getId()+ofs, dof, -bcode);
       // (in)homgenuous constant dirichlet conditions
       else
-        this->prescribe(b->getId()+1, dof,  bcode);
+        this->prescribe(b->getId()+ofs, dof,  bcode);
     }
   }
 
@@ -1802,6 +1807,7 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
                               const std::map<int,VecFunc*>& vfunc, double time,
                               const std::map<int,int>* g2l)
 {
+
   std::map<int,RealFunc*>::const_iterator    fit;
   std::map<int,VecFunc*>::const_iterator     vfit;
   std::map<int,int>::const_iterator          nit;
@@ -1809,6 +1815,11 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
 
   for (size_t i = 0; i < dirich.size(); i++)
   {
+    // figure out function index offset (when using multiple basis)
+    size_t ofs = 0;
+    for (int j = 1; j < dirich[j].basis; j++)
+      ofs += this->getNoNodes(j);
+
     RealArray edgeControlpoints;
     Real2DMat edgeControlmatrix;
     if ((fit = func.find(dirich[i].code)) != func.end())
@@ -1839,7 +1850,7 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
       {
         int dof = dofs%10;
         // Find the constraint equation for current (node,dof)
-        MPC pDOF(MLGN[nit->second],dof);
+        MPC pDOF(MLGN[nit->second]+ofs,dof);
         MPCIter mit = mpcs.find(&pDOF);
         if (mit == mpcs.end()) continue; // probably a deleted constraint
 

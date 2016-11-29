@@ -327,11 +327,12 @@ private:
     IntMat              MNPC;      //!< Matrix of Nodal-Point Correpondanse
     int                 dof;       //!< Local DOF to constrain along the boundary
     int                 code;      //!< Inhomogeneous Dirichlet condition code
+    int                 basis;     //!< Index to the basis used
     int                 corners[2];//!< Index of the two end-points of this line
 
     //! \brief Default constructor.
-    DirichletEdge(int numbBasis, int numbElements, int d = 0, int c = 0)
-    : MLGE(numbElements), MNPC(numbElements), dof(d), code(c) {}
+    DirichletEdge(int numbBasis, int numbElements, int d = 0, int c = 0, int b = 1)
+    : MLGE(numbElements), MNPC(numbElements), dof(d), code(c), basis(b) {}
   };
 
   //! \brief Projects the secondary solution field onto the primary basis.
