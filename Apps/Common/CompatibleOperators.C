@@ -21,11 +21,9 @@ void CompatibleOperators::Weak::Advection(std::vector<Matrix>& EM,
                                           const Vec3& AC, double scale)
 {
   size_t nsd = fe.grad(1).cols();
+  Vector c(AC.ptr(), nsd);
   for (size_t n = 1; n <= nsd; ++n)
-    for (size_t i = 1; i <= fe.basis(n).size(); ++i)
-      for (size_t j = 1; j <= fe.basis(n).size(); ++j)
-        for (size_t k = 1; k <= nsd; ++k)
-          EM[n](i,j) += scale*AC[k]*fe.grad(n)(j,k)*fe.basis(n)(i)*fe.detJxW;
+    EM[n].outer_product(fe.basis(n), fe.grad(n)*c, true, scale*fe.detJxW);
 }
 
 
@@ -41,16 +39,15 @@ void CompatibleOperators::Weak::Convection(std::vector<Matrix>& EM,
                                     {10, 2, 11},
                                     {14, 15, 3}};
   size_t nsd = fe.grad(1).cols();
+  Vector u(U.ptr(), nsd);
   for (size_t m=1; m <= nsd; ++m)
-    for (size_t i=1; i <= fe.basis(m).size(); ++i)
-      for (size_t n = 1; n <= nsd; ++n)
-        for (size_t j=1; j <= fe.basis(n).size(); ++j) {
-          double conv = fe.basis(n)(j) * dUdX(m,n);
-          if (m == n)
-            for (size_t k = 1; k <= nsd; ++k)
-              conv += U[k-1] * fe.grad(n)(j,k);
-          EM[vidx[m-1][n-1]](i,j) += scale * conv * fe.basis(m)(i) * fe.detJxW;
-        }
+    for (size_t n = 1; n <= nsd; ++n) {
+      EM[vidx[m-1][n-1]].outer_product(fe.basis(m), fe.basis(n),
+                                       true, dUdX(m,n)*scale*fe.detJxW);
+      if (m == n)
+        EM[vidx[m-1][n-1]].outer_product(fe.basis(m), fe.grad(n)*u,
+                                         true, scale*fe.detJxW);
+    }
 }
 
 
@@ -84,12 +81,11 @@ void CompatibleOperators::Weak::Laplacian(std::vector<Matrix>& EM,
     EqualOrderOperators::Weak::Laplacian(EM[n], fe, scale, false, n);
 
   for (size_t m = 1; m <= nsd && stress; m++)
-    for (size_t i = 1; i <= fe.basis(m).size(); ++i)
-      for (size_t n = m; n <= nsd; n++)
-        for (size_t j = 1; j <= fe.basis(n).size(); ++j) {
-          int idx = m == n ? m : (m == 1 ? 5+n-m : 10+n-m);
-          EM[idx](i,j) += scale* fe.grad(n)(j,m) * fe.grad(m)(i,n) * fe.detJxW;
-        }
+    for (size_t n = m; n <= nsd; n++) {
+      int idx = m == n ? m : (m == 1 ? 5+n-m : 10+n-m);
+      EM[idx].multiply(fe.grad(m), fe.grad(n), false, true,
+                       true, scale*fe.detJxW);
+    }
 }
 
 
@@ -124,13 +120,9 @@ void CompatibleOperators::Residual::Convection(Vectors& EV, const FiniteElement&
                                                bool conservative)
 {
   size_t nsd = fe.grad(1).cols();
-  for (size_t n=1; n <= nsd; ++n) {
-    double conv = 0.0;
-    for (size_t k = 1; k<= nsd; ++k)
-      conv += U[k-1]*dUdX(n, k);
-    for (size_t i=1; i <= fe.basis(n).size(); ++i)
-      EV[n](i) -= scale * conv * fe.basis(n)(i) * fe.detJxW;
-  }
+  Vec3 udu = dUdX*U;
+  for (size_t n=1; n <= nsd; ++n)
+    EV[n].add(fe.basis(n), -scale*udu[n-1]*fe.detJxW);
 }
 
 
@@ -140,6 +132,8 @@ void CompatibleOperators::Residual::Laplacian(Vectors& EV,
                                               double scale, bool stress)
 {
   size_t nsd = fe.grad(1).cols();
+  Matrix dUdXt(nsd, nsd);
+  dUdXt = dUdX;
   for (size_t k = 1; k <= nsd; ++k)
     for (size_t i = 1; i <= fe.basis(k).size(); ++i) {
       double diff = 0.0;

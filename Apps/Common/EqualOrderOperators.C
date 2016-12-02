@@ -55,18 +55,16 @@ void EqualOrderOperators::Weak::Advection(Matrix& EM, const FiniteElement& fe,
                                           const Vec3& AC,
                                           double scale, int basis)
 {
-  Matrix C(fe.basis(basis).size(), fe.basis(basis).size());
-  size_t ncmp = EM.rows() / C.rows();
-  for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
-    for (size_t j = 1; j <= fe.basis(basis).size(); ++j) {
-      // Sum convection for each direction
-      for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
-        C(i,j) += AC[k-1]*fe.grad(basis)(j,k);
-
-      C(i,j) *= scale*fe.basis(basis)(i)*fe.detJxW;
-    }
+  size_t ncmp = EM.rows() / fe.basis(1).size();
+  size_t nsd = fe.grad(1).cols();
+  Vector c(AC.ptr(), nsd);
+  if (ncmp == 1)
+    EM.outer_product(fe.basis(basis), fe.grad(basis)*c, true, scale*fe.detJxW);
+  else {
+    Matrix C(fe.basis(basis).size(), fe.basis(basis).size());
+    C.outer_product(fe.basis(basis), fe.grad(basis)*c, true, scale*fe.detJxW);
+    addComponents(EM, C, ncmp, ncmp, 0);
   }
-  addComponents(EM, C, ncmp, ncmp, 0);
 }
 
 
@@ -115,12 +113,8 @@ void EqualOrderOperators::Weak::Gradient(Matrix& EM, const FiniteElement& fe,
 void EqualOrderOperators::Weak::Divergence(Vector& EV, const FiniteElement& fe,
                                            const Vec3& D, double scale, int basis)
 {
-  for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
-    double div=0.0;
-    for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
-      div += D[k-1]*fe.grad(basis)(i,k);
-    EV(i) += scale*div*fe.detJxW;
-  }
+  size_t nsd = fe.grad(1).cols();
+  fe.grad(basis).multiply(Vector(D.ptr(),nsd), EV, scale*fe.detJxW, 1.0);
 }
 
 
@@ -138,10 +132,13 @@ void EqualOrderOperators::Weak::Laplacian(Matrix& EM, const FiniteElement& fe,
                                           double scale, bool stress, int basis)
 {
   size_t cmp = EM.rows() / fe.basis(basis).size();
-  Matrix A;
-  A.multiply(fe.grad(basis),fe.grad(basis),false,true);
-  A *= scale*fe.detJxW;
-  addComponents(EM, A, cmp, cmp, 0);
+  if (cmp == 1) {
+    EM.multiply(fe.grad(basis),fe.grad(basis),false,true,true,scale*fe.detJxW);
+  } else {
+    Matrix A;
+    A.multiply(fe.grad(basis),fe.grad(basis),false,true,false,scale*fe.detJxW);
+    addComponents(EM, A, cmp, cmp, 0);
+  }
   if (stress)
     for (size_t i = 1; i <= fe.basis(basis).size(); i++)
       for (size_t j = 1; j <= fe.basis(basis).size(); j++)
@@ -165,10 +162,13 @@ void EqualOrderOperators::Weak::Mass(Matrix& EM, const FiniteElement& fe,
                                      double scale, int basis)
 {
   size_t ncmp = EM.rows()/fe.basis(basis).size();
-  Matrix A;
-  A.outer_product(fe.basis(basis),fe.basis(basis),false);
-  A *= scale*fe.detJxW;
-  addComponents(EM, A, ncmp, ncmp, 0);
+  if (ncmp == 1)
+    EM.outer_product(fe.basis(basis), fe.basis(basis), true, scale*fe.detJxW);
+  else {
+    Matrix A;
+    A.outer_product(fe.basis(basis),fe.basis(basis),false, scale*fe.detJxW);
+    addComponents(EM, A, ncmp, ncmp, 0);
+  }
 }
 
 
@@ -229,10 +229,5 @@ void EqualOrderOperators::Residual::Divergence(Vector& EV, const FiniteElement& 
                                                 const Tensor& dUdX,
                                                 double scale, size_t basis)
 {
-  for (size_t i = 1; i <= fe.basis(basis).size(); ++i) {
-    double div=0.0;
-    for (size_t k = 1; k <= fe.grad(basis).cols(); ++k)
-      div += dUdX(k,k);
-    EV(i) += scale*div*fe.basis(basis)(i)*fe.detJxW;
-  }
+  EV.add(fe.basis(basis), dUdX.trace()*scale*fe.detJxW);
 }
