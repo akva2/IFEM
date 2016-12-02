@@ -57,9 +57,9 @@ void CompatibleOperators::Weak::Gradient(std::vector<Matrix>& EM,
 {
   size_t nsd = fe.grad(1).cols();
   for (size_t n = 1; n <= nsd; ++n)
-    for (size_t i=1; i <= fe.basis(n).size(); ++i)
-      for (size_t j=1; j <= fe.basis(nsd+1).size(); ++j)
-        EM[8+4*(n-1)](i,j) += -scale*fe.grad(n)(i,n)*fe.basis(nsd+1)(j)*fe.detJxW;
+    EM[8+4*(n-1)].outer_product(fe.grad(n).getColumn(n),
+                                fe.basis(nsd+1),
+                                true, -scale*fe.detJxW);
 }
 
 
@@ -132,13 +132,10 @@ void CompatibleOperators::Residual::Laplacian(Vectors& EV,
                                               double scale, bool stress)
 {
   size_t nsd = fe.grad(1).cols();
-  Matrix dUdXt(nsd, nsd);
-  dUdXt = dUdX;
-  for (size_t k = 1; k <= nsd; ++k)
-    for (size_t i = 1; i <= fe.basis(k).size(); ++i) {
-      double diff = 0.0;
-      for (size_t m = 1; m <= nsd; ++m)
-        diff += fe.grad(k)(i,m)*dUdX(k,m);
-      EV[k](i) += scale*diff*fe.detJxW;
-    }
+  Tensor d(dUdX);
+  d.transpose();
+  for (size_t k = 1; k <= nsd; ++k) {
+    Vector t(d[k-1].ptr(), nsd);
+    EV[k].add(fe.grad(k)*t, scale*fe.detJxW);
+  }
 }

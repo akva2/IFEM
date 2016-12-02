@@ -198,30 +198,20 @@ void EqualOrderOperators::Weak::Source(Vector& EV, const FiniteElement& fe,
 
 
 void EqualOrderOperators::Residual::Convection(Vector& EV, const FiniteElement& fe,
-                                                const Vec3& U, const Tensor& dUdX,
+                                               const Vec3& U, const Tensor& dUdX,
                                                const Vec3& UC, double scale,
                                                bool conservative, int basis)
 {
   size_t cmp = EV.size() / fe.basis(basis).size();
+  size_t nsd = fe.grad(1).cols();
   if (conservative) {
-    for (size_t i = 1;i <= fe.basis(basis).size();i++)
-      for (size_t k = 1;k <= cmp;k++)
-        for (size_t l = 1;l <= cmp;l++)
-          // Convection
-          EV((i-1)*cmp + k) += scale*U[k-1]*UC[l-1]*fe.grad(basis)(i,l)*fe.detJxW;
+    Vector uc(UC.ptr(), nsd);
+    for (size_t k = 1;k <= cmp;k++)
+      fe.grad(basis).multiply(uc, EV, U[k-1]*scale*fe.detJxW, 1.0, false,
+                              1, nsd, 0, k-1);
   }
-  else {
-    for (size_t k = 1;k <= cmp;k++) {
-      // Convection
-      double conv = 0.0;
-      for (size_t l = 1;l <= cmp;l++)
-        conv += UC[l-1]*dUdX(k,l);
-      conv *= scale*fe.detJxW;
-
-      for (size_t i = 1;i <= fe.basis(basis).size();i++)
-        EV((i-1)*cmp + k) -= conv*fe.basis(basis)(i);
-    }
-  }
+  else
+    EqualOrderOperators::Weak::Source(EV, fe, dUdX*UC, -scale, basis);
 }
 
 
