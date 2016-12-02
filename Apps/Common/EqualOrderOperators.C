@@ -132,19 +132,20 @@ void EqualOrderOperators::Weak::Laplacian(Matrix& EM, const FiniteElement& fe,
                                           double scale, bool stress, int basis)
 {
   size_t cmp = EM.rows() / fe.basis(basis).size();
+  Matrix A;
   if (cmp == 1) {
     EM.multiply(fe.grad(basis),fe.grad(basis),false,true,true,scale*fe.detJxW);
   } else {
-    Matrix A;
     A.multiply(fe.grad(basis),fe.grad(basis),false,true,false,scale*fe.detJxW);
     addComponents(EM, A, cmp, cmp, 0);
   }
-  if (stress)
-    for (size_t i = 1; i <= fe.basis(basis).size(); i++)
-      for (size_t j = 1; j <= fe.basis(basis).size(); j++)
-        for (size_t k = 1; k <= cmp; k++)
-          for (size_t l = 1; l <= cmp; l++)
-            EM(cmp*(j-1)+k,cmp*(i-1)+l) += scale*fe.grad(basis)(i,k)*fe.grad(basis)(j,l)*fe.detJxW;
+  if (stress) {
+    for (size_t k = 1; k <= cmp; k++)
+      for (size_t l = 1; l <= cmp; l++)
+        for (size_t i = 1; i <= fe.basis(basis).size(); i++)
+          for (size_t j = 1; j <= fe.basis(basis).size(); j++)
+             EM(cmp*(j-1)+k,cmp*(i-1)+l) += A(i,j);
+  }
 }
 
 
