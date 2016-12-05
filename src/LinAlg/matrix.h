@@ -1041,8 +1041,6 @@ namespace utl //! General utility classes and functions.
                                int stridex, int stridey, int ofsx,
                                int ofsy) const
   {
-    if (!this->compatible(X,transA)) return false;
-
     cblas_sgemv(CblasColMajor,
                 transA ? CblasTrans : CblasNoTrans,
                 nrow, ncol, alpha,
@@ -1078,8 +1076,6 @@ namespace utl //! General utility classes and functions.
                                 int stridex, int stridey,
                                 int ofsx, int ofsy) const
   {
-    if (!this->compatible(X,transA)) return false;
-
     cblas_dgemv(CblasColMajor,
                 transA ? CblasTrans : CblasNoTrans,
                 nrow, ncol, alpha,
