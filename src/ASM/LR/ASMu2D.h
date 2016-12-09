@@ -96,7 +96,7 @@ public:
   //! \param glbNodes Array of global boundary node numbers
   //! \param local If true return patch-local node numbers
   virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes,
-                                int basis, bool local = false) const;
+                                int basis, int, bool local = false) const;
 
   //! \brief Returns the polynomial order in each parameter direction.
   //! \param[out] p1 Order in first (u) direction

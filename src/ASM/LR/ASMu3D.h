@@ -92,7 +92,7 @@ public:
   //! \param glbNodes Array of global boundary node numbers
   //! \param local If true return patch-local node numbers
   virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes,
-                                int basis, bool local) const;
+                                int basis, int, bool local) const;
 
   //! \brief Returns the node index for a given corner.
   virtual int getCorner(int I, int J, int K, int basis = 1) const;
