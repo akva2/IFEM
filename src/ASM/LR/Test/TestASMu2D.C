@@ -46,9 +46,9 @@ TEST_P(TestASMu2D, ConstrainEdge)
   ASMu2D*pch = getPatch(sim);
   ASSERT_TRUE(pch != nullptr);
   pch->constrainEdge(GetParam().edgeIdx, false, 1, 1, 1);
-  std::vector<int> glbNodes;
-  pch->getBoundaryNodes(GetParam().edge, glbNodes, 1, 1);
-  for (int& it : glbNodes)
+  std::vector<int> nodes;
+  pch->getBoundaryNodes(GetParam().edge, nodes, 1, 1);
+  for (int& it : nodes)
     ASSERT_TRUE(pch->findMPC(it, 1) != nullptr);
 }
 
@@ -59,15 +59,15 @@ TEST_P(TestASMu2D, ConstrainEdgeOpen)
   ASMu2D* pch = getPatch(sim);
   ASSERT_TRUE(pch != nullptr);
   pch->constrainEdge(GetParam().edgeIdx, true, 1, 1, 1);
-  std::vector<int> glbNodes;
-  pch->getBoundaryNodes(GetParam().edge, glbNodes, 1, 1);
+  std::vector<int> nodes;
+  pch->getBoundaryNodes(GetParam().edge, nodes, 1, 1);
   int crn = pch->getCorner(GetParam().c1[0], GetParam().c1[1], 1);
   ASSERT_TRUE(pch->findMPC(crn, 1) == nullptr);
-  glbNodes.erase(std::find(glbNodes.begin(), glbNodes.end(), crn));
+  nodes.erase(std::find(nodes.begin(), nodes.end(), crn));
   crn = pch->getCorner(GetParam().c2[0], GetParam().c2[1], 1);
   ASSERT_TRUE(pch->findMPC(crn, 1) == nullptr);
-  glbNodes.erase(std::find(glbNodes.begin(), glbNodes.end(), crn));
-  for (int& it : glbNodes)
+  nodes.erase(std::find(nodes.begin(), nodes.end(), crn));
+  for (int& it : nodes)
     ASSERT_TRUE(pch->findMPC(it, 1) != nullptr);
 }
 

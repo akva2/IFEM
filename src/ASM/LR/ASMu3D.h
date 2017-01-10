@@ -87,11 +87,12 @@ public:
   //! \brief Returns the node indices for a given face.
   std::vector<int> getFaceNodes(int face, int basis = 1) const;
 
-  //! \brief Finds the global numbers of the nodes on a patch boundary.
-  //! \param[in] lIndex Local index of the boundary edge
-  //! \param glbNodes Array of global boundary node numbers
+  //! \brief Finds the global (or patch-local) node numbers on a patch boundary.
+  //! \param[in] lIndex Local index of the boundary face
+  //! \param nodes Array of node numbers
+  //! \param basis Which basis to grab nodes for (0 for all)
   //! \param local If true return patch-local node numbers
-  virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes,
+  virtual void getBoundaryNodes(int lIndex, IntVec& nodes,
                                 int basis, int, bool local) const;
 
   //! \brief Returns the node index for a given corner.

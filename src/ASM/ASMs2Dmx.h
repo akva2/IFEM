@@ -209,13 +209,13 @@ public:
   //! \param[in] basis Which basis to return size parameters for
   virtual bool getSize(int& n1, int& n2, int basis = 0) const;
 
-  //! \brief Finds the global numbers of the nodes on a patch boundary.
+  //! \brief Finds the global (or patch-local) node numbers on a patch boundary.
   //! \param[in] lIndex Local index of the boundary edge
-  //! \param glbNodes Array of global boundary node numbers
+  //! \param nodes Array of node numbers
   //! \param basis Which basis to grab nodes for (0 for all)
   //! \param thick Thickness of connection
   //! \param local If true return patch-local node numbers
-  virtual void getBoundaryNodes(int lIndex, IntVec& glbNodes, int basis,
+  virtual void getBoundaryNodes(int lIndex, IntVec& nodes, int basis,
                                 int thick = 1, bool local = false) const;
 
 protected:
