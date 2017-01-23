@@ -94,6 +94,14 @@ public:
   static Go::SplineSurface getSubPatch(const Go::SplineSurface* srf,
       const size_t startu, const size_t numcoefsu, const int orderu,
       const size_t startv, const size_t numcoefsv, const int orderv);
+  //! \brief Establishes mixed subdivision bases.
+  //! \param sim Simulator object holding MixedType information
+  bool establishSubdivisionBases (SIMinput& sim) const;
+
+  //! \brief Extend basis (raise order and continuity) tuned for subdivided patches.
+  //! \param[in] old Spline basis to extend
+  //! \return New spline basis
+  static Go::BsplineBasis extendedBasis(const Go::BsplineBasis& old);
 
 protected:
   //! \brief Generates the G2 description of the geometry.
