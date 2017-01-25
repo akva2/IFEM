@@ -20,6 +20,12 @@
 #include <GoTools/trivariate/SplineVolume.h>
 
 
+//! \brief Extend basis (raise order and continuity) tuned for subdivided patches.
+//! \param[in] old Spline basis to extend
+//! \return New spline basis
+Go::BsplineBasis extendedBasis(const Go::BsplineBasis& old);
+
+
 /*!
   \brief 1D multi-patch model generator for FEM simulators.
   \details Generate a line split in a given number of blocks.
@@ -97,11 +103,6 @@ public:
   //! \brief Establishes mixed subdivision bases.
   //! \param sim Simulator object holding MixedType information
   bool establishSubdivisionBases (SIMinput& sim) const;
-
-  //! \brief Extend basis (raise order and continuity) tuned for subdivided patches.
-  //! \param[in] old Spline basis to extend
-  //! \return New spline basis
-  static Go::BsplineBasis extendedBasis(const Go::BsplineBasis& old);
 
 protected:
   //! \brief Generates the G2 description of the geometry.

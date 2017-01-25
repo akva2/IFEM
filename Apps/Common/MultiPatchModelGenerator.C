@@ -419,7 +419,7 @@ Go::SplineSurface MultiPatchModelGenerator2D::getSubPatch(
 }
 
 
-Go::BsplineBasis MultiPatchModelGenerator2D::extendedBasis(const Go::BsplineBasis& bOld)
+Go::BsplineBasis extendedBasis(const Go::BsplineBasis& bOld)
 {
   auto i0 = bOld.begin(), i1 = bOld.end()-1;
   std::vector<double> knots = const_cast<Go::BsplineBasis&>(bOld).getKnots();
@@ -446,8 +446,8 @@ bool MultiPatchModelGenerator2D::establishSubdivisionBases (SIMinput& sim) const
     if (ASMmxBase::Type == ASMmxBase::FULL_CONT_RAISE_BASIS1)
     {
       int ndim = surf->dimension();
-      Go::BsplineBasis b1 = this->extendedBasis(surf->basis(0));
-      Go::BsplineBasis b2 = this->extendedBasis(surf->basis(1));
+      Go::BsplineBasis b1 = extendedBasis(surf->basis(0));
+      Go::BsplineBasis b2 = extendedBasis(surf->basis(1));
 
       RealArray ug(b1.numCoefs()), vg(b2.numCoefs());
       for (int i = 0; i < b1.numCoefs(); i++)

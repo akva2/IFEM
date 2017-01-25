@@ -624,17 +624,17 @@ TEST(TestMultiPatchModelGenerator, ExtendedBasis2D)
 {
   std::vector<double> knots {0.0, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.0};
   Go::BsplineBasis basis(2, knots.begin(), knots.end());
-  Go::BsplineBasis nBasis = MultiPatchModelGenerator2D::extendedBasis(basis);
+  Go::BsplineBasis nBasis = extendedBasis(basis);
   std::vector<double> nknots {0.0, 0.0, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.0, 1.0};
   check_vector_double_near(nBasis.getKnots(),nknots);
 
   Go::BsplineBasis basis2(2, knots.begin(), knots.begin()+4);
-  nBasis = MultiPatchModelGenerator2D::extendedBasis(basis2);
+  nBasis = extendedBasis(basis2);
   nknots = {0.0, 0.0, 0.0, 0.2, 0.4, 0.6};
   check_vector_double_near(nBasis.getKnots(),nknots);
 
   Go::BsplineBasis basis3(2, knots.begin()+4, knots.end());
-  nBasis = MultiPatchModelGenerator2D::extendedBasis(basis3);
+  nBasis = extendedBasis(basis3);
   nknots = {0.4, 0.6, 0.8, 1.0, 1.0, 1.0};
   check_vector_double_near(nBasis.getKnots(),nknots);
 }
