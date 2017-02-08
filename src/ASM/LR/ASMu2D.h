@@ -17,6 +17,7 @@
 #include "ASMunstruct.h"
 #include "ASM2D.h"
 #include "LRSpline/LRSpline.h"
+#include "ThreadGroups.h"
 #include <memory>
 
 class FiniteElement;
@@ -355,6 +356,16 @@ private:
                                             const Matrix& points) const;
 
 public:
+  //! \brief Generates element groups for multi-threading of interior integrals.
+  //! \param[in] integrand Object with problem-specific data and methods
+  //! \param[in] silence If \e true, suppress threading group outprint
+  //! \param[in] ignoreGlobalLM If \e true ignore global multipliers in sanity check
+  void generateThreadGroups(const Integrand& integrand, bool silence,
+                            bool ignoreGlobalLM);
+
+  //! \brief Thread groups accessor.
+  const ThreadGroups& getThreadGroups() const { return threadGroups; }
+
   //! \brief Projects the secondary solution field onto the primary basis.
   //! \param[in] integrand Object with problem-specific data and methods
   virtual LR::LRSpline* evalSolution(const IntegrandBase& integrand) const;
@@ -497,6 +508,8 @@ protected:
 
   Go::BsplineBasis bezier_u;
   Go::BsplineBasis bezier_v;
+
+  ThreadGroups threadGroups; //!< Element groups for multi-threaded assembly
 };
 
 #endif

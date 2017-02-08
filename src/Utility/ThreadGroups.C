@@ -12,16 +12,16 @@
 //==============================================================================
 
 #include "ThreadGroups.h"
-#if SP_DEBUG > 1
+//#if SP_DEBUG > 1
 #include <iostream>
-#endif
+//#endif
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
 
 
 void ThreadGroups::calcGroups (const BoolVec& el1, const BoolVec& el2,
-                               int p1, int p2)
+                               int p1, int p2, int dir)
 {
   // Count the non-zero element in each direction, the zero-span elements
   // should not affect the partitioning as they don't involve any work
@@ -34,11 +34,12 @@ void ThreadGroups::calcGroups (const BoolVec& el1, const BoolVec& el2,
   int threads=1;
   int stripsize=0;
   int remainder=0;
-  int dir=0, mul=1;
+  int mul=1;
 #ifdef USE_OPENMP
   threads = omp_get_max_threads();
   int parts = threads > 1 ? 2*threads : 1;
-  dir = getStripDirection(nel1,nel2,parts);
+  if (dir < 0)
+    dir = getStripDirection(nel1,nel2,parts);
   mul = dir == 0 ? 1 : el1.size();
   int els = dir == 0 ? nel1 : nel2;
 

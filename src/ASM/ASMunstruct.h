@@ -16,6 +16,7 @@
 
 #include "ASMbase.h"
 #include "GoTools/geometry/BsplineBasis.h"
+#include "ThreadGroups.h"
 
 
 namespace LR {
@@ -71,6 +72,10 @@ namespace LR {
   //! \param[in] xi Dimensionless Gauss point coordinates [-1,1]
   void getGaussPointParameters(const LRSpline* spline, RealArray& uGP,
                                int dir, int nGauss, int iel, const double* xi);
+
+  //! \brief Generate thread groups for a LRSpline mesh
+  //! \param[in] lr The LR spline to generate thread groups for
+  ThreadGroups generateThreadGroups(const LR::LRSpline* lr);
 }
 
 
