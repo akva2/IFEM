@@ -35,7 +35,6 @@
 #include "Vec3Oper.h"
 #include <array>
 #include <fstream>
-#include <omp.h>
 
 
 ASMu2D::ASMu2D (unsigned char n_s, unsigned char n_f)
@@ -1264,8 +1263,7 @@ bool ASMu2D::integrate (Integrand& integrand,
       {
         ok = false;
         continue;
-      }        
-
+      }
 
       // --- Integration loop over all quadrature points in this element ---------
 
