@@ -21,11 +21,29 @@
 #include "ASMs3DLag.h"
 #include "ASMs2Dmx.h"
 #include "ASMs3Dmx.h"
+#ifdef HAS_LRSPLINE
+#include "LR/LRSplineFields2D.h"
+#include "LR/LRSplineFields2Dmx.h"
+#include "LR/LRSplineFields3D.h"
+#include "ASMu2D.h"
+#include "ASMu2Dmx.h"
+#include "ASMu3D.h"
+#endif
 
 
 Fields* Fields::create (const ASMbase* pch, const RealArray& v,
 			char basis, const char* name)
 {
+#ifdef HAS_LRSPLINE
+  const ASMu2Dmx* pu2mx = dynamic_cast<const ASMu2Dmx*>(pch);
+  if (pu2mx) return new LRSplineFields2Dmx(pu2mx,v,basis,name);
+
+  const ASMu2D* pu2 = dynamic_cast<const ASMu2D*>(pch);
+  if (pu2) return new LRSplineFields2D(pu2,v,basis,name);
+
+  const ASMu3D* pu3 = dynamic_cast<const ASMu3D*>(pch);
+  if (pu3) return new LRSplineFields3D(pu3,v,basis,name);
+#endif
   const ASMs2DLag* pl2 = dynamic_cast<const ASMs2DLag*>(pch);
   if (pl2) return new LagrangeFields2D(pl2,v,basis,name);
 

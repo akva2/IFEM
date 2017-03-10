@@ -371,6 +371,8 @@ public:
   //! \brief Dummy method.
   int getGlobalNode(int node) const { return -1; }
 
+  int getNoBasis() const { return m_planes[0]->getNoBasis(); }
+
 protected:
   std::vector<PlaneSolver*> m_planes; //!< Planar solvers
 
