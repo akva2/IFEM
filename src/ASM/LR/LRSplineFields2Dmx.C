@@ -61,11 +61,13 @@ bool LRSplineFields2Dmx::valueFE (const FiniteElement& fe, Vector& vals) const
   auto rit = vals.begin();
   for (const auto& it : bases) {
     const LR::LRSplineSurface* basis = surf->getBasis(it);
+
+    int iel = basis->getElementContaining(fe.u,fe.v);
+    auto elm = basis->getElement(iel);
     Go::BasisPtsSf spline;
-    basis->computeBasis(fe.u,fe.v,spline);
+    basis->computeBasis(fe.u,fe.v,spline,iel);
 
     // Evaluate the solution field at the given point
-    auto elm = basis->getElement(basis->getElementContaining(fe.u,fe.v));
 
     size_t i = 1;
     Vector Vnod(elm->nBasisFunctions());
@@ -95,9 +97,10 @@ bool LRSplineFields2Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   // Evaluate the basis functions at the given point
   Go::BasisDerivsSf spline;
   const LR::LRSplineSurface* gsurf = surf->getBasis(ASMmxBase::geoBasis);
-  gsurf->computeBasis(fe.u,fe.v,spline);
+  int iel = gsurf->getElementContaining(fe.u,fe.v);
+  auto elm = gsurf->getElement(iel);
+  gsurf->computeBasis(fe.u,fe.v,spline,iel);
 
-  auto elm = gsurf->getElement(gsurf->getElementContaining(fe.u,fe.v));
   const size_t nen = elm->nBasisFunctions();
 
   Matrix dNdu(nen,2), dNdX;
@@ -122,9 +125,10 @@ bool LRSplineFields2Dmx::gradFE (const FiniteElement& fe, Matrix& grad) const
   size_t row = 1;
   for (const auto& it : bases) {
     const LR::LRSplineSurface* basis = surf->getBasis(it);
-    basis->computeBasis(fe.u,fe.v,spline);
+    int iel = basis->getElementContaining(fe.u,fe.v);
+    auto belm = basis->getElement(iel);
+    basis->computeBasis(fe.u,fe.v,spline,iel);
 
-    auto belm = basis->getElement(basis->getElementContaining(fe.u,fe.v));
     const size_t nbf = belm->nBasisFunctions();
     dNdu.resize(nbf,2);
     for (size_t n = 1; n <= nbf; n++)

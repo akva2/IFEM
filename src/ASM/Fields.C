@@ -36,7 +36,7 @@ Fields* Fields::create (const ASMbase* pch, const RealArray& v,
 {
 #ifdef HAS_LRSPLINE
   const ASMu2Dmx* pu2mx = dynamic_cast<const ASMu2Dmx*>(pch);
-  if (pu2mx) return new LRSplineFields2Dmx(pu2mx,v,basis,name);
+  if (basis > 10 && pu2mx) return new LRSplineFields2Dmx(pu2mx,v,basis,name);
 
   const ASMu2D* pu2 = dynamic_cast<const ASMu2D*>(pch);
   if (pu2) return new LRSplineFields2D(pu2,v,basis,name);

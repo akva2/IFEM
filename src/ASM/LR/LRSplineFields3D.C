@@ -67,10 +67,10 @@ bool LRSplineFields3D::valueFE (const FiniteElement& fe, Vector& vals) const
   if (!basis) return false;
 
   // Evaluate the basis functions at the given point
+  int iel = basis->getElementContaining(fe.u,fe.v,fe.w);
+  auto elm = basis->getElement(iel);
   Go::BasisPts spline;
-  basis->computeBasis(fe.u,fe.v,fe.w,spline);
-
-  auto elm = basis->getElement(basis->getElementContaining(fe.u,fe.v,fe.w));
+  basis->computeBasis(fe.u,fe.v,fe.w,spline,iel);
 
   // Evaluate the solution field at the given point
   Matrix Vnod(3, elm->nBasisFunctions());
@@ -99,10 +99,11 @@ bool LRSplineFields3D::gradFE(const FiniteElement& fe, Matrix& grad) const
   if (!vol)   return false;
 
   // Evaluate the basis functions at the given point
+  int iel = vol->getElementContaining(fe.u,fe.v,fe.w);
+  auto elm = vol->getElement(iel);
   Go::BasisDerivs spline;
-  vol->computeBasis(fe.u,fe.v,fe.w,spline);
+  vol->computeBasis(fe.u,fe.v,fe.w,spline,iel);
 
-  auto elm = vol->getElement(vol->getElementContaining(fe.u,fe.v,fe.w));
   const size_t nen = elm->nBasisFunctions();
 
   Matrix dNdu(nen,3), dNdX;
@@ -129,9 +130,10 @@ bool LRSplineFields3D::gradFE(const FiniteElement& fe, Matrix& grad) const
   if (basis != vol)
   {
     // Mixed formulation, the solution uses a different basis than the geometry
-    basis->computeBasis(fe.u,fe.v,fe.w,spline);
+    int iel = basis->getElementContaining(fe.u,fe.v,fe.w);
+    auto belm = basis->getElement(iel);
+    basis->computeBasis(fe.u,fe.v,fe.w,spline,iel);
 
-    auto belm = basis->getElement(basis->getElementContaining(fe.u,fe.v,fe.w));
     const size_t nbf = belm->nBasisFunctions();
     dNdu.resize(nbf,3);
     for (size_t n = 1; n <= nbf; n++)
@@ -168,7 +170,8 @@ bool LRSplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
   if (!basis) return false;
   if (!vol)  return false;
 
-  auto elm = vol->getElement(vol->getElementContaining(fe.u,fe.v,fe.w));
+  int iel = vol->getElementContaining(fe.u,fe.v,fe.w);
+  auto elm = vol->getElement(iel);
   const size_t nen = elm->nBasisFunctions();
 
   // Evaluate the basis functions at the given point
@@ -184,7 +187,7 @@ bool LRSplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
       Xnod(i, j) = (*it)->cp(j-1);
 
   if (vol == basis) {
-    vol->computeBasis(fe.u,fe.v,fe.w,spline2);
+    vol->computeBasis(fe.u,fe.v,fe.w,spline2,iel);
 
     dNdu.resize(nen,3);
     d2Ndu2.resize(nen,3,3);
@@ -208,7 +211,7 @@ bool LRSplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
         Vnod(i,j) = values((*it)->getId()*3+j);
   }
   else {
-    vol->computeBasis(fe.u,fe.v,fe.w,spline);
+    vol->computeBasis(fe.u,fe.v,fe.w,spline,iel);
 
     dNdu.resize(nen,3);
     for (size_t n = 1; n <= nen; n++) {
@@ -224,9 +227,10 @@ bool LRSplineFields3D::hessianFE(const FiniteElement& fe, Matrix3D& H) const
   // Evaluate the gradient of the solution field at the given point
   if (basis != vol) {
     // Mixed formulation, the solution uses a different basis than the geometry
-    basis->computeBasis(fe.u,fe.v,fe.w,spline2);
+    int iel = basis->getElementContaining(fe.u,fe.v,fe.w);
+    auto belm = basis->getElement(iel);
+    basis->computeBasis(fe.u,fe.v,fe.w,spline2,iel);
 
-    auto belm = basis->getElement(basis->getElementContaining(fe.u,fe.v,fe.w));
     const size_t nbf = belm->nBasisFunctions();
     dNdu.resize(nbf,3);
     d2Ndu2.resize(nbf,3,3);
