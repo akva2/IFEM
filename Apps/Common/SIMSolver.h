@@ -100,6 +100,20 @@ public:
     return 0;
   }
 
+  //! \brief Serialize internal state for restarting purposes.
+  //! \param data Container for serialized data
+  bool serialize(DataExporter::SerializeData& data)
+  {
+    return tp.serialize(data) && S1.serialize(data);
+  }
+
+  //! \brief Set internal state from a serialized state.
+  //! \param[in] data Container for serialized data
+  bool deSerialize(const DataExporter::SerializeData& data)
+  {
+    return tp.deSerialize(data) && S1.deSerialize(data);
+  }
+
 protected:
   //! \brief Parses a data section from an input stream.
   virtual bool parse(char* keyw, std::istream& is) { return tp.parse(keyw,is); }
@@ -143,8 +157,13 @@ protected:
     if (saveRes && !S1.saveStep(tp,nBlock))
       return false;
 
-    if (saveRes && exporter)
-      exporter->dumpTimeLevel(&tp,newMesh);
+    if (saveRes && exporter) {
+      DataExporter::SerializeData serializeData;
+      if (exporter->getRestartStride() > 0 &&
+          tp.step % exporter->getRestartStride() == 0)
+        this->serialize(serializeData);
+      exporter->dumpTimeLevel(&tp,newMesh,&serializeData);
+    }
 
     return true;
   }
