@@ -20,6 +20,8 @@ test  $? -eq 0 || exit 1
 if test -z "$4"
 then
   test -n "$3" && mysim="mpirun -n $3 $mysim"
+else
+  test -n "$5" && mysim="mpirun -n $5 $mysim"
 fi
 hdf5=""
 test -n "$4" && hdf5="-hdf5 @CMAKE_BINARY_DIR@/Testing/$3"

@@ -780,17 +780,41 @@ bool HDF5Writer::writeRestartData(int level, const DataExporter::SerializeData& 
   if (level > 0)
     m_restart_flag = H5F_ACC_RDWR;
   openFile(level, true);
-  for (auto& it : data) {
-    std::stringstream str;
-    str << level << '/' << it.first;
-    int group;
-    if (checkGroupExistence(m_restart_file,str.str().c_str()))
-      continue;
-    else
-      group = H5Gcreate2(m_restart_file,str.str().c_str(),0,H5P_DEFAULT,H5P_DEFAULT);
+  int pid = 0;
+  int ptot = 1;
+#ifdef HAVE_MPI
+  pid = m_adm.getProcId();
+  ptot = m_adm.getNoProcs();
+#endif
+  for (int p = 0; p < ptot; ++p) {
+    for (auto& it : data) {
+      std::stringstream str;
+      str << level << '/' << it.first;
+      if (!checkGroupExistence(m_restart_file,str.str().c_str())) {
+        std::cout << "making grup for " << str.str() << std::endl;
+        int g = H5Gcreate2(m_restart_file,str.str().c_str(),0,H5P_DEFAULT,H5P_DEFAULT);
+        H5Gclose(g);
+      }
 
-    writeArray(group, "RestartData", it.second.size(), it.second.data(), H5T_NATIVE_CHAR);
-    H5Gclose(group);
+      str << '/' << pid;
+      int group;
+      if (checkGroupExistence(m_restart_file,str.str().c_str()))
+        group = H5Gopen2(m_restart_file,str.str().c_str(),H5P_DEFAULT);
+      else {
+        std::cout << "making grup for " << str.str() << std::endl;
+        group = H5Gcreate2(m_restart_file,str.str().c_str(),0,H5P_DEFAULT,H5P_DEFAULT);
+      }
+
+      if (pid == p) {
+        std::cout << "write data from pid " << pid << std::endl;
+        writeArray(group, "RestartData", it.second.size(), it.second.data(), H5T_NATIVE_CHAR);
+      } else {
+        std::cout << "dummy write from " << pid << std::endl; 
+        writeArray(group, "RestartData", 0, nullptr, H5T_NATIVE_CHAR);
+      }
+
+      H5Gclose(group);
+    }
   }
   H5Fclose(m_restart_file);
   m_restart_file = 0;
@@ -804,6 +828,7 @@ bool HDF5Writer::writeRestartData(int level, const DataExporter::SerializeData& 
 
 struct read_restart_ctx {
   HDF5Writer* w;
+  int pid;
   DataExporter::SerializeData* data;
 };
 
@@ -815,7 +840,9 @@ static herr_t read_restart_data(hid_t group_id, const char* member_name, void* d
 
   char* c;
   int len;
-  hid_t g = H5Gopen2(group_id, member_name, H5P_DEFAULT);
+  std::stringstream str;
+  str << member_name << '/' << ctx->pid;
+  hid_t g = H5Gopen2(group_id, str.str().c_str(), H5P_DEFAULT);
   ctx->w->readArray(g, "RestartData", len, c);
   H5Gclose(g);
   std::string tmp;
@@ -848,6 +875,10 @@ int HDF5Writer::readRestartData(DataExporter::SerializeData& data, int level)
   read_restart_ctx ctx;
   ctx.w = this;
   ctx.data = &data;
+  ctx.pid = 0;
+#ifdef HAVE_MPI
+  ctx.pid = m_adm.getProcId();
+#endif
   int it = H5Giterate(m_file, str.str().c_str(), &idx, read_restart_data, &ctx);
   closeFile(0);
   return it < 0 ? it : level;
