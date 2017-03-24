@@ -20,6 +20,11 @@
 #include "IFEM.h"
 #include "tinyxml.h"
 
+#ifdef HAS_CEREAL
+#include <cereal/cereal.hpp>
+#include <cereal/archives/binary.hpp>
+#endif
+
 
 /*!
   \brief Struct for configuring a given simulator.
@@ -100,7 +105,52 @@ public:
     return 0;
   }
 
+  //! \brief Serialize internal state for restarting purposes.
+  //! \param data Container for serialized data
+  bool serialize(DataExporter::SerializeData& data)
+  {
+#ifdef HAS_CEREAL
+    std::ostringstream str;
+    cereal::BinaryOutputArchive ar(str);
+    doSerializeOps(ar);
+    data.insert(std::make_pair("TimeStep", str.str()));
+    return true;
+#endif
+    return false;
+  }
+
+  //! \brief Set internal state from a serialized state.
+  //! \param data Container for serialized data
+  void deSerialize(const DataExporter::SerializeData& data)
+  {
+#ifdef HAS_CEREAL
+    std::stringstream str;
+    auto it = data.find("TimeStep");
+    if (it != data.end()) {
+      str << it->second;
+      cereal::BinaryInputArchive ar(str);
+      doSerializeOps(ar);
+    }
+#endif
+  }
+
 protected:
+#ifdef HAS_CEREAL
+  //! \brief Serialize to/from archive.
+  //! \param ar Input or output archive
+  template<class T> void doSerializeOps(T& ar)
+  {
+    ar(tp.step);
+    ar(tp.starTime);
+    ar(tp.maxCFL);
+    ar(tp.time.t);
+    ar(tp.time.dt);
+    ar(tp.time.dtn);
+    ar(tp.time.CFL);
+    ar(tp.time.first);
+  }
+#endif
+
   //! \brief Parses a data section from an input stream.
   virtual bool parse(char* keyw, std::istream& is) { return tp.parse(keyw,is); }
 
@@ -143,8 +193,15 @@ protected:
     if (saveRes && !S1.saveStep(tp,nBlock))
       return false;
 
-    if (saveRes && exporter)
-      exporter->dumpTimeLevel(&tp,newMesh);
+    if (saveRes && exporter) {
+      DataExporter::SerializeData serializeData;
+      if (exporter->getRestartStride() > 0 &&
+          tp.step % exporter->getRestartStride() == 0) {
+        S1.serialize(serializeData);
+        this->serialize(serializeData);
+      }
+      exporter->dumpTimeLevel(&tp,newMesh,&serializeData);
+    }
 
     return true;
   }
