@@ -48,6 +48,7 @@ SIMoptions::SIMoptions ()
   dtSave  =  0.0;
   pSolOnly = false;
   enableController = false;
+  restartInc = 0;
 
   nGauss[0] = nGauss[1] = 4;
   nViz[0] = nViz[1] = nViz[2] = 2;
@@ -139,6 +140,11 @@ bool SIMoptions::parseOutputTag (const TiXmlElement* elem)
     const char* value = utl::getValue(elem,"stride");
     if (value) saveInc = atoi(value);
     utl::getAttribute(elem,"dt",dtSave);
+  }
+
+  else if (!strcasecmp(elem->Value(),"restartstride")) {
+    const char* value = utl::getValue(elem,"restartstride");
+    if (value) restartInc = atoi(value);
   }
 
   else if (!strcasecmp(elem->Value(),"hdf5")) {
