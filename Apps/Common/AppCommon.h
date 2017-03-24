@@ -35,6 +35,8 @@ namespace SIM
 
   public:
     int dim; //!< Dimensionality of simulation
+    std::string restartfile; //!< File to read restart data from
+    int restartlevel = -1; //!< Restart level
   };
 
   //! \brief Handles application restarts.

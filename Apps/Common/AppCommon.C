@@ -19,18 +19,22 @@
 
 bool SIM::AppXMLInputBase::parse (const TiXmlElement* elem)
 {
-  if (strcasecmp(elem->Value(),"geometry"))
+  if (!strcasecmp(elem->Value(),"geometry")) {
+    if (!utl::getAttribute(elem,"dimension",dim))
+      utl::getAttribute(elem,"dim",dim);
+  } else if (strcasecmp(elem->Value(),"postprocessing"))
     return true;
-
-  if (!utl::getAttribute(elem,"dimension",dim))
-    utl::getAttribute(elem,"dim",dim);
 
   std::string type;
   const TiXmlElement* child = elem->FirstChildElement();
   for (; child; child = child->NextSiblingElement())
-    if (!strcasecmp(child->Value(),"patchfile"))
+    if (!strcasecmp(child->Value(),"patchfile")) {
       if (utl::getAttribute(child,"type",type) && type == "lrspline")
         IFEM::getOptions().discretization = ASM::LRSpline;
+    } else if (!strcasecmp(child->Value(),"restartfile")) {
+      restartfile = utl::getValue(child, "restartfile");
+      utl::getAttribute(child, "level" , restartlevel);
+    }
 
   return true;
 }
