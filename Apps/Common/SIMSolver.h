@@ -15,8 +15,9 @@
 #define _SIM_SOLVER_H_
 
 #include "SIMadmin.h"
-#include "DataExporter.h"
 #include "TimeStep.h"
+#include "HDF5Writer.h"
+#include "Utilities.h"
 #include "IFEM.h"
 #include "tinyxml.h"
 
@@ -60,6 +61,7 @@ public:
   SIMSolver(T1& s1) : SIMadmin("Time integration driver"), S1(s1)
   {
     saveDivergedSol = false;
+    restartStep = -1;
   }
 
   //! \brief Empty destructor.
@@ -121,13 +123,18 @@ protected:
   //! \brief Parses a data section from an XML element.
   virtual bool parse(const TiXmlElement* elem)
   {
-    if (strcasecmp(elem->Value(),"postprocessing"))
+    if (!strcasecmp(elem->Value(),"restart")) {
+      utl::getAttribute(elem,"file",restartFile);
+      utl::getAttribute(elem,"step",restartStep);
+    }
+    else if (!strcasecmp(elem->Value(),"postprocessing")) {
+      const TiXmlElement* child = elem->FirstChildElement();
+      for (; child; child = child->NextSiblingElement())
+        if (!strncasecmp(child->Value(),"savediverg",10))
+          saveDivergedSol = true;
+    }
+    else
       return tp.parse(elem);
-
-    const TiXmlElement* child = elem->FirstChildElement();
-    for (; child; child = child->NextSiblingElement())
-      if (!strncasecmp(child->Value(),"savediverg",10))
-        saveDivergedSol = true;
 
     return true;
   }
@@ -168,8 +175,36 @@ protected:
     return true;
   }
 
+public:
+  //! \brief Handles application restarts by reading a serialized solver state.
+  //! \return One-based time step index of the restart state read.
+  //! If zero, no restart specified. If negative, read failure.
+  int restart()
+  {
+    if (restartFile.empty()) return 0;
+
+    DataExporter::SerializeData data;
+    HDF5Writer hdf(restartFile,adm,true);
+    if ((restartStep = hdf.readRestartData(data,restartStep)) >= 0)
+    {
+      IFEM::cout <<"\n === Restarting from a serialized state ==="
+                 <<"\n     file = "<< restartFile
+                 <<"\n     step = "<< restartStep << std::endl;
+      if (this->deSerialize(data))
+        return restartStep+1;
+      else
+        restartStep = -2;
+    }
+
+    std::cerr <<" *** SIMSolver: Failed to read restart data."<< std::endl;
+    return restartStep;
+  }
+
 private:
   bool saveDivergedSol; //!< If \e true, save also the diverged solution to VTF
+
+  std::string restartFile; //!< File to read restart state data from
+  int         restartStep; //!< Index to the actual state to restart from
 
 protected:
   TimeStep tp; //!< Time stepping information

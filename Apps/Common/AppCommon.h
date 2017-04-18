@@ -37,28 +37,6 @@ namespace SIM
     int dim; //!< Dimensionality of simulation
   };
 
-  //! \brief Handles application restarts.
-  //! \param[in] simulator The top SIMbase instance of your application
-  //! \param[in] solver The SIMSolver instance of your application
-  //! \param[in] restartfile The file to read from
-  //! \param[in] restartstep The step to restart from
-  template<class Solver>
-  bool handleRestart(Solver& solver,
-                     const std::string& restartfile, int restartstep = -1)
-  {
-    HDF5Writer hdf(restartfile,solver.getProcessAdm(),true);
-    DataExporter::SerializeData data;
-    int astep = hdf.readRestartData(data, restartstep);
-    if (astep >= 0) {
-      IFEM::cout << "\n=== Restarting from a serialized state ==="
-                 << "\n  file = " << restartfile
-                 << "\n  step = " << astep << std::endl;
-      return solver.deSerialize(data);
-    }
-
-    return true;
-  }
-
   //! \brief Handles application data output.
   //! \param[in] simulator The top SIMbase instance of your application
   //! \param[in] solver The SIMSolver instance of your application
