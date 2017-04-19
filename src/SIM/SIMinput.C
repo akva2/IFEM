@@ -1176,3 +1176,11 @@ bool SIMinput::hasIC (const std::string& name) const
 
   return false;
 }
+
+
+bool SIMinput::deSerialize (const std::map<std::string,std::string>&)
+{
+  std::cerr <<" *** SIMinput::deSerialize: Must be implemented in sub-class.\n"
+            <<"     Restart not supported for "<< this->getName() << std::endl;
+  return false;
+}
