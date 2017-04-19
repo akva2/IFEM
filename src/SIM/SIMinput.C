@@ -464,6 +464,8 @@ bool SIMinput::parse (const TiXmlElement* elem)
   bool result = true;
   if (!strcasecmp(elem->Value(),"discretization"))
     result = opt.parseDiscretizationTag(elem);
+  else if (!strcasecmp(elem->Value(),"restart"))
+    result = opt.parseRestartTag(elem);
   else if (!strcasecmp(elem->Value(),"initialcondition"))
     result = this->parseICTag(elem);
   else if (!strcasecmp(elem->Value(),"linearsolver"))

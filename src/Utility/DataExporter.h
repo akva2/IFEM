@@ -144,8 +144,8 @@ public:
   //! \brief Returns visualization data stride
   int getStride() const { return m_ndump; }
 
-  //! \brief Returns restart data stride
-  int getRestartStride() const { return m_nrestart; }
+  //! \brief Returns whether current step should be saved for restart or not.
+  bool dumpForRestart(const TimeStep* tp) const;
 
 protected:
   //! \brief Internal helper function.

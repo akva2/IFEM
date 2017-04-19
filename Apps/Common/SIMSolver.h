@@ -17,7 +17,6 @@
 #include "SIMadmin.h"
 #include "TimeStep.h"
 #include "HDF5Writer.h"
-#include "Utilities.h"
 #include "IFEM.h"
 #include "tinyxml.h"
 
@@ -61,7 +60,6 @@ public:
   SIMSolver(T1& s1) : SIMadmin("Time integration driver"), S1(s1)
   {
     saveDivergedSol = false;
-    restartStep = -1;
   }
 
   //! \brief Empty destructor.
@@ -123,18 +121,13 @@ protected:
   //! \brief Parses a data section from an XML element.
   virtual bool parse(const TiXmlElement* elem)
   {
-    if (!strcasecmp(elem->Value(),"restart")) {
-      utl::getAttribute(elem,"file",restartFile);
-      utl::getAttribute(elem,"step",restartStep);
-    }
-    else if (!strcasecmp(elem->Value(),"postprocessing")) {
-      const TiXmlElement* child = elem->FirstChildElement();
-      for (; child; child = child->NextSiblingElement())
-        if (!strncasecmp(child->Value(),"savediverg",10))
-          saveDivergedSol = true;
-    }
-    else
+    if (strcasecmp(elem->Value(),"postprocessing"))
       return tp.parse(elem);
+
+    const TiXmlElement* child = elem->FirstChildElement();
+    for (; child; child = child->NextSiblingElement())
+      if (!strncasecmp(child->Value(),"savediverg",10))
+        saveDivergedSol = true;
 
     return true;
   }
@@ -165,11 +158,11 @@ protected:
       return false;
 
     if (saveRes && exporter) {
-      DataExporter::SerializeData serializeData;
-      if (exporter->getRestartStride() > 0 &&
-          tp.step % exporter->getRestartStride() == 0)
-        this->serialize(serializeData);
-      exporter->dumpTimeLevel(&tp,newMesh,&serializeData);
+      DataExporter::SerializeData data;
+      if (exporter->dumpForRestart(&tp) && this->serialize(data))
+        return exporter->dumpTimeLevel(&tp,newMesh,&data);
+      else // no restart dump, or serialization failure
+        return exporter->dumpTimeLevel(&tp,newMesh);
     }
 
     return true;
@@ -177,9 +170,11 @@ protected:
 
 public:
   //! \brief Handles application restarts by reading a serialized solver state.
+  //! \param[in] restartFile File to read restart state from
+  //! \param[in] restartStep Index of the time step to read restart state for
   //! \return One-based time step index of the restart state read.
   //! If zero, no restart specified. If negative, read failure.
-  int restart()
+  int restart(const std::string& restartFile, int restartStep)
   {
     if (restartFile.empty()) return 0;
 
@@ -202,9 +197,6 @@ public:
 
 private:
   bool saveDivergedSol; //!< If \e true, save also the diverged solution to VTF
-
-  std::string restartFile; //!< File to read restart state data from
-  int         restartStep; //!< Index to the actual state to restart from
 
 protected:
   TimeStep tp; //!< Time stepping information
