@@ -63,7 +63,7 @@ LocalIntegral* GlbL2::getLocalIntegral (size_t nen, size_t iEl,
                                         bool neumann) const
 {
   return new L2Mats(*const_cast<GlbL2*>(this),
-		    problem.getLocalIntegral(nen,iEl,neumann));
+                    problem.getLocalIntegral(nen,iEl,neumann));
 }
 
 
@@ -164,6 +164,11 @@ bool GlbL2::solve (Matrix& sField)
   for (size_t j = 1; j <= nnod; j++)
     if (A(j,j) == 0.0) A(j,j) = 1.0;
 
+#if SP_DEBUG > 1
+  std::cout <<"\nGlobal L2-projection matrix:\n"<< A;
+  std::cout <<"\nGlobal L2-projection RHS:"<< B;
+#endif
+
   // Solve the patch-global equation system
   if (!A.solve(B)) return false;
 
@@ -174,13 +179,16 @@ bool GlbL2::solve (Matrix& sField)
     for (size_t j = 1; j <= ncomp; j++)
       sField(j,i) = B(i+(j-1)*nnod);
 
+#if SP_DEBUG > 1
+  std::cout <<"\nSolution:"<< sField;
+#endif
   return true;
 }
 
 
 bool ASMbase::L2projection (Matrix& sField,
-			    const IntegrandBase& integrand,
-			    const TimeDomain& time)
+                            const IntegrandBase& integrand,
+                            const TimeDomain& time)
 {
   PROFILE2("ASMbase::L2projection");
 
@@ -189,4 +197,46 @@ bool ASMbase::L2projection (Matrix& sField,
 
   gl2.preAssemble(MNPC,this->getNoElms(true));
   return this->integrate(gl2,dummy,time) && gl2.solve(sField);
+}
+
+
+bool ASMbase::globalL2projection (Matrix& sField,
+                                  const IntegrandBase& integrand,
+                                  bool continuous) const
+{
+  if (this->empty()) return true; // silently ignore empty patches
+
+  PROFILE2("ASMbase::globalL2");
+
+  // Assemble the projection matrices
+  const size_t nnod = this->getNoNodes(1);
+  const size_t ncomp = integrand.getNoFields(2);
+  SparseMatrix A(SparseMatrix::SUPERLU);
+  StdVector B(nnod*ncomp);
+  A.redim(nnod,nnod);
+
+  if (!this->assembleL2matrices(A,B,integrand,continuous))
+    return false;
+
+#if SP_DEBUG > 1
+  std::cout <<"---- Matrix A -----\n"<< A
+            <<"-------------------"<< std::endl;
+  std::cout <<"---- Vector B -----"<< B
+            <<"-------------------"<< std::endl;
+#endif
+
+  // Solve the patch-global equation system
+  if (!A.solve(B)) return false;
+
+  // Store the control-point values of the projected field
+  sField.resize(ncomp,nnod);
+  for (size_t i = 1; i <= nnod; i++)
+    for (size_t j = 1; j <= ncomp; j++)
+      sField(j,i) = B(i+(j-1)*nnod);
+
+#if SP_DEBUG > 1
+  std::cout <<"- Solution Vector -"<< sField
+            <<"-------------------"<< std::endl;
+#endif
+  return true;
 }
