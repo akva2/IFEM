@@ -1551,7 +1551,7 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
     case SIMoptions::CGL2:
       if (msgLevel > 1 && i == 0)
         IFEM::cout <<"\tContinuous global L2-projection"<< std::endl;
-      ok = myModel[i]->globalL2projection(values,*myProblem,true);
+      ok = myModel[i]->globalL2projection(values,*myProblem,true,true);
       break;
 
     case SIMoptions::CGL2_INT:

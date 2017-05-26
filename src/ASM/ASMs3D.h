@@ -538,6 +538,12 @@ protected:
                                   const IntegrandBase& integrand,
                                   bool continuous) const;
 
+  //! \brief Returns parameter values and node numbers of the domain corners.
+  //! \param[out] u Parameter values of the domain corners
+  //! \param[out] corners 1-based indices of the corner nodes
+  virtual bool getParameterDomain(std::vector<RealArray>& u,
+                                  std::vector<int>& corners) const;
+
   //! \brief Connects all matching nodes on two adjacent boundary faces.
   //! \param[in] face Local face index of this patch, in range [1,6]
   //! \param neighbor The neighbor patch

@@ -162,7 +162,7 @@ public:
   //! \param[in] continuous If \e true, a continuous L2-projection is used
   virtual bool globalL2projection(Matrix& sField,
                                   const IntegrandBase& integrand,
-                                  bool continuous = false) const;
+                                  bool continuous, bool) const;
 
   using ASMu2D::refine;
   //! \brief Refines the mesh adaptively.

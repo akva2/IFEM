@@ -101,6 +101,10 @@ protected:
   //! \param[in] n_f Number of primary solution fields
   ASMunstruct(const ASMunstruct& patch, unsigned char n_f = 0);
 
+  //! \brief Returns parameter values and node numbers of the domain corners.
+  virtual bool getParameterDomain(std::vector<RealArray>&,
+                                  std::vector<int>&) const { return false; }
+
 public:
   //! \brief The destructor frees the dynamically allocated spline object.
   virtual ~ASMunstruct();

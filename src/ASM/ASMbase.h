@@ -517,9 +517,11 @@ public:
   //! \param[out] sField Secondary solution field control point values
   //! \param[in] integrand Object with problem-specific data and methods
   //! \param[in] continuous If \e true, a continuous L2-projection is used
+  //! \param[in] enforceEnds If \e true, enforce corner point value equality
   virtual bool globalL2projection(Matrix& sField,
-				  const IntegrandBase& integrand,
-				  bool continuous = false) const;
+                                  const IntegrandBase& integrand,
+                                  bool continuous = false,
+                                  bool enforceEnds = false) const;
 
   //! \brief Projects the secondary solution using a continuous global L2-fit.
   //! \param[out] sField Secondary solution field control point values
@@ -616,6 +618,9 @@ protected:
   //! \param[in] pch Pointer to the neighboring patch
   void addNeighbor(ASMbase* pch);
 
+  // Miscellanesous methods for internal use
+  // =======================================
+
   //! \brief Helper method used by evalPoint to search for a control point.
   //! \param[in] cit iterator of array of control point coordinates
   //! \param[in] end iterator of array of control point coordinates
@@ -633,6 +638,12 @@ protected:
   virtual bool assembleL2matrices(SparseMatrix& A, StdVector& B,
                                   const IntegrandBase& integrand,
                                   bool continuous) const = 0;
+
+  //! \brief Returns parameter values and node numbers of the domain corners.
+  //! \param[out] u Parameter values of the domain corners
+  //! \param[out] corners 1-based indices of the corner nodes
+  virtual bool getParameterDomain(std::vector<RealArray>& u,
+                                  std::vector<int>& corners) const = 0;
 
 public:
   //! \brief Constrains all nodes in the patch.

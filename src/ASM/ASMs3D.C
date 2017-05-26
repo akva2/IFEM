@@ -1605,6 +1605,29 @@ size_t ASMs3D::getNoBoundaryElms (char lIndex, char ldim) const
 }
 
 
+bool ASMs3D::getParameterDomain (std::vector<RealArray>& u,
+                                 std::vector<int>& corners) const
+{
+  u.resize(3,RealArray(2));
+  for (int d = 0; d < 3; d++)
+  {
+    u[d].front() = svol->basis(d).startparam();
+    u[d].back() = svol->basis(d).endparam();
+  }
+
+  corners.resize(8);
+  corners[0] = 1;
+  corners[1] = svol->numCoefs(0);
+  corners[2] = svol->numCoefs(0)*(svol->numCoefs(1)-1) + 1;
+  corners[3] = svol->numCoefs(0)*svol->numCoefs(1);
+  int wnjump = corners[3]*(svol->numCoefs(2)-1);
+  for (int i = 0; i < 4; i++)
+    corners[4+i] = corners[i] + wnjump;
+
+  return true;
+}
+
+
 const Vector& ASMs3D::getGaussPointParameters (Matrix& uGP, int dir, int nGauss,
 					       const double* xi) const
 {

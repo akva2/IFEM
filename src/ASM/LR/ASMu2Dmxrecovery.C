@@ -43,7 +43,7 @@ static void expandTensorGrid (const RealArray* in, RealArray* out)
 
 bool ASMu2Dmx::globalL2projection (Matrix& sField,
                                    const IntegrandBase& integrand,
-                                   bool continuous) const
+                                   bool continuous, bool) const
 {
   if (!m_basis[0] || !m_basis[1]) return true; // silently ignore empty patches
 
