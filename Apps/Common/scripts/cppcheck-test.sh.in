@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# This script performs a single analysis using cppcheck
+# It is used by the 'make test' target in the buildsystems
+# Usually you should use 'ctest -C cppcheck' rather than calling this script directly
+#
+# Parameters: $1 = Application binary
+#             $2 = Source file to process
+#             $3..$N = include paths for include
+
+cppcheck_cmd=$1
+source_file=$2
+shift 2
+
+tmpfil=`mktemp`
+$cppcheck_cmd $@ --enable=all --force $source_file &> $tmpfil
+if grep -q \[.*\] <<< `cat $tmpfil`
+then
+  cat $tmpfil
+  rm $tmpfil
+  exit 1
+fi
+
+rm $tmpfil
+exit 0
