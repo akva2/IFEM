@@ -702,6 +702,7 @@ size_t ASMu2D::constrainEdgeLocal (int dir, bool open, int dof, int code,
   return 0; // TODO...
 }
 
+#include "IFEM.h"
 
 int ASMu2D::getCorner(int I, int J, int basis) const
 {
@@ -710,18 +711,9 @@ int ASMu2D::getCorner(int I, int J, int basis) const
   const LR::LRSplineSurface* srf = this->getBasis(basis);
 
   // Note: Corners are identified by "coordinates" {-1,-1} {-1,1} {1,-1} {1,1}.
-  if (I < 0) {
-    if (J < 0)
-      srf->getEdgeFunctions(edgeFunctions, LR::SOUTH_WEST);
-    else if (J > 0)
-      srf->getEdgeFunctions(edgeFunctions, LR::NORTH_WEST);
-  }
-  else if (I > 0) {
-    if (J < 0)
-      srf->getEdgeFunctions(edgeFunctions, LR::SOUTH_EAST);
-    else if (J > 0)
-      srf->getEdgeFunctions(edgeFunctions, LR::NORTH_EAST);
-  }
+  int dir = (I > 0 ? LR::EAST : LR::WEST) | (J > 0 ? LR::NORTH : LR::SOUTH);
+  IFEM::cout << "I=" << I <<",J=" << J << " -> " << dir << std::endl;
+  srf->getEdgeFunctions(edgeFunctions, static_cast<LR::parameterEdge>(dir));
 
   if (edgeFunctions.empty()) {
     std::cerr <<" *** ASMu2D::constrainCorner: Invalid corner I,J="

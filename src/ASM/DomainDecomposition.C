@@ -15,6 +15,7 @@
 #include "ASMstruct.h"
 #include "ASM2D.h"
 #include "ASM3D.h"
+#include "ASMunstruct.h"
 #include "LinSolParams.h"
 #include "ProcessAdm.h"
 #include "SAMpatch.h"
@@ -28,22 +29,37 @@
 //! \brief Iterator for matching nodes on edges/faces with a given orientation and index.
 class NodeIterator {
 public:
-  //! \brief Constructor.
+  //! \brief Constructor for structured patches.
   //! \param pch Slave patch
   //! \param orient Orientation of boundary on slave
   //! \param lIdx Index of boundary on slave
   //! \param basis Basis to use for boundary on slave
   //! \param dim Dimension to iterate over
-  NodeIterator(const ASMstruct* pch, int orient, int lIdx, int basis, int dim = 2)
+  NodeIterator(const ASMbase* pch, int orient, int lIdx, int basis, int dim = 2)
   {
     if (dim == 0) {
       nodes.resize(1);
       return;
     }
+    const ASMstruct* spch = dynamic_cast<const ASMstruct*>(pch);
+    const ASMunstruct* upch = dynamic_cast<const ASMunstruct*>(pch);
+
+    int nsd = pch->getNoSpaceDim();
+    if (upch) {
+      if (nsd == 3) {
+      } else {
+        IntVec nodes;
+        pch->getBoundaryNodes(lIdx, nodes, basis);
+        if (orient == 0)
+          std::iota(nodes.begin(), nodes.end(), 0);
+        else
+          std::iota(nodes.rbegin(), nodes.rend(), 0);
+      }
+      return;
+    }
 
     int n1, n2, n3;
-    pch->getSize(n1,n2,n3,basis);
-    int nsd = pch->getNoSpaceDim();
+    spch->getSize(n1,n2,n3,basis);
     if (nsd == 3) {
       if (dim == 1) {
         if (lIdx <= 4)
@@ -311,14 +327,15 @@ void DomainDecomposition::setupNodeNumbers(int basis, IntVec& lNodes,
   for (const int& it2 : cbasis)
     if (dim == 0) {
       int node = 0;
-      if (pch2D)
+      if (pch2D) {
         switch (lidx) {
         case 1: node = pch2D->getCorner(-1,-1, it2); break;
         case 2: node = pch2D->getCorner( 1,-1, it2); break;
         case 3: node = pch2D->getCorner(-1, 1, it2); break;
         case 4: node = pch2D->getCorner( 1, 1, it2); break;
         }
-      else if (pch3D)
+        IFEM::cout << "node is " <<node << " " << lidx << std::endl;
+      } else if (pch3D)
         switch (lidx) {
         case 1: node = pch3D->getCorner(-1,-1,-1, it2); break;
         case 2: node = pch3D->getCorner( 1,-1,-1, it2); break;
@@ -336,6 +353,9 @@ void DomainDecomposition::setupNodeNumbers(int basis, IntVec& lNodes,
         lNodes.push_back(pch->getNodeID(it));
     } else
       pch->getBoundaryNodes(lidx, lNodes, it2, thick, false);
+    
+  for (auto& it : lNodes)
+    IFEM::cout << "local node " << it << std::endl;
 }
 
 
@@ -409,12 +429,13 @@ bool DomainDecomposition::calcGlobalNodeNumbers(const ProcessAdm& adm,
     size_t ofs = 0;
     for (size_t b = 1; b <= sim.getPatch(sidx)->getNoBasis(); ++b) {
       if (cbasis.empty() || cbasis.find(b) != cbasis.end()) {
-        NodeIterator iter(dynamic_cast<const ASMstruct*>(sim.getPatch(sidx)),
+        NodeIterator iter(sim.getPatch(sidx),
                           it.orient, it.sidx, b, it.dim);
         auto it_n = iter.begin();
         for (size_t i = 0; i < iter.size(); ++i, ++it_n) {
           for (int t = 0; t < it.thick; ++t) {
             int node = MLGN[lNodes[i*it.thick+t+ofs]-1];
+            IFEM::cout << "remapping " << node << " to " << glbNodes[*it_n*it.thick+t + ofs] <<std::endl;
             old2new[node] = glbNodes[*it_n*it.thick+t + ofs];
           }
         }
@@ -656,8 +677,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
         } else
           components = utl::getDigits(sim.getSolParams()->getBlock(block-1).comps);
 
-        NodeIterator iter(dynamic_cast<const ASMstruct*>(sim.getPatch(sidx)),
-                          it.orient, it.sidx, basis, it.dim);
+        NodeIterator iter(sim.getPatch(sidx), it.orient, it.sidx, basis, it.dim);
         auto it_n = iter.begin();
         int nodeDofs = components.size();
         for (size_t i = 0; i < iter.size(); ++i, ++it_n) {
@@ -830,6 +850,8 @@ bool DomainDecomposition::sanityCheckCorners(const SIMbase& sim)
   for (size_t i = 0; i < glob_data.size(); i += 5)
     corners.push_back({glob_data[i], glob_data[i+1],
                         glob_data[i+2], glob_data[i+3], glob_data[i+4]});
+  for (auto& it : corners)
+    IFEM::cout << it[4] << "= (" << it[0] << "," << it[1] << "," << it[2] << ")" << std::endl;
 
   for (const auto& c : corners) {
     auto fail = std::find_if(corners.begin(), corners.end(),
@@ -842,7 +864,7 @@ bool DomainDecomposition::sanityCheckCorners(const SIMbase& sim)
                                     (int)c[4] != (int)C[4];
                             });
     if (fail != corners.end()) {
-      std::cerr << "** DomainDecomposition::setup ** Corner node " << (int)c[4]
+      IFEM::cout << "** DomainDecomposition::setup ** Corner node " << (int)c[4]
                 << " with coordinates (" << c[0] << "," << c[1] << "," << c[2] << ")"
                 << " found with different global ID " << (int)(*fail)[4]
                 << " for basis " << (int)c[3] << "."
