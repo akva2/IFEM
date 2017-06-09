@@ -111,7 +111,7 @@ public:
   //! \param thick Thickness of connection
   //! \param local If \e true, return patch-local node numbers
   virtual void getBoundaryNodes(int lIndex, IntVec& nodes,
-                                int, int thick, bool local) const;
+                                int, int thick, int, bool local) const;
 
   //! \brief Finds the node that is closest to the given point.
   //! \param[in] X Global coordinates of point to search for

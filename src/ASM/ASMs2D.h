@@ -187,7 +187,7 @@ public:
   //! \param local If \e true return patch-local node numbers
   virtual void getBoundaryNodes(int lIndex, IntVec& nodes,
                                 int basis, int thick = 1,
-                                bool local = false) const;
+                                int = 0, bool local = false) const;
 
   //! \brief Returns the node index for a given corner.
   virtual int getCorner(int I, int J, int basis) const;

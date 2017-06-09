@@ -219,7 +219,7 @@ public:
   //! \param thick Thickness of connection
   //! \param local If \e true return patch-local node numbers
   virtual void getBoundaryNodes(int lIndex, IntVec& nodes, int basis,
-                                int thick = 1, bool local = false) const;
+                                int thick = 1, int = 0, bool local = false) const;
 
 protected:
   std::vector<std::shared_ptr<Go::SplineSurface>> m_basis; //!< Vector of bases
