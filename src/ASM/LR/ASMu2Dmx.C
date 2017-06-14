@@ -169,6 +169,7 @@ bool ASMu2Dmx::getSolution (Matrix& sField, const Vector& locSol,
   return this->getSolutionMx(sField,locSol,nodes);
 }
 
+#include <fstream>
 
 bool ASMu2Dmx::generateFEMTopology ()
 {
@@ -176,10 +177,31 @@ bool ASMu2Dmx::generateFEMTopology ()
     return true;
 
   if (m_basis.empty()) {
-    auto vec = ASMmxBase::establishBases(tensorspline, ASMmxBase::Type);
-    m_basis.resize(vec.size());
-    for (size_t i=0;i<vec.size();++i)
-      m_basis[i].reset(new LR::LRSplineSurface(vec[i].get()));
+    if (tensorspline) {
+      auto vec = ASMmxBase::establishBases(tensorspline, ASMmxBase::Type);
+      m_basis.resize(vec.size());
+      for (size_t i=0;i<vec.size();++i)
+        m_basis[i].reset(new LR::LRSplineSurface(vec[i].get()));
+    } else if (lrspline) {
+      if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1 ||
+          ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2) {
+        m_basis.resize(2);
+        m_basis[0].reset(lrspline->getRaiseOrderSpace(1,1));
+        m_basis[1] = lrspline;
+      }
+      if (ASMmxBase::Type == FULL_CONT_RAISE_BASIS2 ||
+          ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2) {
+        std::swap(m_basis[0], m_basis[1]);
+        ASMmxBase::geoBasis = 1;
+      }
+      std::ofstream meshFile("mesh1.eps");
+      m_basis[0]->writePostscriptMesh(meshFile);
+      std::ofstream meshFile2("mesh2.eps");
+      m_basis[1]->writePostscriptMesh(meshFile2);
+    } else {
+      std::cerr << "*** ASMu2Dmx::generateFEMTopology: No basis specified" << std::endl;
+      return false;
+    }
   }
   lrspline = m_basis[geoBasis-1];
 
