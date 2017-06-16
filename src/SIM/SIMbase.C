@@ -1234,7 +1234,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   // Number of recovered solution components
   size_t i, nCmp = 0;
   for (i = 0; i < ssol.size() && nCmp == 0; i++)
-    nCmp = ssol[i].size() / mySam->getNoNodes();
+    nCmp = ssol[i].size() / mySam->getNoNodes('D');
 
 #ifdef USE_OPENMP
   // When assembling in parallel, we must always do the norm summation
@@ -1284,7 +1284,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
           if (ssol[k].empty())
             norm->getProjection(k).clear();
           else
-            pch->extractNodeVec(ssol[k],norm->getProjection(k),nCmp);
+            this->extractPatchSolution(ssol[k],norm->getProjection(k),lp-1,nCmp,1);
 	ok &= pch->integrate(*norm,globalNorm,time);
       }
       else
@@ -1300,7 +1300,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
         if (ssol[k].empty())
           norm->getProjection(k).clear();
         else
-          myModel[i]->extractNodeVec(ssol[k],norm->getProjection(k),nCmp);
+          this->extractPatchSolution(ssol[i],norm->getProjection(k),i,nCmp,1);
       ok &= myModel[i]->integrate(*norm,globalNorm,time);
       lp = i+1;
     }
@@ -1492,7 +1492,7 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
   ssol.clear();
 
   size_t i, j, n;
-  size_t ngNodes = mySam->getNoNodes();
+  size_t ngNodes = mySam->getNoNodes('D');
 
   Matrix values;
   Vector count(myModel.size() > 1 ? ngNodes : 0);
@@ -1796,14 +1796,21 @@ bool SIMbase::setPatchMaterial (size_t patch)
 }
 
 
-bool SIMbase::addMADOF (unsigned char basis, unsigned char nndof)
+bool SIMbase::addMADOF (unsigned char basis, unsigned char nndof, bool otherbasis)
 {
   int key = basis << 16 + nndof;
   if (mixedMADOFs.find(key) != mixedMADOFs.end())
     return false; // This MADOF already calculated
 
   IntVec& madof = mixedMADOFs[key];
-  madof.resize(this->getNoNodes(true)+1,0);
+  size_t ofs = 0;
+  if (otherbasis)
+    madof.resize(this->getNoNodes(true)+1,0);
+  else {
+    madof.resize(this->getNoNodes(true,basis));
+    for (size_t i = 1; i < basis; ++i)
+      ofs += this->getNoNodes(true,i);
+  }
 
   char nType = basis <= 1 ? 'D' : 'P' + basis-2;
   for (size_t i = 0; i < myModel.size(); i++)
@@ -1811,8 +1818,8 @@ bool SIMbase::addMADOF (unsigned char basis, unsigned char nndof)
     {
       int n = myModel[i]->getNodeID(j+1);
       if (n > 0 && myModel[i]->getNodeType(j+1) == nType)
-        madof[n] = nndof;
-      else if (n > 0)
+        madof[n-ofs] = nndof;
+      else if (n > 0 && otherbasis)
         madof[n] = myModel[i]->getNodalDOFs(j+1);
     }
 
