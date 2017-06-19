@@ -102,7 +102,7 @@ bool ASMu2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
                                  const IntegrandBase& integrand,
                                  bool continuous) const
 {
-  const size_t nnod = this->getNoNodes();
+  const size_t nnod = this->getNoNodes(1);
 
   const int p1 = lrspline->order(0);
   const int p2 = lrspline->order(1);

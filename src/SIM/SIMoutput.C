@@ -1049,6 +1049,7 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
 
   std::string normName;
   j = l = 1;
+  size_t ng = norm->getNoFields(-1);
   for (k = 0; k < maxN && !sID[k].empty(); l++)
   {
     if (l > norm->getNoFields(j))
@@ -1057,8 +1058,8 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
     if (!norm->hasElementContributions(j,l))
       continue;
 
-    if (prefix && j > 1)
-      normName = norm->getName(j,l,prefix[j-2]);
+    if (prefix && j > ng)
+      normName = norm->getName(j,l,prefix[j-ng-1]);
     else
       normName = norm->getName(j,l);
 

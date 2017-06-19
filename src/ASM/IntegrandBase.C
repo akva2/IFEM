@@ -298,6 +298,9 @@ void NormBase::addBoundaryTerms (Vectors& gNorm, double energy) const
 
 size_t NormBase::getNoFields (int group) const
 {
+  if (group == -1)
+    return 1;
+
   return group > 0 ? 0 : 1 + prjsol.size();
 }
 

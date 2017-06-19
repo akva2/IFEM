@@ -106,6 +106,7 @@ void SIMbase::clearProperties ()
   myTracs.clear();
   myProps.clear();
   myInts.clear();
+  mixedMADOFs.clear();
 }
 
 
@@ -1583,7 +1584,7 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
     }
 
     size_t nComps = values.rows();
-    size_t nNodes = values.cols();
+    size_t nNodes = std::min(values.cols(), ngNodes);
     if (ssol.empty())
       ssol.resize(nComps,ngNodes);
 
@@ -1803,14 +1804,7 @@ bool SIMbase::addMADOF (unsigned char basis, unsigned char nndof, bool otherbasi
     return false; // This MADOF already calculated
 
   IntVec& madof = mixedMADOFs[key];
-  size_t ofs = 0;
-  if (otherbasis)
-    madof.resize(this->getNoNodes(true)+1,0);
-  else {
-    madof.resize(this->getNoNodes(true,basis));
-    for (size_t i = 1; i < basis; ++i)
-      ofs += this->getNoNodes(true,i);
-  }
+  madof.resize(this->getNoNodes(true)+1,0);
 
   char nType = basis <= 1 ? 'D' : 'P' + basis-2;
   for (size_t i = 0; i < myModel.size(); i++)
@@ -1818,7 +1812,7 @@ bool SIMbase::addMADOF (unsigned char basis, unsigned char nndof, bool otherbasi
     {
       int n = myModel[i]->getNodeID(j+1);
       if (n > 0 && myModel[i]->getNodeType(j+1) == nType)
-        madof[n-ofs] = nndof;
+        madof[n] = nndof;
       else if (n > 0 && otherbasis)
         madof[n] = myModel[i]->getNodalDOFs(j+1);
     }

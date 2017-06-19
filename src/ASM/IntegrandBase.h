@@ -258,6 +258,9 @@ public:
     return LinAlg::GENERAL_MATRIX;
   }
 
+  //! \brief Specify a norm group to adapt based on.
+  virtual int adaptiveNorm() const { return -1; }
+
   //! \brief Registers a vector to inject a named field into.
   //! \param[in] name Name of field
   //! \param[in] vec Vector to inject field into
