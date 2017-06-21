@@ -184,8 +184,10 @@ bool ASMu2Dmx::generateFEMTopology ()
   lrspline = m_basis[geoBasis-1];
 
   nb.resize(m_basis.size());
-  for (size_t i=0; i < m_basis.size(); ++i)
+  for (size_t i=0; i < m_basis.size(); ++i) {
+    m_basis[i]->generateIDs();
     nb[i] = m_basis[i]->nBasisFunctions();
+  }
 
   if (shareFE == 'F') return true;
 
@@ -205,8 +207,6 @@ bool ASMu2Dmx::generateFEMTopology ()
   myMLGE.resize(nel,0);
   myMLGN.resize(nnod);
   myMNPC.resize(nel);
-  for (auto&& it : m_basis)
-    it->generateIDs();
 
   std::vector<LR::Element*>::iterator el_it1 = m_basis[geoBasis-1]->elementBegin();
   for (size_t iel=0; iel<nel; iel++, ++el_it1)
@@ -727,7 +727,7 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
 
   // which basis to refine
   size_t bas = (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2 ||
-                ASMmxBase::Type == ASMmxBase::FULL_CONT_RAISE_BASIS2) ? 1 : 0;
+                ASMmxBase::Type == ASMmxBase::FULL_CONT_RAISE_BASIS2) ? 0 : 1;
 
   // to pick up if LR splines get stuck while doing refinement
   // print entry and exit point of this function

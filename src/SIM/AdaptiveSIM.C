@@ -15,10 +15,13 @@
 #include "SIMoutput.h"
 #include "SIMenums.h"
 #include "ASMunstruct.h"
+#include "ASMmxBase.h"
+#include "ASMu2D.h"
 #include "IntegrandBase.h"
 #include "Utilities.h"
 #include "IFEM.h"
 #include "tinyxml.h"
+#include "LRSpline/LRSplineSurface.h"
 #include <sstream>
 #include <cstdio>
 
@@ -314,13 +317,21 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     // Sum up the total error over all supported elements for each function
     ASMbase* patch = model.getPatch(1);
     if (!patch) return false;
-    IntMat::const_iterator eit;
-    IntVec::const_iterator nit;
-    for (i = 0; i < patch->getNoNodes(); i++) // Loop over basis functions
+    int basis = patch->getNoBasis() > 1 ? ASMmxBase::geoBasis : 1;
+    const LR::LRSplineSurface* srf = dynamic_cast<ASMu2D*>(patch)->getBasis(basis);
+    for (i = 0; i < patch->getNoNodes(basis); i++) // Loop over basis functions
       errors.push_back(DblIdx(0.0,i));
-    for (i = 1, eit = patch->begin_elm(); eit < patch->end_elm(); ++eit, i++)
-      for (nit = eit->begin(); nit < eit->end(); ++nit)
-        errors[*nit].first += eNorm(eRow,i);
+
+    i = 1;
+    for (auto& eit : srf->getAllElements()) {
+      for (auto nit : eit->support())
+        errors[nit->getId()].first += eNorm(eRow,i);
+      ++i;
+    }
+
+//    for (i = 1, eit = patch->begin_elm(); eit < patch->end_elm(); ++eit, i++)
+//      for (nit = eit->begin(); nit < eit->end(); ++nit)
+//        errors[*nit].first += eNorm(eRow,i);
   }
   else
     for (i = 0; i < eNorm.cols(); i++)
