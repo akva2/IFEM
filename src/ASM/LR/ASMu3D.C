@@ -37,14 +37,14 @@
 
 ASMu3D::ASMu3D (unsigned char n_f)
   : ASMunstruct(3,3,n_f), lrspline(nullptr), tensorspline(nullptr),
-    bezierExtract(myBezierExtract)
+    myGeoBasis(1), bezierExtract(myBezierExtract)
 {
 }
 
 
 ASMu3D::ASMu3D (const ASMu3D& patch, unsigned char n_f)
   : ASMunstruct(patch,n_f), lrspline(patch.lrspline), tensorspline(nullptr),
-    bezierExtract(patch.myBezierExtract)
+    myGeoBasis(1), bezierExtract(patch.myBezierExtract)
 {
   // Need to set nnod here,
   // as hasXNodes might be invoked before the FE data is generated
@@ -446,11 +446,10 @@ void ASMu3D::constrainFace (int dir, bool open, int dof, int code, char basis)
   for (const auto& it : corners.find(face)->second)
     *c++ = this->getCorner(it[0], it[1], it[2], basis);
 
-  int j = 0;
   int bcode = abs(code);
   for (auto b : faceFunctions)
   {
-    de.MLGN[j++] = b->getId();
+    de.MLGN.push_back(b->getId());
     int* cid = std::find(de.corners, de.corners+4, b->getId()+ofs);
     // skip corners for open boundaries
     if (open && cid == de.corners+4)
@@ -2176,11 +2175,12 @@ bool ASMu3D::updateDirichlet (const std::map<int,RealFunc*>& func,
         if (mit == mpcs.end()) continue; // probably a deleted constraint
 
         // Now update the prescribed value in the constraint equation
-        (*mit)->setSlaveCoeff(edgeControlmatrix[dof-1][j++]);
+        (*mit)->setSlaveCoeff(edgeControlmatrix[dirich[i].dof > 10 ? dof-1 : 0][j]);
 #if SP_DEBUG > 1
         std::cout <<"Updated constraint: "<< **mit;
 #endif
       }
+      ++j;
     }
   }
 

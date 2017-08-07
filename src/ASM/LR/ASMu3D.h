@@ -490,6 +490,7 @@ protected:
   // this object for increased efficiency.
 
   std::vector<DirichletFace> dirich; //!< Inhomogeneous Dirichlet boundary condition data
+  int myGeoBasis; //!< Used with mixed
 
   ThreadGroups threadGroups; //!< Element groups for multi-threaded assembly
 private:

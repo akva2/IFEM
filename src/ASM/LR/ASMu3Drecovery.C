@@ -559,7 +559,7 @@ bool ASMu3D::faceL2projection (const DirichletFace& edge,
         }
 
       // Evaluate basis function (geometry) derivatives at current integration points
-      this->evaluateBasis(fe, dNdu);
+      this->evaluateBasis(fe, dNdu, myGeoBasis);
 
       // Compute basis function derivatives and the edge normal
       fe.detJxW = utl::Jacobian(Jac,normal,fe.dNdX,Xnod,dNdu,t1,t2);
@@ -625,9 +625,7 @@ bool ASMu3D::faceL2projection (const DirichletFace& edge,
 #endif
 
   // Solve the edge-global equation system
-  if (!A.solve(B[0], true)) return false;
-  // Solve the system for the rest of the right-hand-side components (re-use LU factorization)
-  for (size_t k=1; k<nsd; k++)
+  for (size_t k = 0; k < B.size(); k++)
     if (!A.solve(B[k], false)) return false;
 
 #if SP_DEBUG > 2
@@ -637,7 +635,7 @@ bool ASMu3D::faceL2projection (const DirichletFace& edge,
 
   // Store the control-point values of the projected field
   result.resize(values.dim());
-  for(size_t i=0; i<nsd; i++)
+  for(size_t i = 0; i < values.dim(); i++)
   {
     result[i].resize(n);
     std::copy(B[i].begin(), B[i].end(), result[i].begin());

@@ -41,6 +41,7 @@ ASMu3Dmx::ASMu3Dmx (const CharVec& n_f)
   : ASMu3D(std::accumulate(n_f.begin(), n_f.end(), 0)), ASMmxBase(n_f),
     bezierExtract(myBezierExtract)
 {
+  myGeoBasis = ASMmxBase::geoBasis;
 }
 
 
@@ -51,6 +52,7 @@ ASMu3Dmx::ASMu3Dmx (const ASMu3Dmx& patch, const CharVec& n_f)
   m_basis = patch.m_basis;
   nfx = patch.nfx;
   nb =  patch.nb;
+  myGeoBasis = ASMmxBase::geoBasis;
 }
 
 
