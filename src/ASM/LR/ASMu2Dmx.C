@@ -307,6 +307,9 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
         continue;
       }
 
+      if (integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS)
+        fe.h = this->getElementCorners(geoEl,fe.XC);
+
       // Compute parameter values of the Gauss points over this element
       std::array<RealArray,2> gpar;
       for (int d = 0; d < 2; d++)
@@ -498,7 +501,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
     }
 
     if (integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS)
-      this->getElementCorners(iel,fe.XC);
+      fe.h = this->getElementCorners(iel,fe.XC);
 
     // Get integration gauss points over this element
     this->getGaussPointParameters(gpar[t2-1],t2-1,nGP,geoEl,xg);
