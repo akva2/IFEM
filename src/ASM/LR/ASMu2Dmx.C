@@ -910,3 +910,17 @@ void ASMu2Dmx::getBoundaryNodes (int lIndex, IntVec& nodes, int basis,
     for (size_t b = 1; b <= this->getNoBasis(); ++b)
       this->ASMu2D::getBoundaryNodes(lIndex, nodes, b, thick, orient, local);
 }
+
+
+void ASMu2Dmx::remapErrors(std::vector<DblIdx>& errors, const Vector& origErr)
+{
+  const LR::LRSplineSurface* basis = this->getBasis(1);
+  const LR::LRSplineSurface* geo = this->getBasis(ASMmxBase::geoBasis);
+
+  for (auto& eit : basis->getAllElements()) {
+    int gEl = geo->getElementContaining((eit->umin()+eit->umax())/2.0,
+                                        (eit->vmin()+eit->vmax())/2.0) + 1;
+    for (auto nit : eit->support())
+      errors[nit->getId()].first += origErr(gEl);
+  }
+}
