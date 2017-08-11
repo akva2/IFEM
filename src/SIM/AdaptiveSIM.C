@@ -15,10 +15,15 @@
 #include "SIMoutput.h"
 #include "SIMenums.h"
 #include "ASMunstruct.h"
+#include "ASMmxBase.h"
+#include "ASMu2D.h"
+#include "ASMu3D.h"
 #include "IntegrandBase.h"
 #include "Utilities.h"
 #include "IFEM.h"
 #include "tinyxml.h"
+#include "LRSpline/LRSplineSurface.h"
+#include "LRSpline/LRSplineVolume.h"
 #include <sstream>
 #include <cstdio>
 
@@ -258,11 +263,33 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF)
 }
 
 
-//! \brief Element error and associated index.
-//! \note The error value must be first and the index second, such that the
-//! internally defined greater-than operator can be used when sorting the
-//! error+index pairs in decreasing error order.
-typedef std::pair<double,int> DblIdx;
+void AdaptiveSIM::remapErrors(std::vector<DblIdx>& errors,
+                              const ASMbase* patch,
+                              const Vector& origErr)
+{
+  if (patch->getNoSpaceDim() == 2) {
+    const LR::LRSplineSurface* basis = dynamic_cast<const ASMu2D*>(patch)->getBasis(1);
+    const LR::LRSplineSurface* geo = dynamic_cast<const ASMu2D*>(patch)->getBasis(ASMmxBase::geoBasis);
+
+    for (auto& eit : basis->getAllElements()) {
+      int gEl = geo->getElementContaining((eit->umin()+eit->umax())/2.0,
+          (eit->vmin()+eit->vmax())/2.0) + 1;
+      for (auto nit : eit->support())
+        errors[nit->getId()].first += origErr(gEl);
+    }
+  } else {
+    const LR::LRSplineVolume* basis = dynamic_cast<const ASMu3D*>(patch)->getBasis(1);
+    const LR::LRSplineVolume* geo = dynamic_cast<const ASMu3D*>(patch)->getBasis(ASMmxBase::geoBasis);
+
+    for (auto& eit : basis->getAllElements()) {
+      int gEl = geo->getElementContaining((eit->umin()+eit->umax())/2.0,
+                                           (eit->vmin()+eit->vmax())/2.0,
+                                           (eit->wmin()+eit->wmax())/2.0) + 1;
+      for (auto nit : eit->support())
+        errors[nit->getId()].first += origErr(gEl);
+    }
+  }
+}
 
 
 bool AdaptiveSIM::adaptMesh (int iStep)
@@ -309,7 +336,11 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   {
     IFEM::cout <<"\nRefining by increasing solution space by "<< beta
                <<" percent."<< std::endl;
-    prm.errors = eNorm.getRow(eRow);
+    std::vector<DblIdx> errors(model.getPatch(1)->getNoNodes(1));
+    remapErrors(errors, model.getPatch(1), eNorm.getRow(eRow));
+    prm.errors.reserve(errors.size());
+    for (auto &it : errors)
+      prm.errors.push_back(it.first);
     if (!storeMesh)
       return model.refine(prm);
 
@@ -324,13 +355,12 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     // Sum up the total error over all supported elements for each function
     ASMbase* patch = model.getPatch(1);
     if (!patch) return false;
-    IntMat::const_iterator eit;
-    IntVec::const_iterator nit;
-    for (i = 0; i < patch->getNoNodes(); i++) // Loop over basis functions
+
+    errors.reserve(patch->getNoNodes(1));
+    for (i = 0; i < patch->getNoNodes(1); i++) // Loop over basis functions
       errors.push_back(DblIdx(0.0,i));
-    for (i = 1, eit = patch->begin_elm(); eit < patch->end_elm(); ++eit, i++)
-      for (nit = eit->begin(); nit < eit->end(); ++nit)
-        errors[*nit].first += eNorm(eRow,i);
+
+    remapErrors(errors, patch, eNorm.getRow(eRow));
   }
   else
     for (i = 0; i < eNorm.cols(); i++)

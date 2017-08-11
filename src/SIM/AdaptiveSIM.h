@@ -77,6 +77,19 @@ private:
   SIMoutput& model; //!< The isogeometric FE model
   bool       alone; //!< If \e false, this class is wrapped by SIMSolver
 
+  //! \brief Element error and associated index.
+  //! \note The error value must be first and the index second, such that the
+  //! internally defined greater-than operator can be used when sorting the
+  //! error+index pairs in decreasing error order.
+  typedef std::pair<double,int> DblIdx;
+
+  //! \brief Remap element wise errors from geometry mesh to refinement mesh.
+  //! \param     errors The remapped errors
+  //! \param[in] patch The patch which holds the meshes
+  //! \param[in] origErr The element wise errors on the geometry mesh
+  void remapErrors(std::vector<DblIdx>& errors,
+                   const ASMbase* patch, const Vector& origErr);
+
   bool   storeMesh;    //!< Creates a series of eps-files for intermediate steps
   bool   linIndepTest; //!< Test mesh for linear independence after refinement
   double beta;         //!< Refinement percentage in each step
