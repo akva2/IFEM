@@ -645,10 +645,9 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
   de.lr   = lr;
   int bcode = abs(code);
 
-  int j = 0;
   for (auto b : edgeFunctions)
   {
-    de.MLGN[j++] = b->getId();
+    de.MLGN.push_back(b->getId());
     // skip corners for open boundaries
     if (open && (b->getId() == de.corners[0] || b->getId() == de.corners[1]))
       continue;
@@ -685,10 +684,11 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
     for (auto b : el->support())
     {
       de.MNPC[i].push_back(-1);
-      for (auto l2g : de.MLGN)
+
+      for (size_t j = 0; j < de.MLGN.size(); j++)
         // can't do map::find, since this works on first
-        if (b->getId() == l2g.second)
-          de.MNPC[i].back() = l2g.first;
+        if (b->getId() == de.MLGN[j])
+          de.MNPC[i].back() = j;
     }
   }
   if (code > 0)
@@ -1887,11 +1887,6 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
                               const std::map<int,VecFunc*>& vfunc, double time,
                               const std::map<int,int>* g2l)
 {
-
-  std::map<int,RealFunc*>::const_iterator    fit;
-  std::map<int,VecFunc*>::const_iterator     vfit;
-  std::map<int,int>::const_iterator          nit;
-
   for (size_t i = 0; i < dirich.size(); i++)
   {
     // figure out function index offset (when using multiple basis)
@@ -1899,10 +1894,11 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
     for (int j = 1; j < dirich[i].basis; j++)
       ofs += this->getNoNodes(j);
 
-    RealArray edgeControlpoints;
     Real2DMat edgeControlmatrix;
+    std::map<int,RealFunc*>::const_iterator  fit;
+    std::map<int,VecFunc*>::const_iterator   vfit;
     if ((fit = func.find(dirich[i].code)) != func.end())
-      edgeL2projection(dirich[i], *fit->second, edgeControlpoints, time);
+      edgeL2projection(dirich[i], *fit->second, edgeControlmatrix, time);
     else if ((vfit = vfunc.find(dirich[i].code)) != vfunc.end())
       edgeL2projection(dirich[i], *vfit->second, edgeControlmatrix, time);
     else
@@ -1911,7 +1907,7 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
                 <<" is not associated with any function."<< std::endl;
       return false;
     }
-    if (edgeControlpoints.empty() && edgeControlmatrix.empty())
+    if (edgeControlmatrix.empty())
     {
       std::cerr <<" *** ASMu2D::updateDirichlet: Projection failure."
                 << std::endl;
@@ -1919,29 +1915,30 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
     }
 
     // Loop over the nodes of this boundary curve
-    for (nit = dirich[i].MLGN.begin(); nit != dirich[i].MLGN.end(); nit++)
+    int j = 0;
+    for (int node : dirich[i].MLGN)
     {
       // skip corner nodes, since these are special cased (interpolatory)
-      if (nit->second == dirich[i].corners[0] ||
-          nit->second == dirich[i].corners[1])
+      if (node == dirich[i].corners[0] || node == dirich[i].corners[1]) {
+        ++j;
         continue;
+      }
       for (int dofs = dirich[i].dof; dofs > 0; dofs /= 10)
       {
         int dof = dofs%10;
         // Find the constraint equation for current (node,dof)
-        MPC pDOF(MLGN[nit->second+ofs-1],dof);
+        MPC pDOF(MLGN[node+ofs-1],dof);
         MPCIter mit = mpcs.find(&pDOF);
         if (mit == mpcs.end()) continue; // probably a deleted constraint
 
         // Now update the prescribed value in the constraint equation
-        if (edgeControlpoints.empty()) // vector conditions
-          (*mit)->setSlaveCoeff(edgeControlmatrix[dof-1][nit->first]);
-        else                           //scalar condition
-          (*mit)->setSlaveCoeff(edgeControlpoints[nit->first]);
+        size_t idx = dirich[i].dof > 10 ? dof-1 : 0;
+        (*mit)->setSlaveCoeff(edgeControlmatrix[idx][j]);
 #if SP_DEBUG > 1
         std::cout <<"Updated constraint: "<< **mit;
 #endif
       }
+      ++j;
     }
   }
 

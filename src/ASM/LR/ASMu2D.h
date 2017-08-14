@@ -330,7 +330,7 @@ private:
     LR::LRSplineSurface *lr;       //!< Pointer to the right object (in case of multiple bases)
     LR::parameterEdge   edg;       //!< Which edge is this
     IntVec              MLGE;      //!< Local-to-Global Element numbers
-    std::map<int,int>   MLGN;      //!< Local-to-Global Nodal numbers
+    IntVec              MLGN;      //!< Local-to-Global Nodal numbers
     IntMat              MNPC;      //!< Matrix of Nodal-Point Correpondanse
     int                 dof;       //!< Local DOF to constrain along the boundary
     int                 code;      //!< Inhomogeneous Dirichlet condition code
@@ -385,17 +385,7 @@ public:
   //! \param[out] result fitted value in terms of control-point values
   //! \param[in] time time used in dynamic problems
   bool edgeL2projection (const DirichletEdge& edge,
-                         const RealFunc& values,
-                         RealArray& result,
-                         double time) const;
-
-  //! \brief Projects inhomogenuous (vector) dirichlet conditions by continuous L2-fit.
-  //! \param[in] edge low-level edge information needed to do integration
-  //! \param[in] values inhomogenuous function which is to be fitted
-  //! \param[out] result fitted value in terms of control-point values
-  //! \param[in] time time used in dynamic problems
-  bool edgeL2projection (const DirichletEdge& edge,
-                         const VecFunc& values,
+                         const FunctionBase& values,
                          Real2DMat& result,
                          double time) const;
 
