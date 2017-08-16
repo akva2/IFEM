@@ -137,7 +137,7 @@ PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar,
 {
   // Create matrix object, by default the matrix type is AIJ
   bool matrixfree = spar.getIntValue("matrixfree") ? true : false;
-  if (!matrixfree)
+//  if (!matrixfree)
     MatCreate(*adm.getCommunicator(),&A);
 
   // Create linear solver object
