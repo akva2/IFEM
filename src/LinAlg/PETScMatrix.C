@@ -132,7 +132,7 @@ Real PETScVector::Linfnorm() const
 
 PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar,
                           LinAlg::LinearSystemType ltype) :
-  SparseMatrix(SUPERLU, 1), mxv(nullptr), mxvOwnMatrix(false), mfpc(nullptr), 
+  SparseMatrix(SUPERLU, 1), mxv(nullptr), mxvOwnMatrix(true), mfpc(nullptr), 
   nsp(nullptr), adm(padm), solParams(spar, adm), linsysType(ltype)
 {
   // Create matrix object, by default the matrix type is AIJ
