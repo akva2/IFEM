@@ -194,6 +194,12 @@ public:
                                 int basis, int thick = 1,
                                 int orient = 0, bool local = false) const;
 
+  //! \brief Remap element wise errors from geometry mesh to refinement mesh.
+  //! \param     errors The remapped errors
+  //! \param[in] patch The patch which holds the meshes
+  //! \param[in] origErr The element wise errors on the geometry mesh
+  virtual void remapErrors(std::vector<DblIdx>& errors, const Vector& origErr);
+
 protected:
   //! \brief Assembles L2-projection matrices for the secondary solution.
   //! \param[out] A Left-hand-side matrix

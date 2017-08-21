@@ -1217,3 +1217,10 @@ bool ASMbase::evaluate (const FunctionBase*, RealArray&, int, double) const
 {
   return Aerror("evaluate(const FunctionBase*,RealArray&,int,double)");
 }
+
+
+void ASMbase::remapErrors(std::vector<DblIdx>& errors, const Vector& origErr)
+{
+  for (size_t i = 0; i < origErr.size(); ++i)
+    errors[i].first = origErr[i];
+}

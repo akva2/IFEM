@@ -15,10 +15,15 @@
 #include "SIMoutput.h"
 #include "SIMenums.h"
 #include "ASMunstruct.h"
+#include "ASMmxBase.h"
+#include "ASMu2D.h"
+#include "ASMu3D.h"
 #include "IntegrandBase.h"
 #include "Utilities.h"
 #include "IFEM.h"
 #include "tinyxml.h"
+#include "LRSpline/LRSplineSurface.h"
+#include "LRSpline/LRSplineVolume.h"
 #include <sstream>
 #include <cstdio>
 
@@ -258,13 +263,6 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF)
 }
 
 
-//! \brief Element error and associated index.
-//! \note The error value must be first and the index second, such that the
-//! internally defined greater-than operator can be used when sorting the
-//! error+index pairs in decreasing error order.
-typedef std::pair<double,int> DblIdx;
-
-
 bool AdaptiveSIM::adaptMesh (int iStep)
 {
   if (iStep < 2)
@@ -309,7 +307,11 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   {
     IFEM::cout <<"\nRefining by increasing solution space by "<< beta
                <<" percent."<< std::endl;
-    prm.errors = eNorm.getRow(eRow);
+    std::vector<ASMbase::DblIdx> errors(model.getPatch(1)->getNoNodes(1));
+    model.getPatch(1)->remapErrors(errors, eNorm.getRow(eRow));
+    prm.errors.reserve(errors.size());
+    for (auto &it : errors)
+      prm.errors.push_back(it.first);
     if (!storeMesh)
       return model.refine(prm);
 
@@ -347,7 +349,7 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   }
 
   // Sort the elements in the sequence of decreasing errors
-  std::sort(errors.begin(),errors.end(),std::greater<DblIdx>());
+  std::sort(errors.begin(),errors.end(),std::greater<ASMbase::DblIdx>());
 
   // find the list of refinable elements/basisfunctions
   // the variable 'toBeRefined' contains one of the following:
@@ -374,7 +376,8 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     refineSize = ceil(errors.size()*beta/100.0);
   else
     refineSize = std::upper_bound(errors.begin(), errors.end(),
-                                  DblIdx(limit,0), std::greater_equal<DblIdx>())
+                                  ASMbase::DblIdx(limit,0),
+                                  std::greater_equal<ASMbase::DblIdx>())
                - errors.begin();
 
   IFEM::cout <<"\nRefining "<< refineSize
