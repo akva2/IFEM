@@ -320,22 +320,40 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     return model.refine(prm,fname);
   }
 
-  std::vector<DblIdx> errors;
-  if (scheme == 2) // use errors per function
+  std::vector<ASMbase::DblIdx> errors;
+  if (scheme == 2)
   {
-    // Sum up the total error over all supported elements for each function
-    IntMat::const_iterator eit;
-    IntVec::const_iterator nit;
-    int eOfs = 0;
-    errors.resize(model.getNoNodes(true));
+    errors.reserve(model.getNoNodes());
+    for (i = 0; i < model.getNoNodes(); i++)
+      errors.push_back(ASMbase::DblIdx(0.0,i));
+
     for (ASMbase* patch : model.getFEModel()) {
-      for (i = 1, eit = patch->begin_elm(); eit < patch->end_elm(); eit++, i++)
-        for (nit = eit->begin(); nit < eit->end(); nit++) {
-          int node = patch->getNodeID(*nit+1)-1;
-          errors[node].first += eNorm(eRow,i+eOfs);
-          errors[node].second = node;
-        }
-      eOfs += patch->getNoElms();
+      if (!patch) return false;
+
+      std::vector<ASMbase::DblIdx> locErr;
+      size_t rBasis = 1; // TODO: make this non-hardcoded.
+      size_t nOfs = 0; // first node on refinement basis for patch
+      for (i = 1; i < rBasis; ++i)
+        nOfs += patch->getNoNodes(i);
+
+      // resize
+      locErr.reserve(patch->getNoNodes(rBasis));
+      for (i = 0; i < patch->getNoNodes(rBasis); i++)
+        locErr.push_back(ASMbase::DblIdx(0.0,i));
+
+      // extract element norms for this patch
+      Vector locNorm(patch->getNoElms());
+      for (i = 1; i <= patch->getNoElms(); ++i)
+        locNorm(i) = eNorm(eRow, patch->getElmID(i));
+
+      // remap from geometry basis to refinement basis
+      patch->remapErrors(locErr, locNorm);
+
+      // insert into global error array
+      for (i = 0; i < locErr.size(); ++i) {
+        std::cout << i << " -> " << patch->getNodeID(i+1+nOfs)-1 << std::endl;
+        errors[patch->getNodeID(i+1+nOfs)-1].first += locErr[i].first;
+      }
     }
   }
   else { // use errors per element
@@ -345,7 +363,7 @@ bool AdaptiveSIM::adaptMesh (int iStep)
       return false;
     }
     for (i = 0; i < eNorm.cols(); i++)
-      errors.push_back(DblIdx(eNorm(eRow,1+i),i));
+      errors.push_back(ASMbase::DblIdx(eNorm(eRow,1+i),i));
   }
 
   // Sort the elements in the sequence of decreasing errors
