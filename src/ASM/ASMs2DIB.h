@@ -31,7 +31,7 @@ class ASMs2DIB : public ASMs2D
     element is intersected by the immersed boundary, or if it is neighbor to
     an element that is intersected.
   */
-  class Intersected : public InterfaceChecker
+  class Intersected : public ASMs2D::InterfaceChecker
   {
     const ASMs2DIB& myPatch; //!< Reference to the patch being integrated
     bool            myAll;   //!< If \e true, consider all element interfaces
