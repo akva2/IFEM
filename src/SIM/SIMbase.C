@@ -1341,6 +1341,13 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
         if (mySol)
           mySol->initPatch(pch->idx);
 	ok &= pch->integrate(*norm,globalNorm,time);
+        if (norm->getIntegrandType() & IntegrandBase::INTERFACE_TERMS) {
+          ASM::InterfaceChecker* iChk = this->getInterfaceChecker(pch->idx);
+          if (iChk) {
+            ok &= !pch->integrate(*norm,globalNorm,time,*iChk);
+            delete iChk;
+          }
+        }
       }
       else
 	ok = false;
@@ -1359,6 +1366,13 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
       if (mySol)
         mySol->initPatch(myModel[i]->idx);
       ok &= myModel[i]->integrate(*norm,globalNorm,time);
+      if (norm->getIntegrandType() & IntegrandBase::INTERFACE_TERMS) {
+        ASM::InterfaceChecker* iChk = this->getInterfaceChecker(myModel[i]->idx);
+        if (iChk) {
+          ok &= myModel[i]->integrate(*norm,globalNorm,time,*iChk);
+          delete iChk;
+        }
+      }
       lp = i+1;
     }
 
