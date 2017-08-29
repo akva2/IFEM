@@ -1387,6 +1387,9 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   for (k = 0; k < gNorm.size(); k++)
     adm.allReduceAsSum(gNorm[k]);
 
+  if (ok)
+    ok = this->postProcessNorms(gNorm, eNorm);
+
   return ok;
 }
 
