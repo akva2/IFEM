@@ -1332,6 +1332,13 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
           else
             this->extractPatchSolution(ssol[k],norm->getProjection(k),lp-1,nCmp,1);
 	ok &= pch->integrate(*norm,globalNorm,time);
+        if (norm->getIntegrandType() & IntegrandBase::INTERFACE_TERMS) {
+          ASM::InterfaceChecker* iChk = this->getInterfaceChecker(pch->idx);
+          if (iChk) {
+            ok &= !pch->integrate(*norm,globalNorm,time,*iChk);
+            delete iChk;
+          }
+        }
       }
       else
 	ok = false;
@@ -1348,6 +1355,13 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
         else
           this->extractPatchSolution(ssol[k],norm->getProjection(k),i,nCmp,1);
       ok &= myModel[i]->integrate(*norm,globalNorm,time);
+      if (norm->getIntegrandType() & IntegrandBase::INTERFACE_TERMS) {
+        ASM::InterfaceChecker* iChk = this->getInterfaceChecker(myModel[i]->idx);
+        if (iChk) {
+          ok &= myModel[i]->integrate(*norm,globalNorm,time,*iChk);
+          delete iChk;
+        }
+      }
       lp = i+1;
     }
 
