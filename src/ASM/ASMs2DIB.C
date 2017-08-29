@@ -228,7 +228,7 @@ bool ASMs2DIB::generateFEMTopology ()
 }
 
 
-short int ASMs2DIB::Intersected::hasContribution (int I, int J) const
+short int ASMs2DIB::Intersected::hasContribution (int, int I, int J, int) const
 {
   const int n1 = myPatch.surf->numCoefs_u();
   const int n2 = myPatch.surf->numCoefs_v();
