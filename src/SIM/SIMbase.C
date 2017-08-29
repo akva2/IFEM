@@ -1283,7 +1283,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   gNorm.resize(norm->getNoFields(0));
   size_t nNorms = 0;
   for (i = 0; i < gNorm.size(); i++)
-    if (i == 0 || i > ssol.size() || !ssol[i-1].empty())
+    if (i == 0 || i >= ssol.size())
     {
       size_t nNrm = norm->getNoFields(1+i);
       gNorm[i].resize(nNrm,true);
