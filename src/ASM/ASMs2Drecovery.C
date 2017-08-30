@@ -80,7 +80,7 @@ bool ASMs2D::evaluate (const ASMbase* basis, const Vector& locVec,
   // Note: it is here assumed that *basis and *this have spline bases
   // defined over the same parameter domain.
   Matrix sValues;
-  if (!pch->evalSolution(sValues,locVec,gpar.data()))
+  if (!pch->evalSolution(sValues,locVec,gpar.data(),true))
     return false;
 
   Go::SplineSurface* surf = this->getBasis(basisNum);

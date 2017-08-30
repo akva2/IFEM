@@ -849,7 +849,7 @@ bool SIMoutput::writeGlvP (const Vector& ssol, int iStep, int& nBlock,
 
     // Evaluate the solution variables at the visualization points
     this->extractPatchSolution(ssol,lovec,i,sID.size(),1);
-    if (!myModel[i]->evalSolution(field,lovec,opt.nViz))
+    if (!myModel[i]->evalSolution(field,lovec,opt.nViz,sID.size()))
       return false;
 
     // Write out to VTF-file as scalar fields

@@ -407,7 +407,7 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     limit = 0.0;
   }
   if (threshold == NONE)
-    refineSize = ceil(errors.size()*beta/100.0);
+    refineSize = ceil(model.getNoNodes(1)*beta/100.0);
   else
     refineSize = std::upper_bound(errors.begin(), errors.end(),
                                   DblIdx(limit,0),
@@ -446,8 +446,13 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     return false;
 
   prm.elements.reserve(refineSize);
-  for (i = 0; i < refineSize; i++)
-    prm.elements.push_back(errors[i].second);
+  size_t j = 0;
+  for (i = 0; j < refineSize; i++) {
+    if (model.getNodeType(errors[i].first+1) == 'D') {
+      prm.elements.push_back(errors[i].second);
+      ++j;
+    }
+  }
 
   // Now refine the mesh
   if (!storeMesh)
@@ -471,11 +476,11 @@ void AdaptiveSIM::printNorms (size_t w) const
 
     const Vector& fNorm = gNorm.front();
     const Vector& aNorm = gNorm[adaptor];
-    IFEM::cout <<"\nError estimate"
-               << utl::adjustRight(w-14,norm->getName(adaptor+1,adNorm))
-               << aNorm(adNorm)
-               <<"\nRelative error (%) : "
-               << 100.0*aNorm(adNorm)/model.getReferenceNorm(gNorm,adaptor);
+//    IFEM::cout <<"\nError estimate "
+//               << utl::adjustRight(w-14,norm->getName(adaptor+1,adNorm))
+//               << aNorm(adNorm)
+//               <<"\nRelative error (%) : "
+//               << 100.0*aNorm(adNorm)/model.getReferenceNorm(gNorm,adaptor);
     if (model.haveAnaSol() && fNorm.size() > 3 && adNorm == 2)
       IFEM::cout <<"\nEffectivity index  : "<< aNorm(2)/fNorm(4);
     IFEM::cout <<"\n"<< std::endl;
