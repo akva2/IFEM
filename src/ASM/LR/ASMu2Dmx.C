@@ -838,7 +838,7 @@ bool ASMu2Dmx::refine2 (const LR::RefineData& prm,
       }
 
   if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
-    m_basis[0].reset(new LR::LRSplineSurface(*projBasis));
+    m_basis[0].reset(projBasis->copy());
     size_t nFunc = projBasis->nBasisFunctions();
     IntVec elems(nFunc);
     std::iota(elems.begin(),elems.end(),0);
@@ -1103,10 +1103,7 @@ void ASMu2Dmx::remapErrors(RealArray& errors, const RealArray& origErr) const
   for (const LR::Element* elm : basis->getAllElements()) {
     int gEl = geo->getElementContaining((elm->umin()+elm->umax())/2.0,
                                         (elm->vmin()+elm->vmax())/2.0) + 1;
-    std::cout << "gEl = " << gEl << " nelm = " << origErr.size() << std::endl;
-    for (const LR::Basisfunction* b : elm->support()) {
-      std::cout << "\t map to function " << b->getId() << std::endl;
+    for (const LR::Basisfunction* b : elm->support())
       errors[b->getId()] += origErr[gEl-1];
-    }
   }
 }
