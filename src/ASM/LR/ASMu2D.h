@@ -411,7 +411,8 @@ public:
   //! \param[in] sidx  Index of face/edge on neighbour
   //! \param[in] orient Orientation flag for connection
   virtual bool matchNeighbour(ASMunstruct* neigh,
-                              int midx, int sidx, int orient);
+                              int midx, int sidx, int orient,
+                              Vectors& extraCoefs);
 
 protected:
 

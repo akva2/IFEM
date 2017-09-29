@@ -144,8 +144,12 @@ public:
   //! \param[in] midx Index of face/edge on this patch
   //! \param[in] sidx  Index of face/edge on neighbour
   //! \param[in] orient Orientation flag for connection
+  //! \param[in] extraCoefs Extra coefficients to attach (solution transfer)
+  //! \details extraCoefs holds the coefs for master patch, all bases, then
+  //!          coefs for the slave patch, all bases.                
   virtual bool matchNeighbour(ASMunstruct* neigh,
-                              int midx, int sidx, int orient) = 0;
+                              int midx, int sidx, int orient,
+                              Vectors& extraCoefs) = 0;
 
 protected:
   LR::LRSpline* geo; //!< Pointer to the actual spline geometry object

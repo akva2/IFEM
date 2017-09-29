@@ -2048,7 +2048,8 @@ void ASMu2D::generateThreadGroups (const Integrand& integrand, bool silence,
 }
 
 
-bool ASMu2D::matchNeighbour (ASMunstruct* neigh, int midx, int sidx, int orient)
+bool ASMu2D::matchNeighbour(ASMunstruct* neigh, int midx, int sidx, int orient,
+                            Vectors& extraCoefs)
 {
   ASMu2D* slave = dynamic_cast<ASMu2D*>(neigh);
   if (!slave)
@@ -2073,10 +2074,22 @@ bool ASMu2D::matchNeighbour (ASMunstruct* neigh, int midx, int sidx, int orient)
 
   bool result = false;
   for (size_t i = 1; i <= this->getNoBasis(); ++i) {
+    if (!extraCoefs.empty()) {
+      LR::extendControlPoints(this->getBasis(i), extraCoefs[i], 
+                              extraCoefs[i].size()/this->getBasis(i)->nBasisFunctions());
+      LR::extendControlPoints(slave->getBasis(i), extraCoefs[i+extraCoefs.size()/2], 
+                              extraCoefs[i+extraCoefs.size()/2].size()/slave->getBasis(i)->nBasisFunctions());
+    }
     result |= this->getBasis(i)->matchParametricEdge(medge, slave->getBasis(i),
                                                      sedge, orient);
-    this->getBasis(i)->enforceIsotropic();
-    slave->getBasis(i)->enforceIsotropic();
+//    this->getBasis(i)->enforceIsotropic();
+//    slave->getBasis(i)->enforceIsotropic();
+    if (!extraCoefs.empty()) {
+      LR::contractControlPoints(this->getBasis(i), extraCoefs[i], 
+                                extraCoefs[i].size()/this->getBasis(i)->nBasisFunctions());
+      LR::contractControlPoints(slave->getBasis(i), extraCoefs[i+extraCoefs.size()/2], 
+                                extraCoefs[i+extraCoefs.size()/2].size()/slave->getBasis(i)->nBasisFunctions());
+    }
   }
 
   return result;

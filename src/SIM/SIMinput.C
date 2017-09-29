@@ -1078,15 +1078,17 @@ bool SIMinput::refine (const LR::RefineData& prm,
 {
   isRefined = false;
   ASMunstruct* pch = nullptr;
+  Vectors nsol(sol.size()*myModel.size());
+  size_t solOfs = 0;
   for (size_t i = 0; i < myModel.size(); i++)
     if ((pch = dynamic_cast<ASMunstruct*>(myModel[i])))
     {
-      if (isRefined && !sol.empty())
+/*      if (isRefined && !sol.empty())
       {
         std::cerr <<" *** SIMinput::refine: Solution transfer is not"
                   <<" implemented for multi-patch models."<< std::endl;
         return false;
-      }
+      }*/
 
       if (myModel.size() > 1) {
         LR::RefineData prmloc(prm);
@@ -1105,8 +1107,19 @@ bool SIMinput::refine (const LR::RefineData& prm,
               prmloc.elements.push_back(node);
           }
         }
-        if (!pch->refine(prmloc,sol,fName))
+        Vectors lnsol; 
+        if (!sol.empty()) {
+          lnsol.resize(sol.size());
+          for (size_t p = 0; p < sol.size(); ++p)
+            pch->extractNodeVec(sol[p], lnsol[p],
+                                sol[p].size()/this->getNoNodes(1));
+        }
+        if (!pch->refine(prmloc,lnsol,fName))
           return false;
+        if (!sol.empty()) {
+          for (size_t p = 0; p < sol.size(); ++p, ++solOfs)
+            nsol[solOfs] = lnsol[p];
+        }
       } else if (!pch->refine(prm,sol,fName))
         return false;
 
@@ -1126,14 +1139,31 @@ bool SIMinput::refine (const LR::RefineData& prm,
         int midx = this->getLocalPatchIndex(it.master);
         ASMunstruct* pch = dynamic_cast<ASMunstruct*>(this->getPatch(midx));
         ASMunstruct* spch = dynamic_cast<ASMunstruct*>(this->getPatch(sidx));
+        Vectors extraCoefs;
+        if (!sol.empty()) {
+          for (size_t p = 0; p < sol.size(); ++p)
+            extraCoefs.push_back(nsol[(midx-1)*sol.size()+p]);
+          for (size_t p = 0; p < sol.size(); ++p)
+            extraCoefs.push_back(nsol[(sidx-1)*sol.size()+p]);
+        }
         if (pch && spch)
-          extraRefine |= pch->matchNeighbour(spch, it.midx, it.sidx, it.orient);
+          extraRefine |= pch->matchNeighbour(spch, it.midx, it.sidx,
+                                             it.orient, extraCoefs);
+        if (!sol.empty()) {
+          for (size_t p = 0; p < sol.size(); ++p) {
+            nsol[(midx-1)*sol.size()+p] = extraCoefs[p];
+            nsol[(sidx-1)*sol.size()+p] = extraCoefs[sol.size()+p];
+          }
+        }
       }
 #ifdef HAVE_MPI
       //for (const ASM::Interface& it : adm.dd.ghostConnections) // TODO
 #endif
     } while (extraRefine);
   }
+
+  if (!sol.empty() && myModel.size() > 1)
+    sol = nsol;
 
   return isRefined;
 }

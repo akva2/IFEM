@@ -2220,7 +2220,8 @@ bool ASMu3D::updateDirichlet (const std::map<int,RealFunc*>& func,
 }
 
 
-bool ASMu3D::matchNeighbour(ASMunstruct* neigh, int midx, int sidx, int orient)
+bool ASMu3D::matchNeighbour(ASMunstruct* neigh, int midx, int sidx, int orient, 
+                            Vectors& extraCoefs)
 {
   ASMu3D* slave = dynamic_cast<ASMu3D*>(neigh);
   if (!slave)
