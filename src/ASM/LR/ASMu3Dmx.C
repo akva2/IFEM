@@ -730,7 +730,7 @@ bool ASMu3Dmx::integrate (Integrand& integrand, int lIndex,
 
 bool ASMu3Dmx::evalSolution (Matrix& sField, const Vector& locSol,
                              const RealArray* gpar, bool regular,
-                             int deriv) const
+                             int deriv, int nf) const
 {
   return false;
 }
