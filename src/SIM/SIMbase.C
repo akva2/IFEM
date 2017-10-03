@@ -1282,12 +1282,16 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   // Initialize norm integral classes
   gNorm.resize(norm->getNoFields(0));
   size_t nNorms = 0;
+  auto prj_idx = opt.project.begin();
   for (i = 0; i < gNorm.size(); i++)
-    if (i == 0 || i >= ssol.size())
+    if (i == 0 || (i >= ssol.size() && (!ssol[i-1].empty() ||
+                                        prj_idx->first == SIMoptions::NONE)))
     {
       size_t nNrm = norm->getNoFields(1+i);
       gNorm[i].resize(nNrm,true);
       nNorms += nNrm;
+      if (i != 0)
+        ++prj_idx;
     }
 
   GlbNorm globalNorm(gNorm,norm->getFinalOperation());
