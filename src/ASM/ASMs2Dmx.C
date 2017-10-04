@@ -52,7 +52,7 @@ ASMs2Dmx::ASMs2Dmx (const ASMs2Dmx& patch,
 Go::SplineSurface* ASMs2Dmx::getBasis (int basis) const
 {
   if (basis < 1 || basis > (int)m_basis.size())
-    return surf;
+    return surf.get();
 
   return m_basis[basis-1].get();
 }
@@ -86,7 +86,7 @@ void ASMs2Dmx::clear (bool retainGeometry)
 {
   // Erase the spline data
   if (!retainGeometry)
-    delete surf, surf = 0;
+    surf.reset();
 
   for (auto& it : m_basis)
     it.reset();

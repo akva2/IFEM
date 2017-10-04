@@ -195,7 +195,8 @@ bool ASMu2Dmx::generateFEMTopology ()
 
     // HACKETIHACKETIHACK!
     if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
-        ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE) {
+        ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+        ASMmxBase::Type == ASMmxBase::SUBGRID) {
       auto vec2 = ASMmxBase::establishBases(tensorspline,
                                             ASMmxBase::FULL_CONT_RAISE_BASIS1);
       projBasis.reset(new LR::LRSplineSurface(vec2.front().get()));
@@ -816,7 +817,7 @@ bool ASMu2Dmx::refine2 (const LR::RefineData& prm,
   const std::vector<LR::Meshline*> lines = projBasis->getAllMeshlines();
   for (const LR::Meshline* line : lines)
     for (size_t j = 0; j < m_basis.size(); ++j)
-      if (0)
+      if (j == 0 && ASMmxBase::Type == ASMmxBase::SUBGRID)
         continue;
       else {
         int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
@@ -835,6 +836,14 @@ bool ASMu2Dmx::refine2 (const LR::RefineData& prm,
           m_basis[j]->insert_const_u_edge(line->const_par_,
                                           line->start_, line->stop_, mult);
       }
+
+  if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
+    m_basis[0].reset(new LR::LRSplineSurface(*projBasis));
+    size_t nFunc = projBasis->nBasisFunctions();
+    IntVec elems(nFunc);
+    std::iota(elems.begin(),elems.end(),0);
+    m_basis[0]->refineBasisFunction(elems);
+  }
 
   size_t len = 0;
   for (size_t j = 0; j< m_basis.size(); ++j) {
@@ -1094,7 +1103,10 @@ void ASMu2Dmx::remapErrors(RealArray& errors, const RealArray& origErr) const
   for (const LR::Element* elm : basis->getAllElements()) {
     int gEl = geo->getElementContaining((elm->umin()+elm->umax())/2.0,
                                         (elm->vmin()+elm->vmax())/2.0) + 1;
-    for (const LR::Basisfunction* b : elm->support())
+    std::cout << "gEl = " << gEl << " nelm = " << origErr.size() << std::endl;
+    for (const LR::Basisfunction* b : elm->support()) {
+      std::cout << "\t map to function " << b->getId() << std::endl;
       errors[b->getId()] += origErr[gEl-1];
+    }
   }
 }

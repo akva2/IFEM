@@ -347,8 +347,9 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   std::vector<DblIdx> errors;
   if (scheme == 2) // use errors per function
   {
-    errors.reserve(model.getNoNodes());
-    for (i = 0; i < model.getNoNodes(); i++)
+    size_t nNodes = model.getPatch(1)->getNoNodes(-2) + model.getPatch(1)->getNoNodes(2);
+    errors.reserve(nNodes);
+    for (i = 0; i < nNodes; i++)
       errors.push_back(DblIdx(0.0,i));
 
     for (ASMbase* patch : model.getFEModel()) {
