@@ -327,6 +327,25 @@ IntVec ASMunstruct::getBoundaryNodesCovered (const IntVec& nodes) const
   return result;
 }
 
+IntVec ASMunstruct::getOverlappingNodes (const IntVec& nodes) const
+{
+  IntVec result;
+  geo->generateIDs();
+  for(const int i : nodes)
+  {
+    LR::Basisfunction *b = geo->getBasisfunction(i);
+    for(auto el : b->support()) // for all elements where *b has support
+      for(auto basis : el->support()) // for all functions on this element
+        result.push_back(basis->getId());
+  }
+
+  // remove duplicate indices
+  std::sort(result.begin(), result.end());
+  auto last = std::unique(result.begin(), result.end());
+  result.erase(last, result.end());
+  return result;
+}
+
 
 void ASMunstruct::Sort(int u, int v, int orient,
                        std::vector<LR::Basisfunction*>& functions)

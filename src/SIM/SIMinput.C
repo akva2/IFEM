@@ -1147,6 +1147,7 @@ bool SIMinput::refine (const LR::RefineData& prm,
     // for all boundary nodes, check if these appear on other patches
     for (const int k : bndry_nodes)
     {
+      conformingIndicies[i].push_back(k);
       int globId = pch->getNodeID(k+1);
       for (size_t j = 0; j < myModel.size(); j++)
       {
@@ -1170,11 +1171,21 @@ bool SIMinput::refine (const LR::RefineData& prm,
     }
   }
   for (size_t i = 0; i < myModel.size(); i++)
-    for(int j : conformingIndicies[i])
+  {
+    pch = dynamic_cast<ASMunstruct*>(myModel[i]);
+    IntVec secondary = pch->getOverlappingNodes(conformingIndicies[i]);
+    for(int j : conformingIndicies[i]) // add refinement from neighbours
       refineIndices[i].push_back(j);
-
+    for(int j : secondary)             // add depth refinement to make it conforming
+      refineIndices[i].push_back(j);
+  }
   for (size_t i = 0; i < myModel.size(); i++)
   {
+    // make unique list of refinement indices
+    std::sort(refineIndices[i].begin(), refineIndices[i].end());
+    auto last = std::unique(refineIndices[i].begin(), refineIndices[i].end());
+    refineIndices[i].erase(last, refineIndices[i].end());
+
     pch = dynamic_cast<ASMunstruct*>(myModel[i]);
     LR::RefineData prmloc(prm);
     prmloc.elements = refineIndices[i];
