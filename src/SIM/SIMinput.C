@@ -1129,9 +1129,9 @@ bool SIMinput::refine (const LR::RefineData& prm,
     // extract local indices from the vector of global indices
     pch = dynamic_cast<ASMunstruct*>(myModel[i]);
     for (int it : prm.elements) {
-      int node = myModel[i]->getNodeIndex(it+1)-1;
+      int node = myModel[i]->getNodeIndex(it+1);
       if(node > 0)
-        refineIndices[i].push_back(node);
+        refineIndices[i].push_back(node-1);
     }
     // fetch all boundary nodes covered (may need to pass this to other patches)
     IntVec bndry_nodes = pch->getBoundaryNodesCovered(refineIndices[i]);
