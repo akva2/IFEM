@@ -1104,15 +1104,6 @@ bool SIMinput::refine (const LR::RefineData& prm,
       return true;
     }
   }
-
-
-  // more  error test input
-  if (!sol.empty())
-  {
-    std::cerr <<" *** SIMinput::refine: Solution transfer is not"
-              <<" implemented for multi-patch models."<< std::endl;
-    return false;
-  }
   if (prm.errors.size() > 0 ) // refinement by true_beta
   {
     std::cerr <<" *** SIMinput::refine: True beta refinement not"
@@ -1179,6 +1170,9 @@ bool SIMinput::refine (const LR::RefineData& prm,
     for(int j : secondary)             // add depth refinement to make it conforming
       refineIndices[i].push_back(j);
   }
+
+  Vectors lsols(sol.size()*myModel.size());
+  size_t k = 0;
   for (size_t i = 0; i < myModel.size(); i++)
   {
     // make unique list of refinement indices
@@ -1191,9 +1185,15 @@ bool SIMinput::refine (const LR::RefineData& prm,
     prmloc.elements = refineIndices[i];
     char patchName[256];
     sprintf(patchName, "%d_%s", (int) i, fName);
-    if (!pch->refine(prmloc,sol,patchName))
+    Vectors lsol(sol.size());
+    for (size_t j = 0; j < sol.size(); ++j)
+      pch->extractNodeVec(sol[j], lsol[j], sol[j].size()/this->getNoNodes(1));
+    if (!pch->refine(prmloc,lsol,patchname))
       return false;
+    for (size_t j = 0; j < sol.size(); ++j)
+      lsols[k++] = lsol[j];
   }
+  sol = lsols;
 
   isRefined = true;
   return true;
