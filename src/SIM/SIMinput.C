@@ -1164,11 +1164,28 @@ bool SIMinput::refine (const LR::RefineData& prm,
   for (size_t i = 0; i < myModel.size(); i++)
   {
     pch = dynamic_cast<ASMunstruct*>(myModel[i]);
-    IntVec secondary = pch->getOverlappingNodes(conformingIndicies[i]);
+    int nedg = (pch->getNoParamDim() == 2) ? 4 : 6;
+    std::vector<IntVec> bndry(nedg);
+    for(int j =1 ; j<=nedg; j++)
+      pch->getBoundaryNodes(j, bndry[j-1], 1, 1, 0, true);
     for(int j : conformingIndicies[i]) // add refinement from neighbours
-      refineIndices[i].push_back(j);
-    for(int j : secondary)             // add depth refinement to make it conforming
-      refineIndices[i].push_back(j);
+    {
+      bool done_with_this_node = false;
+      for(int edge=0;  edge<nedg && !done_with_this_node; edge++)
+      {
+        for(int edgeNode : bndry[edge])
+        {
+          if(edgeNode-1 == j)
+          {
+            IntVec secondary = pch->getOverlappingNodes(conformingIndicies[i], (edge-1)/2);
+            for(int k : secondary)
+              refineIndices[i].push_back(k);
+            done_with_this_node = true;
+            break;
+          }
+        }
+      }
+    }
   }
 
   Vectors lsols(sol.size()*myModel.size());
@@ -1188,7 +1205,7 @@ bool SIMinput::refine (const LR::RefineData& prm,
     Vectors lsol(sol.size());
     for (size_t j = 0; j < sol.size(); ++j)
       pch->extractNodeVec(sol[j], lsol[j], sol[j].size()/this->getNoNodes(1));
-    if (!pch->refine(prmloc,lsol,patchname))
+    if (!pch->refine(prmloc,lsol,patchName))
       return false;
     for (size_t j = 0; j < sol.size(); ++j)
       lsols[k++] = lsol[j];
