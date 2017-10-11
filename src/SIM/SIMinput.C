@@ -27,9 +27,6 @@
 #include <sstream>
 #include <numeric>
 
-using namespace std;
-
-
 bool SIMinput::parseGeometryTag (const TiXmlElement* elem)
 {
   IFEM::cout <<"  Parsing <"<< elem->Value() <<">"<< std::endl;
@@ -1127,14 +1124,6 @@ bool SIMinput::refine (const LR::RefineData& prm,
     // fetch all boundary nodes covered (may need to pass this to other patches)
     IntVec bndry_nodes = pch->getBoundaryNodesCovered(refineIndices[i]);
 
-    cout << " == Patch #" << i << " ==\n";
-    cout << " Requested (inner) indices:\n";
-    for(int j : refineIndices[i])
-      cout << j << endl;
-    cout << " Covered (boundary) indices:\n";
-    for(int j : bndry_nodes)
-      cout << j << endl;
-
     // for all boundary nodes, check if these appear on other patches
     for (const int k : bndry_nodes)
     {
@@ -1147,18 +1136,14 @@ bool SIMinput::refine (const LR::RefineData& prm,
         int locId = pch2->getNodeIndex(globId);
         if(locId > 0) {
           conformingIndicies[j].push_back(locId-1);
-          cout << " #"<<i<<":"<< k << " <---> #"<<j<<":"<<locId-1<<endl;
         }
       }
     }
-    cout << " Transfered (multipatch) indices:\n";
     for (size_t j = 0; j < myModel.size(); j++)
     {
       std::sort(conformingIndicies[j].begin(), conformingIndicies[j].end());
       auto last = std::unique(conformingIndicies[j].begin(), conformingIndicies[j].end());
       conformingIndicies[j].erase(last, conformingIndicies[j].end());
-        for(int l : conformingIndicies[j])
-          cout << "#"<<j<<": "<<l << endl;
     }
   }
   for (size_t i = 0; i < myModel.size(); i++)
