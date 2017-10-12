@@ -1143,17 +1143,21 @@ bool SIMinput::refine (const LR::RefineData& prm,
     // for all boundary nodes, check if these appear on other patches
     for (const int k : bndry_nodes)
     {
-      conformingIndicies[i].push_back(k);
+      bool appears_elsewhere = false;
       int globId = pch->getNodeID(k+1);
       for (size_t j = 0; j < myModel.size(); j++)
       {
         if( i == j) continue;
         pch2 = dynamic_cast<ASMunstruct*>(myModel[j]);
         int locId = pch2->getNodeIndex(globId);
-        if(locId > 0) {
+        if(locId > 0)
+        {
           conformingIndicies[j].push_back(locId-1);
+          appears_elsewhere = true;
         }
       }
+      if(appears_elsewhere)
+        conformingIndicies[i].push_back(k);
     }
   }
 
