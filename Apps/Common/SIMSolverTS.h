@@ -67,6 +67,7 @@ public:
       // Prediction cycle loop
       for (int iPred = 0; iPred < maxPred; iPred++)
       {
+        this->S1.doSubIts = false;
         if (iPred > 0)
         {
           // Reset time step counter to the last saved state
@@ -100,7 +101,7 @@ public:
       if (refElms == 0)
         IFEM::cout <<"  No refinement, resume from current state"<< std::endl;
 
-      if (lastRef == 0)
+      /*if (lastRef == 0)
       {
         // The mesh is sufficiently refined at this state.
         // Save the current results to VTF and HDF5, and continue.
@@ -108,7 +109,7 @@ public:
         if (!this->saveState(geoBlk,nBlock,refElms > 0))
           return 2;
       }
-      else
+      else*/
       {
         // The mesh was refined, and we continue (at most) nForward steps
         // without checking for further refinement at this step
@@ -118,6 +119,7 @@ public:
 
         // Solve for each time step up to final time,
         // but only up to nForward steps on this mesh
+        this->S1.doSubIts = true;
         for (size_t j = 0; j < nForward; j++)
           if (!this->advanceStep())
             return 0; // Final time reached, we're done

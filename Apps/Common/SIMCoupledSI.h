@@ -34,6 +34,9 @@ public:
   //! \brief Computes the solution for the current time step.
   virtual bool solveStep(TimeStep& tp, bool firstS1 = true)
   {
+    if (!this->doSubIts)
+      return this->SIMCoupled<T1,T2>::solveStep(tp);
+
     if (maxIter <= 0)
       maxIter = std::min(this->S1.getMaxit(),this->S2.getMaxit());
 

@@ -166,6 +166,8 @@ public:
     return S1.deSerialize(data) && S2.deSerialize(data);
   }
 
+  bool doSubIts = true;
+
 protected:
   T1& S1; //!< First substep
   T2& S2; //!< Second substep
