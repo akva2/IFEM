@@ -44,16 +44,6 @@ public:
   //! \brief Base class that checks if an element has interface contributions.
   class InterfaceChecker : public ASM::InterfaceChecker
   {
-  protected:
-    const ASMu2D& myPatch; //!< Reference to the patch being integrated
-
-    //! \brief Struct holding information about mesh line intersections.
-    struct Intersection {
-      std::vector<int> asMin; //!< Element indices where intersection is for parmin
-      std::vector<int> asMax; //!< Element indices where intersection is for parmax
-      std::vector<double> pts; //!< Intersection parameter values
-    };
-    std::vector<Intersection> intersections; //!< Intersection points for each mesh line
   public:
     //! \brief The constructor initialises the reference to current patch.
     explicit InterfaceChecker(const ASMu2D& pch);
@@ -64,10 +54,21 @@ public:
     virtual short int hasContribution(int iel, int = -1,
                                       int = -1, int = -1) const;
 
+    //! \brief Struct holding information about mesh line intersections.
+    struct Intersection {
+      std::vector<int> asMin; //!< Element indices where intersection is for parmin
+      std::vector<int> asMax; //!< Element indices where intersection is for parmax
+      std::vector<double> pts; //!< Intersection parameter values
+    };
+
     //! \brief Get intersections for a given element edge.
     //! \param iel Element index
     //! \param edge Edge to extract for
     std::vector<Intersection> getIntersections(int iel, int edge) const;
+  protected:
+    const ASMu2D& myPatch; //!< Reference to the patch being integrated
+
+    std::vector<Intersection> intersections; //!< Intersection points for each mesh line
   };
   //! \brief Default constructor.
   ASMu2D(unsigned char n_s = 2, unsigned char n_f = 2);

@@ -2113,12 +2113,8 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
       lr->getMinContinuity(1) > 0)
     return;
 
-  int p1 = lr->order(0) - 1;
-  int p2 = lr->order(1) - 1;
   intersections.reserve(lr->getAllMeshlines().size());
   for (auto m : lr->getAllMeshlines()) {
-    if (m->multiplicity_ !=  ((m->is_spanning_u()) ? p2 : p1))
-      continue;
     Intersection isect;
     isect.pts.resize(1);
     for (auto m2 : lr->getAllMeshlines()) {
@@ -2150,8 +2146,8 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
         parval_left[1]  = (isect.pts[i]+isect.pts[i+1])/2.0;
         parval_right[1] = (isect.pts[i]+isect.pts[i+1])/2.0;
       }
-      isect.asMin.push_back(lr->getElementContaining(parval_left));
-      isect.asMax.push_back(lr->getElementContaining(parval_right));
+      isect.asMax.push_back(lr->getElementContaining(parval_left));
+      isect.asMin.push_back(lr->getElementContaining(parval_right));
     }
     intersections.push_back(isect);
   }

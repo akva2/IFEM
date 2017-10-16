@@ -565,12 +565,31 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
 bool ASMu2Dmx::integrate (Integrand& integrand,
                           GlobalIntegral& glInt,
                           const TimeDomain& time,
-                          const ASM::InterfaceChecker& iChk)
+                          const ASM::InterfaceChecker& iChkgen)
 {
   if (!geo) return true; // silently ignore empty patches
   if (!(integrand.getIntegrandType() & Integrand::INTERFACE_TERMS)) return true;
 
   PROFILE2("ASMu2Dmx::integrate(J)");
+
+  const ASMu2D::InterfaceChecker& iChk = 
+                          static_cast<const ASMu2D::InterfaceChecker&>(iChkgen);
+
+  // Get Gaussian quadrature points and weights
+  int nGP = integrand.getBouIntegrationPoints(nGauss);
+  const double* xg = GaussQuadrature::getCoord(nGP);
+  const double* wg = GaussQuadrature::getWeight(nGP);
+  if (!xg || !wg) return false;
+
+  std::vector<LR::Element*>::iterator el1 = m_basis[0]->elementBegin();
+  for (int iel = 1; el1 != m_basis[0]->elementEnd(); ++el1, ++iel) {
+    short int status = iChk.hasContribution(iel);
+    if (!status) continue; // no interface contributions for this element
+    int bit = 8;
+    for (int iedge = 4; iedge > 0 && status > 0 && ok; iedge--, bit /= 2) {
+      auto intersections = iChk.getIntersections(iel, iedge);
+    }
+  }
 
   return false;
 }
