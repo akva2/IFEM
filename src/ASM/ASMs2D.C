@@ -270,7 +270,7 @@ bool ASMs2D::addInterfaceElms (const ASM::InterfaceChecker& iChk)
       if (MLGE[iel] < 1) continue; // Skip zero-area element
 
       // Loop over the (north and east only) element edges with contributions
-      short int status = iChk.hasContribution(i1,i2,-1,iel);
+      short int status = iChk.hasContribution(iel,i1,i2);
       for (int iedge = 1; iedge <= 4 && status > 0; iedge++, status /= 2)
         if (iedge%2 == 0 && status%2 == 1)
         {
@@ -1980,7 +1980,7 @@ bool ASMs2D::integrate (Integrand& integrand,
       fe.iel = abs(MLGE[jel]);
       if (fe.iel < 1) continue; // zero-area element
 
-      short int status = iChk.hasContribution(i1,i2,-1,iel);
+      short int status = iChk.hasContribution(iel,i1,i2);
       if (!status) continue; // no interface contributions for this element
 
 #if SP_DEBUG > 3
@@ -2752,7 +2752,7 @@ void ASMs2D::extractBasis (double u, double v, int dir, int p,
 }
 
 
-short int ASMs2D::InterfaceChecker::hasContribution (int I, int J, int, int) const
+short int ASMs2D::InterfaceChecker::hasContribution (int iel, int I, int J, int) const
 {
   bool neighbor[4];
   neighbor[0] = I > myPatch.surf->order_u();    // West neighbor

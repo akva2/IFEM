@@ -562,6 +562,20 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
 }
 
 
+bool ASMu2Dmx::integrate (Integrand& integrand,
+                          GlobalIntegral& glInt,
+                          const TimeDomain& time,
+                          const ASM::InterfaceChecker& iChk)
+{
+  if (!geo) return true; // silently ignore empty patches
+  if (!(integrand.getIntegrandType() & Integrand::INTERFACE_TERMS)) return true;
+
+  PROFILE2("ASMu2Dmx::integrate(J)");
+
+  return false;
+}
+
+
 bool ASMu2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
                              const RealArray* gpar, bool,
                              int deriv, int nf) const

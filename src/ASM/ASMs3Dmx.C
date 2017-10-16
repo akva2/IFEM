@@ -882,7 +882,7 @@ bool ASMs3Dmx::integrate (Integrand& integrand,
         fe.iel = abs(MLGE[iel]);
         if (fe.iel < 1) continue; // zero-area element
 
-        short int status = iChk.hasContribution(i1,i2,i3,iel);
+        short int status = iChk.hasContribution(iel,i1,i2,i3);
         if (!status) continue; // no interface contributions for this element
 
   #if SP_DEBUG > 3

@@ -3154,7 +3154,7 @@ void ASMs3D::extractBasis (double u, double v, double w, int dir, int p,
 }
 
 
-short int ASMs3D::InterfaceChecker::hasContribution (int I, int J, int K, int) const
+short int ASMs3D::InterfaceChecker::hasContribution (int iel, int I, int J, int K) const
 {
   bool neighbor[6];
   neighbor[0] = I > myPatch.svol->order(0);    // West neighbor
