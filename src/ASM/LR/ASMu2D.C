@@ -2113,43 +2113,52 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
       lr->getMinContinuity(1) > 0)
     return;
 
-  intersections.reserve(lr->getAllMeshlines().size());
   for (auto m : lr->getAllMeshlines()) {
-    Intersection isect;
-    isect.pts.resize(1);
-    for (auto m2 : lr->getAllMeshlines()) {
-      if (m->intersects(m2, &isect.pts.back()))
-        isect.pts.push_back(0);
-    }
-    isect.pts.pop_back();
-    std::sort(isect.pts.begin(), isect.pts.end());
-    auto end = std::unique(isect.pts.begin(), isect.pts.end());
-    isect.pts.erase(end,isect.pts.end());
+    std::vector<double> isectpts(1);
+
+    for (auto m2 : lr->getAllMeshlines())
+      if (m->intersects(m2, &isectpts.back()))
+        isectpts.push_back(0);
+
+    isectpts.pop_back();
+    std::sort(isectpts.begin(), isectpts.end());
+    auto end = std::unique(isectpts.begin(), isectpts.end());
+    isectpts.erase(end,isectpts.end());
 
     // find elements where this intersection lives
     std::vector<double> parval_left(2);
     std::vector<double> parval_right(2);
     double epsilon = 1e-6;
-    for(size_t i=0; i < isect.pts.size()-1; i++) {
+    for(size_t i=0; i < isectpts.size()-1; i++) {
       if (m->is_spanning_u()) {
-        std::cout << "Line piece from ("<< isect.pts[i] << ", " << m->const_par_ << ") to ("
-             << isect.pts[i+1] << ", " << m->const_par_ << ")" << std::endl;
-        parval_left[0]  = (isect.pts[i]+isect.pts[i+1])/2.0;
-        parval_right[0] = (isect.pts[i]+isect.pts[i+1])/2.0;
+        std::cout << "Line piece from ("<< isectpts[i] << ", " << m->const_par_ << ") to ("
+             << isectpts[i+1] << ", " << m->const_par_ << ")" << std::endl;
+        parval_left[0]  = (isectpts[i]+isectpts[i+1])/2.0;
+        parval_right[0] = (isectpts[i]+isectpts[i+1])/2.0;
         parval_left[1]  = m->const_par_ - epsilon;
         parval_right[1] = m->const_par_ + epsilon;
       } else {
-        std::cout << "Line piece from ("<< m->const_par_ << ", " << isect.pts[i] << ") to ("
-                  << m->const_par_ << ", " << isect.pts[i+1] << ")" << std::endl;
+        std::cout << "Line piece from ("<< m->const_par_ << ", " << isectpts[i] << ") to ("
+                  << m->const_par_ << ", " << isectpts[i+1] << ")" << std::endl;
         parval_left[0]  = m->const_par_ - epsilon;
         parval_right[0] = m->const_par_ + epsilon;
-        parval_left[1]  = (isect.pts[i]+isect.pts[i+1])/2.0;
-        parval_right[1] = (isect.pts[i]+isect.pts[i+1])/2.0;
+        parval_left[1]  = (isectpts[i]+isectpts[i+1])/2.0;
+        parval_right[1] = (isectpts[i]+isectpts[i+1])/2.0;
       }
-      isect.asMax.push_back(lr->getElementContaining(parval_left));
-      isect.asMin.push_back(lr->getElementContaining(parval_right));
+      int el1 = lr->getElementContaining(parval_left);
+      int el2 = lr->getElementContaining(parval_right);
+      if (m->is_spanning_u()) {
+        intersections[el1 << 3 + 4].insert(intersections[el1 << 3 + 4].end(),
+                                           isectpts.begin(), isectpts.end());
+        intersections[el2 << 3 + 3].insert(intersections[el2 << 3 + 3].end(),
+                                           isectpts.begin(), isectpts.end());
+      } else {
+        intersections[el1 << 3 + 2].insert(intersections[el1 << 3 + 2].end(),
+                                           isectpts.begin(), isectpts.end());
+        intersections[el2 << 3 + 1].insert(intersections[el2 << 3 + 1].end(),
+                                           isectpts.begin(), isectpts.end());
+      }
     }
-    intersections.push_back(isect);
   }
 }
 

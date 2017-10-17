@@ -586,9 +586,9 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
     short int status = iChk.hasContribution(iel);
     if (!status) continue; // no interface contributions for this element
     int bit = 8;
-    for (int iedge = 4; iedge > 0 && status > 0 && ok; iedge--, bit /= 2) {
-      auto intersections = iChk.getIntersections(iel, iedge);
-    }
+//    for (int iedge = 4; iedge > 0 && status > 0; iedge--, bit /= 2) {
+//      auto intersections = iChk.getIntersections(iel, iedge);
+//    }
   }
 
   return false;

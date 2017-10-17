@@ -56,8 +56,6 @@ public:
 
     //! \brief Struct holding information about mesh line intersections.
     struct Intersection {
-      std::vector<int> asMin; //!< Element indices where intersection is for parmin
-      std::vector<int> asMax; //!< Element indices where intersection is for parmax
       std::vector<double> pts; //!< Intersection parameter values
     };
 
@@ -68,7 +66,8 @@ public:
   protected:
     const ASMu2D& myPatch; //!< Reference to the patch being integrated
 
-    std::vector<Intersection> intersections; //!< Intersection points for each mesh line
+    //! \brief Intersections for elements. Key: element << 4 + edge (1..4)
+    std::map<int,std::vector<double>> intersections;
   };
   //! \brief Default constructor.
   ASMu2D(unsigned char n_s = 2, unsigned char n_f = 2);
