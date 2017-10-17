@@ -2156,7 +2156,7 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
 
 short int ASMu2D::InterfaceChecker::hasContribution (int iel, int, int, int) const
 {
-	const LR::Element* el = myPatch.geo->getElement(iel-1);
+  const LR::Element* el = myPatch.geo->getElement(iel-1);
   bool neighbor[4];
   neighbor[0] = el->getParmin(0) != myPatch.geo->startparam(0); // West neighbor
   neighbor[1] = el->getParmax(0) != myPatch.geo->endparam(0); // East neighbor
