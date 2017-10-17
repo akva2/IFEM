@@ -2109,10 +2109,6 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
 {
   const LR::LRSplineSurface* lr = myPatch.getBasis(1);
 
-  if (lr->getMinContinuity(0) > 0 &&
-      lr->getMinContinuity(1) > 0)
-    return;
-
   for (auto m : lr->getAllMeshlines()) {
     std::vector<double> isectpts(1);
 
@@ -2131,15 +2127,19 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
     double epsilon = 1e-6;
     for(size_t i=0; i < isectpts.size()-1; i++) {
       if (m->is_spanning_u()) {
+#if SP_DEBUG > 2
         std::cout << "Line piece from ("<< isectpts[i] << ", " << m->const_par_ << ") to ("
              << isectpts[i+1] << ", " << m->const_par_ << ")" << std::endl;
+#endif
         parval_left[0]  = (isectpts[i]+isectpts[i+1])/2.0;
         parval_right[0] = (isectpts[i]+isectpts[i+1])/2.0;
         parval_left[1]  = m->const_par_ - epsilon;
         parval_right[1] = m->const_par_ + epsilon;
       } else {
+#if SP_DEBUG > 2
         std::cout << "Line piece from ("<< m->const_par_ << ", " << isectpts[i] << ") to ("
                   << m->const_par_ << ", " << isectpts[i+1] << ")" << std::endl;
+#endif
         parval_left[0]  = m->const_par_ - epsilon;
         parval_right[0] = m->const_par_ + epsilon;
         parval_left[1]  = (isectpts[i]+isectpts[i+1])/2.0;
@@ -2147,18 +2147,26 @@ ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) :
       }
       int el1 = lr->getElementContaining(parval_left);
       int el2 = lr->getElementContaining(parval_right);
+#if SP_DEBUG > 2
+      std::cout << "\t elem1 " << el1 << " elem2 " << el2 << std::endl;
+#endif
       if (m->is_spanning_u()) {
-        intersections[el1 << 3 + 4].insert(intersections[el1 << 3 + 4].end(),
-                                           isectpts.begin(), isectpts.end());
-        intersections[el2 << 3 + 3].insert(intersections[el2 << 3 + 3].end(),
-                                           isectpts.begin(), isectpts.end());
+        if (el1 > -1 && el2 > -1) {
+          intersections[el2*16 + 3].pts.push_back(isectpts[i+1]);
+          intersections[el1*16 + 4].pts.push_back(isectpts[i+1]);
+        }
       } else {
-        intersections[el1 << 3 + 2].insert(intersections[el1 << 3 + 2].end(),
-                                           isectpts.begin(), isectpts.end());
-        intersections[el2 << 3 + 1].insert(intersections[el2 << 3 + 1].end(),
-                                           isectpts.begin(), isectpts.end());
+        if (el1 > -1 && el2 > -1) {
+          intersections[el2*16 + 1].pts.push_back(isectpts[i+1]);
+          intersections[el1*16 + 2].pts.push_back(isectpts[i+1]);
+        }
       }
     }
+  }
+  for (auto& it : intersections) {
+    std::sort(it.second.pts.begin(), it.second.pts.end());
+    auto end = std::unique(it.second.pts.begin(), it.second.pts.end());
+    it.second.pts.erase(end,it.second.pts.end());
   }
 }
 
@@ -2178,4 +2186,18 @@ short int ASMu2D::InterfaceChecker::hasContribution (int iel, int, int, int) con
     if (neighbor[i]) status += s;
 
   return status;
+}
+
+
+std::vector<double> ASMu2D::InterfaceChecker::getIntersections(int iel, int edge,
+                                                               int* cont) const
+{
+  auto it = intersections.find((iel-1)*16 + edge);
+  if (it != intersections.end()) {
+    if (cont)
+      *cont = it->second.continuity;
+    return it->second.pts;
+  }
+
+  return std::vector<double>();
 }
