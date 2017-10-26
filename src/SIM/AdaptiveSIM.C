@@ -216,6 +216,9 @@ bool AdaptiveSIM::initAdaptor (size_t normGroup)
   }
 
   projs.resize(opt.project.size());
+  if (model.haveDualSol())
+    projd.resize(opt.project.size());
+
   if (opt.format >= 0)
   {
     prefix.reserve(opt.project.size());
@@ -298,6 +301,9 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
       projs[idx++].clear(); // No projection for this norm group
     else if (!model.project(projs[idx++],solution.front(),prj.first))
       return false;
+    else if (idx <= projd.size() && solution.size() > 1)
+      if (!model.project(projd[idx-1],solution[1],prj.first))
+        return false;
 
   if (msgLevel > 1 && !projs.empty())
     model.getProcessAdm().cout << std::endl;
@@ -307,6 +313,9 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
   model.setQuadratureRule(opt.nGauss[1]);
   if (!model.solutionNorms(solution.front(),projs,eNorm,gNorm))
     return false;
+  if (!projd.empty() && solution.size() > 1)
+    if (!model.solutionNorms(solution[1],projd,fNorm,dNorm))
+      return false;
 
   model.setMode(SIM::RECOVERY);
   return model.dumpResults(solution.front(),0.0,
@@ -371,6 +380,12 @@ bool AdaptiveSIM::adaptMesh (int iStep, std::streamsize outPrec)
     eRow += norm->getNoFields(i+1);
   delete norm;
 
+  // Calculate refinement indicators including the dual error estimates
+  Vector refIn = eNorm.getRow(eRow);
+  if (eRow <= fNorm.rows())
+    for (i = 1; i <= refIn.size(); i++)
+      refIn(i) = sqrt(refIn(i)*fNorm(eRow,i));
+
   LR::RefineData prm;
   prm.options.reserve(8);
   prm.options.push_back(beta);
@@ -392,8 +407,8 @@ bool AdaptiveSIM::adaptMesh (int iStep, std::streamsize outPrec)
     IFEM::cout <<"\nRefining by increasing solution space by "<< beta
                <<" percent."<< std::endl;
     prm.errors.resize(thePatch->getNoRefineElms());
-    dynamic_cast<ASMunstruct*>(thePatch)->remapErrors(prm.errors,
-                                                      eNorm.getRow(eRow), true);
+    dynamic_cast<ASMunstruct*>(thePatch)->remapErrors(prm.errors,refIn,true);
+
     if (!storeMesh)
       return model.refine(prm);
 
@@ -424,7 +439,7 @@ bool AdaptiveSIM::adaptMesh (int iStep, std::streamsize outPrec)
       // extract element norms for this patch
       Vector locNorm(patch->getNoElms());
       for (i = 1; i <= patch->getNoElms(); ++i)
-        locNorm(i) = eNorm(eRow, patch->getElmID(i));
+        locNorm(i) = refIn(patch->getElmID(i));
 
       // remap from geometry basis to refinement basis
       Vector locErr(patch->getNoRefineNodes());
@@ -445,8 +460,8 @@ bool AdaptiveSIM::adaptMesh (int iStep, std::streamsize outPrec)
                 <<" is available for isotropic_function only."<< std::endl;
       return false;
     }
-    for (i = 0; i < eNorm.cols(); i++)
-      errors.push_back(DblIdx(eNorm(eRow,1+i),i));
+    for (i = 0; i < refIn.size(); i++)
+      errors.push_back(DblIdx(refIn(1+i),i));
   }
 
   // Sort the elements in the sequence of decreasing errors
@@ -585,6 +600,14 @@ void AdaptiveSIM::printNorms (size_t w) const
     if (model.haveAnaSol() && adaptor != 0)
       IFEM::cout <<"\nEffectivity index  : "
                  << model.getEffectivityIndex(gNorm,adaptor,adNorm);
+    if (adaptor < dNorm.size())
+    {
+      const Vector& bNorm = dNorm[adaptor];
+      IFEM::cout <<"\nError estimate, dual solution"
+                 << utl::adjustRight(w-29,"(z)") << bNorm(adNorm)
+                 <<"\nRelative error (%) : "
+                 << 100.0*bNorm(adNorm)/hypot(dNorm.front()(1),bNorm(2));
+    }
     IFEM::cout <<"\n"<< std::endl;
 
     // Calculate the row-index for the corresponding element norms
@@ -647,7 +670,7 @@ bool AdaptiveSIM::writeGlv (const char* infile, int iStep)
 
   // Write projected solution fields
   SIMoptions::ProjectionMap::const_iterator pit = opt.project.begin();
-  for (size_t i = 0; i < projs.size(); i++, ++pit)
+  for (size_t i = 0; pit != opt.project.end(); i++, ++pit)
     if (!model.writeGlvP(projs[i],iStep,nBlock,100+10*i,pit->second.c_str()))
       return false;
 

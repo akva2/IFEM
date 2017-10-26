@@ -113,16 +113,19 @@ private:
   size_t  adaptor;  //!< Norm group to base the mesh adaptation on
   size_t  adNorm;   //!< Which norm to base the mesh adaptation on
   Vectors gNorm;    //!< Global norms
+  Vectors dNorm;    //!< Dual global norms
   Matrix  eNorm;    //!< Element norms
+  Matrix  fNorm;    //!< Dual element norms
 
   int geoBlk; //!< Running VTF geometry block counter
   int nBlock; //!< Running VTF result block counter
 
   std::vector<Vector>      projs;  //!< Projected secondary solutions
+  std::vector<Vector>      projd;  //!< Projected dual solutions
   std::vector<std::string> prefix; //!< Norm prefices for VTF-output
 
 protected:
-  Vectors solution; //!< All solutions (galerkin projections)
+  Vectors solution; //!< All solutions (including Galerkin projections)
   double  rCond;    //!< Actual reciprocal condition number of the last mesh
 };
 
