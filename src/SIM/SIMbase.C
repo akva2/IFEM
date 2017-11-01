@@ -1304,7 +1304,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
       size_t nNrm = norm->getNoFields(1+i);
       gNorm[i].resize(nNrm,true);
       nNorms += nNrm;
-      if (i != 0 && i <= ssol.size())
+      if (i != 0 && i <= ssol.size() && prj_idx != opt.project.end())
         ++prj_idx;
     }
 
