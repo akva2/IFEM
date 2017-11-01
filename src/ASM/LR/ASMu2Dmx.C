@@ -562,6 +562,189 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
 }
 
 
+bool ASMu2Dmx::integrate (Integrand& integrand,
+                          GlobalIntegral& glInt,
+                          const TimeDomain& time,
+                          const ASM::InterfaceChecker& iChkgen)
+{
+  if (!geo) return true; // silently ignore empty patches
+  if (!(integrand.getIntegrandType() & Integrand::INTERFACE_TERMS)) return true;
+
+  PROFILE2("ASMu2Dmx::integrate(J)");
+
+  const ASMu2D::InterfaceChecker& iChk =
+                          static_cast<const ASMu2D::InterfaceChecker&>(iChkgen);
+
+  // Get Gaussian quadrature points and weights
+  int nGP = integrand.getBouIntegrationPoints(nGauss);
+  const double* xg = GaussQuadrature::getCoord(nGP);
+  const double* wg = GaussQuadrature::getWeight(nGP);
+  if (!xg || !wg) return false;
+
+  Matrix   Xnod, Jac;
+  Vec4     X;
+  Vec3     normal;
+
+  std::vector<LR::Element*>::iterator el1 = m_basis[0]->elementBegin();
+  for (int iel = 1; el1 != m_basis[0]->elementEnd(); ++el1, ++iel) {
+    short int status = iChk.hasContribution(iel);
+    if (!status) continue; // no interface contributions for this element
+    int bit = 8;
+    for (int iedge = 4; iedge > 0 && status > 0; iedge--, bit /= 2) {
+      if (status & bit) {
+        const int edgeDir = (iedge+1)/(iedge%2 ? -2 : 2);
+        const int t1 = abs(edgeDir);   // Tangent direction normal to the edge
+        const int t2 = 3-abs(edgeDir); // Tangent direction along the edge
+
+        // first push the hosting elements
+        std::vector<size_t> els(1,iel);
+        std::vector<size_t> elem_sizes(1,(*el1)->nBasisFunctions());
+
+        double uh = ((*el1)->umin()+(*el1)->umax())/2.0;
+        double vh = ((*el1)->vmin()+(*el1)->vmax())/2.0;
+        for (size_t i=1; i < m_basis.size(); ++i) {
+          els.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
+          elem_sizes.push_back((*(m_basis[i]->elementBegin()+els.back()-1))->nBasisFunctions());
+        }
+        std::vector<size_t> elem_sizes2(elem_sizes);
+        std::copy(elem_sizes.begin(), elem_sizes.end(), std::back_inserter(elem_sizes2));
+        MxFiniteElement fe(elem_sizes2);
+
+        // Set up control point coordinates for current element
+        if (!this->getElementCoordinates(Xnod,iel))
+          return false;
+
+        LocalIntegral* A = integrand.getLocalIntegral(elem_sizes, iel);
+        integrand.initElement(MNPC[iel-1],elem_sizes,nb,*A);
+        size_t origSize = A->vec.size();
+
+        // Set up parameters
+        double u1 = iedge != 2 ? (*el1)->umin() : (*el1)->umax();
+        double v1 = iedge < 4 ? (*el1)->vmin() : (*el1)->vmax();
+        double u2(u1);
+        double v2(v1);
+
+        std::vector<double> intersections = iChk.getIntersections(iel, iedge);
+        for (size_t i = 0; i < intersections.size(); ++i) {
+          std::vector<double> parval(2);
+          parval[0] = u1;
+          parval[1] = v1;
+          const double epsilon = 1e-10;
+          double epsu = 0.0, epsv = 0.0;
+          if (iedge == 1)
+            epsu = epsilon;
+          if (iedge == 2)
+            epsu = -epsilon;
+          if (iedge == 3)
+            epsv = epsilon;
+          if (iedge == 4)
+            epsv = -epsilon;
+          parval[0] -= epsu;
+          parval[1] -= epsv;
+
+          if (iedge == 1 || iedge == 2)
+            v2 += intersections[i];
+          else
+            u2 += intersections[i];
+
+          int el_neigh = this->getBasis(1)->getElementContaining(parval)+1;
+          LocalIntegral* A_neigh = integrand.getLocalIntegral(elem_sizes, el_neigh);
+          integrand.initElement(MNPC[el_neigh-1],elem_sizes,nb,*A_neigh);
+          if (!A_neigh->vec.empty()) {
+            A->vec.resize(origSize+A_neigh->vec.size());
+            std::copy(A_neigh->vec.begin(), A_neigh->vec.end(), A->vec.begin()+origSize);
+          }
+          A_neigh->destruct();
+          std::vector<size_t> els2(1,el_neigh);
+          const LR::Element* el2 = m_basis[0]->getElement(el_neigh-1);
+          uh = (el2->umin()+el2->umax())/2.0;
+          vh = (el2->vmin()+el2->vmax())/2.0;
+          for (size_t i=1; i < m_basis.size(); ++i)
+            els2.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
+
+          double dS = (iedge == 1 || iedge == 2) ? v2 - v1 : u2 - u1;
+
+          std::array<Vector,2> gpar;
+          if (iedge == 1 || iedge == 2) {
+            gpar[0].resize(nGauss);
+            gpar[0].fill(u1);
+            gpar[1].resize(nGauss);
+            for (int i = 0; i < nGauss; ++i)
+              gpar[1][i] = 0.5*((v2-v1)*xg[i] + v2 + v1);
+          } else {
+            gpar[0].resize(nGauss);
+            for (int i = 0; i < nGauss; ++i)
+              gpar[0][i] = 0.5*((u2-u1)*xg[i] + u2 + u1);
+            gpar[1].resize(nGauss);
+            gpar[1].fill(v1);
+          }
+
+          for (int g = 0; g < nGP; g++, ++fe.iGP)
+          {
+            // Local element coordinates and parameter values
+            // of current integration point
+            fe.xi = xg[g];
+            fe.eta = xg[g];
+            fe.u = gpar[0][g];
+            fe.v = gpar[1][g];
+
+            // Evaluate basis function derivatives at current integration points
+            std::vector<Matrix> dNxdu(m_basis.size()*2);
+            for (size_t b=0; b < m_basis.size(); ++b) {
+              Go::BasisDerivsSf spline;
+              m_basis[b]->computeBasis(fe.u+epsu, fe.v+epsv, spline, els[b]-1);
+              SplineUtils::extractBasis(spline,fe.basis(b+1),dNxdu[b]);
+              m_basis[b]->computeBasis(fe.u-epsu, fe.v-epsv, spline, els2[b]-1);
+              SplineUtils::extractBasis(spline,fe.basis(b+1+m_basis.size()),dNxdu[b+m_basis.size()]);
+            }
+
+            // Compute Jacobian inverse of the coordinate mapping and
+            // basis function derivatives w.r.t. Cartesian coordinates
+            fe.detJxW = utl::Jacobian(Jac,normal,fe.grad(geoBasis+m_basis.size()),Xnod,dNxdu[geoBasis-1+m_basis.size()],t1,t2);
+            fe.detJxW = utl::Jacobian(Jac,normal,fe.grad(geoBasis),Xnod,dNxdu[geoBasis-1],t1,t2);
+            if (fe.detJxW == 0.0) continue; // skip singular points
+            for (size_t b = 0; b < m_basis.size(); ++b)
+              if (b != (size_t)geoBasis-1) {
+                fe.grad(b+1).multiply(dNxdu[b],Jac);
+                fe.grad(b+1+m_basis.size()).multiply(dNxdu[b+m_basis.size()],Jac);
+              }
+
+            if (edgeDir < 0)
+              normal *= -1.0;
+
+            // Cartesian coordinates of current integration point
+            X = Xnod * fe.basis(geoBasis);
+            X.t = time.t;
+
+            // Evaluate the integrand and accumulate element contributions
+            fe.detJxW *= 0.5*dS*wg[g];
+            if (!integrand.evalIntMx(*A,fe,time,X,normal))
+              return false;
+          }
+
+          // Finalize the element quantities
+          if (!integrand.finalizeElementBou(*A,fe,time))
+            return false;
+
+          // Assembly of global system integral
+          if (!glInt.assemble(A,fe.iel))
+            return false;
+
+          A->destruct();
+
+          if (iedge == 1 || iedge == 2)
+            v1 += intersections[i];
+          else
+            u1 += intersections[i];
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+
 bool ASMu2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
                              const RealArray* gpar, bool,
                              int deriv, int nf) const
