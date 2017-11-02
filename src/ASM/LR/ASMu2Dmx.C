@@ -629,7 +629,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
           std::vector<double> parval(2);
           parval[0] = u1;
           parval[1] = v1;
-          const double epsilon = 1e-10;
+          const double epsilon = 1e-8;
           double epsu = 0.0, epsv = 0.0;
           if (iedge == 1)
             epsu = epsilon;
@@ -643,9 +643,9 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
           parval[1] -= epsv;
 
           if (iedge == 1 || iedge == 2)
-            v2 += intersections[i];
+            v2 = intersections[i];
           else
-            u2 += intersections[i];
+            u2 = intersections[i];
 
           int el_neigh = this->getBasis(1)->getElementContaining(parval)+1;
           LocalIntegral* A_neigh = integrand.getLocalIntegral(elem_sizes, el_neigh);
@@ -733,9 +733,9 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
           A->destruct();
 
           if (iedge == 1 || iedge == 2)
-            v1 += intersections[i];
+            v1 = v2;
           else
-            u1 += intersections[i];
+            u1 = u2;
         }
       }
     }
