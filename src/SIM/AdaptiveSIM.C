@@ -477,7 +477,7 @@ void AdaptiveSIM::printNorms (size_t w) const
                <<"\nRelative error (%) : "
                << 100.0*aNorm(adNorm)/model.getReferenceNorm(gNorm,adaptor);
     if (model.haveAnaSol() && fNorm.size() > 3 && adNorm == 2)
-      IFEM::cout <<"\nEffectivity index  : "<< aNorm(2)/fNorm(4);
+      IFEM::cout <<"\nEffectivity index  : "<< aNorm(2)/model.getReferenceNorm(gNorm,adaptor);
     IFEM::cout <<"\n"<< std::endl;
 
     // Calculate the row-index for the corresponding element norms

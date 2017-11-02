@@ -228,8 +228,10 @@ bool ASMu2Dmx::generateFEMTopology ()
     for (size_t i=0; i<m_basis.size();++i) {
       auto el_it2 = m_basis[i]->elementBegin() +
                     m_basis[i]->getElementContaining(uh, vh);
+      size_t old = lnod;
       for (LR::Basisfunction *b : (*el_it2)->support())
         myMNPC[iel][lnod++] = b->getId()+ofs;
+      std::cout << "Elem has " << lnod-old << " functions for basis " << i+1 << std::endl;
       ofs += nb[i];
     }
   }
@@ -279,7 +281,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
       std::vector<size_t> elem_sizes;
       for (size_t i=0; i < m_basis.size(); ++i) {
         els.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
-        elem_sizes.push_back((*(m_basis[i]->elementBegin()+els.back()-1))->nBasisFunctions());
+        elem_sizes.push_back((*(m_basis[i]->elementBegin()+(els.back()-1)))->nBasisFunctions());
       }
 
       int geoEl = els[geoBasis-1];
@@ -476,7 +478,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
     std::vector<size_t> elem_sizes;
     for (size_t i=0; i < m_basis.size(); ++i) {
       els.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
-      elem_sizes.push_back((*(m_basis[i]->elementBegin()+els.back()-1))->nBasisFunctions());
+      elem_sizes.push_back((*(m_basis[i]->elementBegin()+(els.back()-1)))->nBasisFunctions());
     }
     int geoEl = els[geoBasis-1];
 
@@ -602,13 +604,15 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
 
         double uh = ((*el1)->umin()+(*el1)->umax())/2.0;
         double vh = ((*el1)->vmin()+(*el1)->vmax())/2.0;
+
         for (size_t i=1; i < m_basis.size(); ++i) {
           els.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
-          elem_sizes.push_back((*(m_basis[i]->elementBegin()+els.back()-1))->nBasisFunctions());
+          elem_sizes.push_back((*(m_basis[i]->elementBegin()+(els.back()-1)))->nBasisFunctions());
         }
-        std::vector<size_t> elem_sizes2(elem_sizes);
-        std::copy(elem_sizes.begin(), elem_sizes.end(), std::back_inserter(elem_sizes2));
-        MxFiniteElement fe(elem_sizes2);
+        std::cout << "elem1: ";
+        for (auto& it : elem_sizes)
+          std::cout << it << " ";
+        std::cout << std::endl;
 
         // Set up control point coordinates for current element
         if (!this->getElementCoordinates(Xnod,iel))
@@ -648,19 +652,33 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
             u2 = intersections[i];
 
           int el_neigh = this->getBasis(1)->getElementContaining(parval)+1;
-          LocalIntegral* A_neigh = integrand.getLocalIntegral(elem_sizes, el_neigh);
-          integrand.initElement(MNPC[el_neigh-1],elem_sizes,nb,*A_neigh);
+          const LR::Element* el2 = m_basis[0]->getElement(el_neigh-1);
+          uh = (el2->umin()+el2->umax())/2.0;
+          vh = (el2->vmin()+el2->vmax())/2.0;
+
+          std::vector<size_t> els2(1,el_neigh);
+          std::vector<size_t> elem_sizes2(1,el2->nBasisFunctions());
+          for (size_t i=1; i < m_basis.size(); ++i) {
+            els2.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
+            elem_sizes2.push_back((*(m_basis[i]->elementBegin()+(els2.back()-1)))->nBasisFunctions());
+          }
+          std::cout << "elem2: ";
+          for (auto& it : elem_sizes2)
+            std::cout << it << " ";
+          std::cout << std::endl;
+
+          LocalIntegral* A_neigh = integrand.getLocalIntegral(elem_sizes2, el_neigh);
+          integrand.initElement(MNPC[el_neigh-1],elem_sizes2,nb,*A_neigh);
+
+          std::vector<size_t> elem_sizes3(elem_sizes);
+          std::copy(elem_sizes2.begin(), elem_sizes2.end(), std::back_inserter(elem_sizes3));
+          MxFiniteElement fe(elem_sizes3);
+
           if (!A_neigh->vec.empty()) {
             A->vec.resize(origSize+A_neigh->vec.size());
             std::copy(A_neigh->vec.begin(), A_neigh->vec.end(), A->vec.begin()+origSize);
           }
           A_neigh->destruct();
-          std::vector<size_t> els2(1,el_neigh);
-          const LR::Element* el2 = m_basis[0]->getElement(el_neigh-1);
-          uh = (el2->umin()+el2->umax())/2.0;
-          vh = (el2->vmin()+el2->vmax())/2.0;
-          for (size_t i=1; i < m_basis.size(); ++i)
-            els2.push_back(m_basis[i]->getElementContaining(uh, vh)+1);
 
           double dS = (iedge == 1 || iedge == 2) ? v2 - v1 : u2 - u1;
 
@@ -723,7 +741,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
           }
 
           // Finalize the element quantities
-          if (!integrand.finalizeElementBou(*A,fe,time))
+          if (!integrand.finalizeElement(*A,fe,time,-1))
             return false;
 
           // Assembly of global system integral
@@ -1010,15 +1028,15 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   if (fName)
     storeMesh();
 
-#ifdef SP_DEBUG
+//#ifdef SP_DEBUG
   std::cout <<"Refined mesh: ";
   for (const auto& it : m_basis)
     std::cout << it->nElements() <<" ";
-  std::cout <<"elements";
+  std::cout <<"elements ";
   for (const auto& it : m_basis)
     std::cout << it->nBasisFunctions() <<" ";
   std::cout <<"nodes."<< std::endl;
-#endif
+//#endif
 
   return true;
 }
