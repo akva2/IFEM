@@ -231,7 +231,7 @@ bool ASMu2Dmx::generateFEMTopology ()
       size_t old = lnod;
       for (LR::Basisfunction *b : (*el_it2)->support())
         myMNPC[iel][lnod++] = b->getId()+ofs;
-      std::cout << "Elem has " << lnod-old << " functions for basis " << i+1 << std::endl;
+      std::cout << "Elem " << iel << " has " << lnod-old << " functions for basis " << i+1 << std::endl;
       ofs += nb[i];
     }
   }
@@ -613,6 +613,8 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
         for (auto& it : elem_sizes)
           std::cout << it << " ";
         std::cout << std::endl;
+        std::cout << *(*el1) << std::endl;
+        std::cout << "midpoint: " << uh << " " << vh << std::endl;
 
         // Set up control point coordinates for current element
         if (!this->getElementCoordinates(Xnod,iel))
@@ -666,6 +668,8 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
           for (auto& it : elem_sizes2)
             std::cout << it << " ";
           std::cout << std::endl;
+        std::cout << *el2 << std::endl;
+        std::cout << "midpoint: " << uh << " " << vh << std::endl;
 
           LocalIntegral* A_neigh = integrand.getLocalIntegral(elem_sizes2, el_neigh);
           integrand.initElement(MNPC[el_neigh-1],elem_sizes2,nb,*A_neigh);
