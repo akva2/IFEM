@@ -182,9 +182,19 @@ bool ASMu2Dmx::generateFEMTopology ()
     m_basis.resize(vec.size());
     for (size_t i=0;i<vec.size();++i)
       m_basis[i].reset(new LR::LRSplineSurface(vec[i].get()));
+
+    // we need to project on something that is not one of our bases
+    if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
+        ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+        ASMmxBase::Type == ASMmxBase::SUBGRID) {
+      auto vec2 = ASMmxBase::establishBases(tensorspline,
+                                            ASMmxBase::FULL_CONT_RAISE_BASIS1);
+      projBasis.reset(new LR::LRSplineSurface(vec2.front().get()));
+      projBasis->generateIDs();
+    } else
+     projBasis = m_basis[0];
   }
   lrspline = m_basis[geoBasis-1];
-  projBasis = m_basis[0];
 
   nb.resize(m_basis.size());
   for (size_t i=0; i < m_basis.size(); ++i)
