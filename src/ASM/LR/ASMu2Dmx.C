@@ -1144,3 +1144,9 @@ Fields* ASMu2Dmx::getProjectedFields(const Vector& coefs, size_t nf) const
 
   return nullptr;
 }
+
+
+size_t ASMu2Dmx::getNoProjectionNodes() const
+{
+  return projBasis->nBasisFunctions();
+}

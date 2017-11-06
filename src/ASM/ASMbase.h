@@ -569,6 +569,9 @@ public:
   //! \note The implementation of this method is placed in GlbL2projector.C
   bool L2projection(Matrix& fVals, FunctionBase* function, double t = 0.0);
 
+  //! \brief Returns the number of projection nodes for this patch.
+  virtual size_t getNoProjectionNodes() const { return nnod; }
+
   //! \brief Returns a field using the projection basis.
   //! \param[in] coefs The coefficients for the field
   virtual Fields* getProjectedFields(const Vector& coefs, size_t nf) const
