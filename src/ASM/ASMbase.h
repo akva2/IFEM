@@ -29,6 +29,7 @@ typedef MPCSet::const_iterator MPCIter; //!< Iterator over an MPC equation set
 struct TimeDomain;
 class ElementBlock;
 class Field;
+class Fields;
 class GlobalIntegral;
 class IntegrandBase;
 class Integrand;
@@ -568,6 +569,10 @@ public:
   //! \note The implementation of this method is placed in GlbL2projector.C
   bool L2projection(Matrix& fVals, FunctionBase* function, double t = 0.0);
 
+  //! \brief Returns a field using the projection basis.
+  //! \param[in] coefs The coefficients for the field
+  virtual Fields* getProjectedFields(const Vector& coefs, size_t nf) const
+  { return nullptr; }
 
   // Methods for result extraction
   // =============================
