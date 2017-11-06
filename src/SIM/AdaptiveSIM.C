@@ -261,6 +261,8 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF)
 
   // Evaluate solution norms
   model.setQuadratureRule(opt.nGauss[1]);
+  if (model.setProjectionCrap(projs))
+    projs.front().clear();
   if (!model.solutionNorms(solution,projs,eNorm,gNorm))
     return false;
 
@@ -363,12 +365,13 @@ bool AdaptiveSIM::adaptMesh (int iStep)
         locNorm(i) = eNorm(eRow, patch->getElmID(i));
 
       // remap from geometry basis to refinement basis
-      Vector locErr(patch->getNoNodes(rBasis));
+      Vector locErr(patch->getNoNodes(-2));
       static_cast<ASMunstruct*>(patch)->remapErrors(locErr, locNorm);
 
       // insert into global error array
       for (i = 0; i < locErr.size(); ++i)
-        errors[patch->getNodeID(i+1+nOfs)-1].first += locErr[i];
+//        errors[patch->getNodeID(i+1+nOfs)-1].first += locErr[i];
+        errors[i].first += locErr[i];
     }
   }
   else { // use errors per element
@@ -398,7 +401,7 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   case AVERAGE: // beta percent of avg error (typical 100%)
     for (size_t i = 0; i < errors.size(); i++)
       sumErr += errors[i].first;
-    limit = sumErr/errors.size() * beta/100.0;
+    limit = sumErr/model.getNoNodes(1) * beta/100.0;
     break;
   case MINIMUM: // beta percent of min error (more than 100%)
     limit = errors.back().first  * beta/100.0;
@@ -407,7 +410,7 @@ bool AdaptiveSIM::adaptMesh (int iStep)
     limit = 0.0;
   }
   if (threshold == NONE)
-    refineSize = ceil(model.getNoNodes(1)*beta/100.0);
+    refineSize = ceil(model.getPatch(1)->getNoNodes(-2)*beta/100.0);
   else
     refineSize = std::upper_bound(errors.begin(), errors.end(),
                                   DblIdx(limit,0),
@@ -448,7 +451,10 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   prm.elements.reserve(refineSize);
   size_t j = 0;
   for (i = 0; j < refineSize; i++) {
-    if (model.getNodeType(errors[i].first+1) == 'D') {
+    /*if ((ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE &&
+         model.getNodeType(errors[i].second+1) != 'Q')
+       || model.getNodeType(errors[i].second+1) == 'D') {*/
+    {
       prm.elements.push_back(errors[i].second);
       ++j;
     }

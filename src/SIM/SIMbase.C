@@ -1648,13 +1648,15 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
     size_t nComps = values.rows();
     size_t nNodes = values.cols();
     if (ssol.empty())
-      ssol.resize(nComps,ngNodes);
+//      ssol.resize(nComps,ngNodes);
+      ssol.resize(nComps,nNodes);
 
     // Nodal averaging for nodes referred to by two or more patches
     // (these are typically the interface nodes)
     for (n = 1; n <= nNodes; n++)
       if (count.empty())
-	ssol.fillColumn(myModel[i]->getNodeID(n),values.getColumn(n));
+        ssol.fillColumn(n,values.getColumn(n));
+//        ssol.fillColumn(myModel[i]->getNodeID(n),values.getColumn(n));
       else
       {
 	int inod = myModel[i]->getNodeID(n);

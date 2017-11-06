@@ -21,6 +21,7 @@
 #include "LRSpline/Element.h"
 #include "LRSpline/Basisfunction.h"
 
+#include "IFEM.h"
 #include "TimeDomain.h"
 #include "FiniteElement.h"
 #include "GlobalIntegral.h"
@@ -37,6 +38,10 @@
 #include <array>
 #include <fstream>
 #include <numeric>
+
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
 
 
 ASMu2Dmx::ASMu2Dmx (unsigned char n_s, const CharVec& n_f)
@@ -97,8 +102,14 @@ void ASMu2Dmx::clear (bool retainGeometry)
 
 size_t ASMu2Dmx::getNoNodes (int basis) const
 {
+  if (basis == -2 && projBasis)
+    return projBasis->nBasisFunctions();
+  else if (basis == -2)
+    basis = 1;
+
   if (basis > (int)nb.size() || basis < 1)
     return this->ASMbase::getNoNodes(basis);
+
 
   return nb[basis-1];
 }
@@ -181,6 +192,15 @@ bool ASMu2Dmx::generateFEMTopology ()
     m_basis.resize(vec.size());
     for (size_t i=0;i<vec.size();++i)
       m_basis[i].reset(new LR::LRSplineSurface(vec[i].get()));
+
+    // HACKETIHACKETIHACK!
+    if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
+        ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE) {
+      auto vec2 = ASMmxBase::establishBases(tensorspline,
+                                            ASMmxBase::FULL_CONT_RAISE_BASIS1);
+      projBasis.reset(new LR::LRSplineSurface(vec2.front().get()));
+      projBasis->generateIDs();
+    }
   }
   lrspline = m_basis[geoBasis-1];
 
@@ -704,9 +724,156 @@ bool ASMu2Dmx::evalSolution (Matrix& sField, const IntegrandBase& integrand,
 }
 
 
+bool ASMu2Dmx::refine2 (const LR::RefineData& prm,
+                       Vectors& sol, const char* fName)
+{
+  if (shareFE) return true;
+
+  auto&& storeMesh = [this, fName]()
+                     {
+                       for (size_t b = 1; b <= m_basis.size(); ++b) {
+                         std::stringstream str;
+                         str << "_patch" << idx << "_basis" << b << "_" << fName;
+                         std::ofstream paramMeshFile("param"+str.str());
+                         this->getBasis(b)->writePostscriptMesh(paramMeshFile);
+                         std::ofstream physMeshFile("physical"+str.str());
+                         this->getBasis(b)->writePostscriptElements(physMeshFile);
+                         std::ofstream pdotFile("param_dot"+str.str());
+                         this->getBasis(b)->writePostscriptElements(pdotFile);
+                         std::ofstream physdotFile("physical_dot"+str.str());
+                         this->getBasis(b)->writePostscriptMeshWithControlPoints(physdotFile);
+                       }
+                     };
+
+  char doRefine = 0;
+  if (!prm.errors.empty())
+    doRefine = 'E'; // Refine based on error indicators
+  else if (!prm.elements.empty())
+    doRefine = 'I'; // Refine the specified elements
+  else {
+    if (fName)
+      storeMesh();
+    return true; // No refinement
+  }
+
+  // which basis to refine
+  size_t bas = (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2 ||
+                ASMmxBase::Type == ASMmxBase::FULL_CONT_RAISE_BASIS2) ? 1 : 0;
+
+  // to pick up if LR splines get stuck while doing refinement
+  // print entry and exit point of this function
+
+  double beta         = prm.options.size() > 0 ? prm.options[0]/100.0 : 0.10;
+  int    multiplicity = prm.options.size() > 1 ? prm.options[1]       : 1;
+  if (multiplicity > 1)
+    for (int d = 0; d < geo->nVariate(); d++) {
+      int p = m_basis[bas]->order(d) - 1;
+      if (multiplicity > p) multiplicity = p;
+    }
+
+  enum refinementStrategy strat = LR_FULLSPAN;
+  if (prm.options.size() > 2)
+    switch (prm.options[2]) {
+    case 1: strat = LR_MINSPAN; break;
+    case 2: strat = LR_STRUCTURED_MESH; break;
+    }
+
+  int  maxTjoints     = prm.options.size() > 4 ? prm.options[4]      : -1;
+  int  maxAspectRatio = prm.options.size() > 5 ? prm.options[5]      : -1;
+  bool closeGaps      = prm.options.size() > 6 ? prm.options[6] != 0 : false;
+
+  // set refinement parameters
+  if (maxTjoints > 0)
+    projBasis->setMaxTjoints(maxTjoints);
+  if (maxAspectRatio > 0)
+    projBasis->setMaxAspectRatio((double)maxAspectRatio);
+  projBasis->setCloseGaps(closeGaps);
+  projBasis->setRefMultiplicity(multiplicity);
+  projBasis->setRefStrat(strat);
+
+  for (size_t j = 0; j < sol.size(); ++j) {
+    size_t ofs = 0;
+    for (size_t i = 0; i< m_basis.size(); ++i) {
+      LR::extendControlPoints(m_basis[i].get(), sol[j], nfx[i], ofs);
+      ofs += nfx[i]*nb[i];
+    }
+  }
+
+  // do actual refinement
+  IntVec elems(projBasis->nBasisFunctions());
+  if (beta == 1.0)
+    std::iota(elems.begin(), elems.end(), 0);
+  else
+    elems = prm.elements;
+  if (doRefine == 'E')
+    projBasis->refineByDimensionIncrease(prm.errors,beta);
+  else if (strat == LR_STRUCTURED_MESH)
+    projBasis->refineBasisFunction(elems);
+  else
+    projBasis->refineElement(prm.elements);
+
+  projBasis->generateIDs();
+  const std::vector<LR::Meshline*> lines = projBasis->getAllMeshlines();
+  for (const LR::Meshline* line : lines)
+    for (size_t j = 0; j < m_basis.size(); ++j)
+      if (0)
+        continue;
+      else {
+        int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
+        int mult;
+        if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1) {
+          if (line->multiplicity_ > 1)
+            mult = p;
+          else
+            mult = j == 0 ? 2 : 1;
+        } else
+          mult = 1;
+        if (line->span_u_line_)
+          m_basis[j]->insert_const_v_edge(line->const_par_,
+                                          line->start_, line->stop_, mult);
+        else
+          m_basis[j]->insert_const_u_edge(line->const_par_,
+                                          line->start_, line->stop_, mult);
+      }
+
+  size_t len = 0;
+  for (size_t j = 0; j< m_basis.size(); ++j) {
+    m_basis[j]->generateIDs();
+    nb[j] = m_basis[j]->nBasisFunctions();
+    len += nfx[j]*nb[j];
+  }
+
+  size_t ofs = 0;
+  for (int i = sol.size()-1; i > 0; i--)
+    for (size_t j = 0; j < m_basis.size(); ++j) {
+      sol[i].resize(len);
+      LR::contractControlPoints(m_basis[j].get(), sol[i], nfx[j], ofs);
+      ofs += nfx[j]*nb[j];
+    }
+
+  if (fName)
+    storeMesh();
+
+//#ifdef SP_DEBUG
+  std::cout <<"Refined mesh: ";
+  for (const auto& it : m_basis)
+    std::cout << it->nElements() <<" ";
+  std::cout <<"elements ";
+  for (const auto& it : m_basis)
+    std::cout << it->nBasisFunctions() <<" ";
+  std::cout <<"nodes."<< std::endl;
+//#endif
+
+  return true;
+}
+
+
 bool ASMu2Dmx::refine (const LR::RefineData& prm,
                        Vectors& sol, const char* fName)
 {
+  if (projBasis)
+    return this->refine2(prm, sol, fName);
+
   if (shareFE) return true;
 
   auto&& storeMesh = [this, fName]()
@@ -793,7 +960,8 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
       if (j == bas)
         continue;
       else {
-        int mult = 1;
+        int p = m_basis[bas]->order(line->span_u_line_ ? 1 : 0)-1;
+        int mult = std::min(line->multiplicity_, p);
         if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
             ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
           int p = m_basis[bas]->order(line->span_u_line_ ? 1 : 0)-1;
@@ -827,15 +995,15 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   if (fName)
     storeMesh();
 
-#ifdef SP_DEBUG
+//#ifdef SP_DEBUG
   std::cout <<"Refined mesh: ";
   for (const auto& it : m_basis)
     std::cout << it->nElements() <<" ";
-  std::cout <<"elements";
+  std::cout <<"elements ";
   for (const auto& it : m_basis)
     std::cout << it->nBasisFunctions() <<" ";
   std::cout <<"nodes."<< std::endl;
-#endif
+//#endif
 
   return true;
 }
@@ -870,6 +1038,16 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
       threadBasis = this->getBasis(i);
       p1 = threadBasis->order(0);
     }
+
+#ifdef USE_OPENMP
+  if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE) {
+    IFEM::cout << " *** ASMu2Dmx::generateThreadGroups *** :"
+               << " Disabling multithreading."
+               << "\n\t Cannot use multi-threading with div-compatible"
+               << std::endl;
+    omp_set_num_threads(1);
+  }
+#endif
 
   LR::generateThreadGroups(threadGroups,threadBasis);
   if (silence || threadGroups[0].size() < 2) return;
@@ -910,7 +1088,7 @@ void ASMu2Dmx::getBoundaryNodes (int lIndex, IntVec& nodes, int basis,
 
 void ASMu2Dmx::remapErrors(RealArray& errors, const RealArray& origErr) const
 {
-  const LR::LRSplineSurface* basis = this->getBasis(1);
+  const LR::LRSplineSurface* basis = projBasis ? projBasis.get() : this->getBasis(1);
   const LR::LRSplineSurface* geo = this->getBasis(ASMmxBase::geoBasis);
 
   for (const LR::Element* elm : basis->getAllElements()) {

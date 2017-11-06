@@ -171,6 +171,13 @@ public:
   virtual bool refine(const LR::RefineData& prm, Vectors& sol,
                       const char* fName = nullptr);
 
+  //! \brief Refines the mesh adaptively.
+  //! \param[in] prm Input data used to control the refinement
+  //! \param sol Control point results values that are transferred to new mesh
+  //! \param[in] fName Optional file name for an image of the resulting mesh
+  bool refine2(const LR::RefineData& prm, Vectors& sol,
+               const char* fName = nullptr);
+
   //! \brief Connects all matching nodes on two adjacent boundary edges.
   //! \param[in] edge Local edge index of this patch, in range [1,4]
   //! \param neighbor The neighbor patch
@@ -198,6 +205,7 @@ public:
   //! \param[in] origErr The element wise errors on the geometry mesh
   virtual void remapErrors(RealArray& errors, const RealArray& origErr) const;
 
+  std::shared_ptr<LR::LRSplineSurface> projBasis;
 protected:
   //! \brief Assembles L2-projection matrices for the secondary solution.
   //! \param[out] A Left-hand-side matrix
@@ -207,6 +215,15 @@ protected:
   virtual bool assembleL2matrices(SparseMatrix& A, StdVector& B,
                                   const IntegrandBase& integrand,
                                   bool continuous) const;
+
+  //! \brief Assembles L2-projection matrices for the secondary solution.
+  //! \param[out] A Left-hand-side matrix
+  //! \param[out] B Right-hand-side vectors
+  //! \param[in] integrand Object with problem-specific data and methods
+  //! \param[in] continuous If \e false, a discrete L2-projection is used
+  bool assembleL2matrices2(SparseMatrix& A, StdVector& B,
+                           const IntegrandBase& integrand,
+                           bool continuous) const;
 
   using ASMu2D::generateThreadGroups;
   //! \brief Generates element groups for multi-threading of interior integrals.

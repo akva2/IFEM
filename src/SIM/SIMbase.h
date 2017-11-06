@@ -120,6 +120,8 @@ public:
   void setQuadratureRule(size_t ng, bool redimBuffers = false,
                          bool printQP = false);
 
+  virtual bool setProjectionCrap(Vectors& proj) { return false; }
+
   //! \brief Prints out problem-specific data to the log stream.
   virtual void printProblem() const;
 

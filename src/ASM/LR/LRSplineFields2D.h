@@ -43,6 +43,8 @@ public:
   //! \brief Empty destructor.
   virtual ~LRSplineFields2D() {}
 
+  LRSplineFields2D(LR::LRSplineSurface* srf, const RealArray& v, int ncmp);
+
   // Methods to evaluate the field
   //==============================
 
