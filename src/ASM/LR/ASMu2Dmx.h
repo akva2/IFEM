@@ -171,6 +171,10 @@ public:
                                   const IntegrandBase& integrand,
                                   bool continuous = false) const;
 
+
+  //! \brief Returns the number of projection nodes for this patch.
+  virtual size_t getNoProjectionNodes() const;
+
   //! \brief Returns a field using the projection basis.
   //! \param[in] coefs The coefficients for the field
   //! \param[in] nf Number of components
