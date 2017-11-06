@@ -171,6 +171,11 @@ public:
                                   const IntegrandBase& integrand,
                                   bool continuous = false) const;
 
+  //! \brief Returns a field using the projection basis.
+  //! \param[in] coefs The coefficients for the field
+  //! \param[in] nf Number of components
+  virtual Fields* getProjectedFields(const Vector& coefs, size_t nf) const;
+
   using ASMu2D::refine;
   //! \brief Refines the mesh adaptively.
   //! \param[in] prm Input data used to control the refinement

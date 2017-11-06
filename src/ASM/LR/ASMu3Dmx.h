@@ -17,6 +17,8 @@
 #include "ASMu3D.h"
 #include "ASMmxBase.h"
 
+class Fields;
+
 
 /*!
   \brief Driver for assembly of unstructured 3D spline mixed FE models.
@@ -155,6 +157,11 @@ public:
   virtual bool injectNodeVec(const Vector& nodeVec, Vector& globVec,
                              unsigned char = 0, int basis = 0) const;
 
+  //! \brief Returns a field using the projection basis.
+  //! \param[in] coefs The coefficients for the field
+  //! \param[in] nf Number of components
+  virtual Fields* getProjectedFields(const Vector& coefs, size_t nf) const;
+
   using ASMu3D::refine;
   //! \brief Refines the mesh adaptively.
   //! \param[in] prm Input data used to control the refinement
@@ -172,6 +179,7 @@ public:
 
 private:
   std::vector<std::shared_ptr<LR::LRSplineVolume>> m_basis; //!< Spline bases
+  std::shared_ptr<LR::LRSplineVolume> projBasis; //!< Basis to project onto
   const std::vector<Matrices>& bezierExtract;   //!< Bezier extraction matrices
   std::vector<Matrices>        myBezierExtract; //!< Bezier extraction matrices
 };
