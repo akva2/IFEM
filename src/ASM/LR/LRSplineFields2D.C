@@ -80,12 +80,12 @@ bool LRSplineFields2D::valueFE (const FiniteElement& fe, Vector& vals) const
 
   // Evaluate the solution field at the given point
 
-  Matrix Vnod(2, elm->nBasisFunctions());
+  Matrix Vnod(nf, elm->nBasisFunctions());
   size_t i = 1;
   for (auto it  = elm->constSupportBegin();
             it != elm->constSupportEnd(); ++it, ++i)
-    for (size_t j = 1; j <= 2; ++j)
-      Vnod(j,i) = values((*it)->getId()*2+j);
+    for (size_t j = 1; j <= nf; ++j)
+      Vnod(j,i) = values((*it)->getId()*nf+j);
 
   Vnod.multiply(spline.basisValues,vals); // vals = Vnod * basisValues
 
