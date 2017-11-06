@@ -101,8 +101,16 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
       return false;
 
     // set up basis function size (for extractBasis subroutine)
-    phi[0].resize(projBasis->getElement(els[0]-1)->nBasisFunctions());
+    const LR::Element* elm = projBasis->getElement(els[0]-1);
+    phi[0].resize(elm->nBasisFunctions());
     phi[1].resize(m_basis[geoBasis-1]->getElement(els[1]-1)->nBasisFunctions());
+    IntVec lmnpc;
+    if (projBasis != m_basis[0]) {
+      lmnpc.reserve(phi[0].size());
+      for (const LR::Basisfunction* f : elm->support())
+        lmnpc.push_back(f->getId());
+    }
+    const IntVec& mnpc = projBasis == m_basis[0] ? MNPC[els[0]-1] : lmnpc;
 
     // --- Integration loop over all Gauss points in each direction ----------
     int ip = 0;
@@ -135,10 +143,10 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
         size_t ncmp = sField.rows();
         for (size_t ii = 0; ii < phi[0].size(); ii++)
         {
-          int inod = MNPC[els[1]-1][ii];
+          int inod = mnpc[ii];
           for (size_t jj = 0; jj < phi[0].size(); jj++)
           {
-            int jnod = MNPC[els[1]-1][jj];
+            int jnod = mnpc[jj];
             for (size_t k = 1; k <= ncmp; ++k)
               A(inod*ncmp+k, jnod*ncmp+k) += phi[0][ii]*phi[0][jj]*dJw;
           }
