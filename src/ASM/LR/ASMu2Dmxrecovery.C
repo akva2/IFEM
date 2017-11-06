@@ -162,7 +162,7 @@ bool ASMu2Dmx::globalL2projection (Matrix& sField,
   PROFILE2("ASMu2Dmx::globalL2");
 
   // Assemble the projection matrices
-  size_t nnod = integrand.getNoFields(2)*nb[0];
+  size_t nnod = this->getNoProjectionNodes() * integrand.getNoFields(2);
   SparseMatrix A(SparseMatrix::SUPERLU);
   StdVector B(nnod);
   A.redim(nnod,nnod);
@@ -184,7 +184,7 @@ bool ASMu2Dmx::globalL2projection (Matrix& sField,
   sField.resize(integrand.getNoFields(2), nb[0]);
 
   size_t inod = 1, jnod = 1;
-  for (size_t i = 1; i <= nb[0]; i++, inod++)
+  for (size_t i = 1; i <= this->getNoProjectionNodes(); i++, inod++)
     for (size_t j = 1; j <= integrand.getNoFields(2); j++, jnod++)
       sField(j,inod) = B(jnod);
 
