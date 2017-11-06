@@ -227,6 +227,7 @@ protected:
 private:
   std::vector<std::shared_ptr<LR::LRSplineSurface>> m_basis; //!< All bases
   LR::LRSplineSurface* threadBasis; //!< Basis for thread groups
+  std::shared_ptr<LR::LRSplineSurface> projBasis; //!< Basis to project onto
 };
 
 #endif
