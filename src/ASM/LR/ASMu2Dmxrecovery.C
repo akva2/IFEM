@@ -46,8 +46,8 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
                                    const IntegrandBase& integrand,
                                    bool continuous) const
 {
-  const int p1 = m_basis[0]->order(0);
-  const int p2 = m_basis[0]->order(1);
+  const int p1 = projBasis->order(0);
+  const int p2 = projBasis->order(1);
 
   // Get Gaussian quadrature points
   const int ng1 = continuous ? nGauss : p1 - 1;
@@ -74,7 +74,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
     double uh = ((*el1)->umin()+(*el1)->umax())/2.0;
     double vh = ((*el1)->vmin()+(*el1)->vmax())/2.0;
     std::vector<size_t> els;
-    els.push_back(m_basis[0]->getElementContaining(uh, vh)+1);
+    els.push_back(projBasis->getElementContaining(uh, vh)+1);
     els.push_back(m_basis[geoBasis-1]->getElementContaining(uh,vh)+1);
 
     int geoEl = els[1];
@@ -101,7 +101,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
       return false;
 
     // set up basis function size (for extractBasis subroutine)
-    phi[0].resize(m_basis[0]->getElement(els[0]-1)->nBasisFunctions());
+    phi[0].resize(projBasis->getElement(els[0]-1)->nBasisFunctions());
     phi[1].resize(m_basis[geoBasis-1]->getElement(els[1]-1)->nBasisFunctions());
 
     // --- Integration loop over all Gauss points in each direction ----------
@@ -111,7 +111,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
       {
         if (continuous)
         {
-          m_basis[0]->computeBasis(gpar[0][i], gpar[1][j], spl1[0], els[0]-1);
+          projBasis->computeBasis(gpar[0][i], gpar[1][j], spl1[0], els[0]-1);
           SplineUtils::extractBasis(spl1[0],phi[0],dNdu[0]);
           m_basis[geoBasis-1]->computeBasis(gpar[0][i], gpar[1][j],
                                             spl1[1], els[1]-1);
@@ -119,7 +119,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
         }
         else
         {
-          m_basis[0]->computeBasis(gpar[0][i], gpar[1][j], spl0[0], els[0]-1);
+          projBasis->computeBasis(gpar[0][i], gpar[1][j], spl0[0], els[0]-1);
           phi[0] = spl0[0].basisValues;
         }
 

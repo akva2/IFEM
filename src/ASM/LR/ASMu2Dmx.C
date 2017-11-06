@@ -184,6 +184,7 @@ bool ASMu2Dmx::generateFEMTopology ()
       m_basis[i].reset(new LR::LRSplineSurface(vec[i].get()));
   }
   lrspline = m_basis[geoBasis-1];
+  projBasis = m_basis[0];
 
   nb.resize(m_basis.size());
   for (size_t i=0; i < m_basis.size(); ++i)
