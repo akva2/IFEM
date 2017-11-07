@@ -58,6 +58,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
   if (!xg || !yg) return false;
   if (continuous && !wg) return false;
 
+  size_t nnod = this->getNoProjectionNodes();
   double dA = 0.0;
   Vectors phi(2);
   Matrices dNdu(2);
@@ -143,62 +144,17 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
         size_t ncmp = sField.rows();
         for (size_t ii = 0; ii < phi[0].size(); ii++)
         {
-          int inod = mnpc[ii];
+          int inod = mnpc[ii]+1;
           for (size_t jj = 0; jj < phi[0].size(); jj++)
           {
-            int jnod = mnpc[jj];
-            for (size_t k = 1; k <= ncmp; ++k)
-              A(inod*ncmp+k, jnod*ncmp+k) += phi[0][ii]*phi[0][jj]*dJw;
+            int jnod = mnpc[jj]+1;
+            A(inod, jnod) += phi[0][ii]*phi[0][jj]*dJw;
           }
-          for (size_t k = 1; k <= ncmp; ++k)
-            B(inod*ncmp+k) += phi[0][ii]*sField(k,ip+1)*dJw;
+          for (size_t r = 1; r <= ncmp; ++r)
+            B(inod + (r-1)*nnod) += phi[0][ii]*sField(r,ip+1)*dJw;
         }
       }
   }
 
-  return true;
-}
-
-
-bool ASMu2Dmx::globalL2projection (Matrix& sField,
-                                   const IntegrandBase& integrand,
-                                   bool continuous) const
-{
-  for (size_t b = 0; b < m_basis.size(); b++)
-    if (!m_basis[b]) return true; // silently ignore empty patches
-
-  PROFILE2("ASMu2Dmx::globalL2");
-
-  // Assemble the projection matrices
-  size_t nnod = this->getNoProjectionNodes() * integrand.getNoFields(2);
-  SparseMatrix A(SparseMatrix::SUPERLU);
-  StdVector B(nnod);
-  A.redim(nnod,nnod);
-
-  if (!this->assembleL2matrices(A,B,integrand,continuous))
-    return false;
-
-#if SP_DEBUG > 1
-  std::cout <<"---- Matrix A -----\n"<< A
-            <<"-------------------"<< std::endl;
-  std::cout <<"---- Vector B -----\n"<< B
-            <<"-------------------"<< std::endl;
-#endif
-
-  // Solve the patch-global equation system
-  if (!A.solve(B)) return false;
-
-  // Store the control-point values of the projected field
-  sField.resize(integrand.getNoFields(2), nb[0]);
-
-  size_t inod = 1, jnod = 1;
-  for (size_t i = 1; i <= this->getNoProjectionNodes(); i++, inod++)
-    for (size_t j = 1; j <= integrand.getNoFields(2); j++, jnod++)
-      sField(j,inod) = B(jnod);
-
-#if SP_DEBUG > 1
-  std::cout <<"- Solution Vector -"<< sField
-            <<"-------------------"<< std::endl;
-#endif
   return true;
 }

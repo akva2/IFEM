@@ -1150,3 +1150,43 @@ size_t ASMu2Dmx::getNoProjectionNodes() const
 {
   return projBasis->nBasisFunctions();
 }
+
+
+bool ASMu2Dmx::evalProjSolution (Matrix& sField, const Vector& locSol,
+                                 const int* npe, int nf) const
+{
+#ifdef SP_DEBUG
+  std::cout <<"ASMu2D::evalProjSolution(Matrix&,const Vector&,const int*,int)\n";
+#endif
+  // Compute parameter values of the result sampling points
+  std::array<RealArray,2> gpar;
+  for (int dir = 0; dir < 2; dir++)
+    if (!this->getGridParameters(gpar[dir],dir,npe[dir]-1))
+      return false;
+
+  size_t nComp = locSol.size() / this->getNoProjectionNodes();
+  if (nComp*this->getNoNodes() != locSol.size())
+    return false;
+
+  size_t nPoints = gpar[0].size();
+  if (nPoints != gpar[1].size())
+    return false;
+
+  Fields* f = this->getProjectedFields(locSol, nComp);
+
+  // Evaluate the primary solution field at each point
+  sField.resize(nComp,nPoints);
+  for (size_t i = 0; i < nPoints; i++)
+  {
+    Vector vals;
+    FiniteElement fe;
+    fe.u = gpar[0][i];
+    fe.v = gpar[1][i];
+    f->valueFE(fe, vals);
+    sField.fillColumn(1+i, vals);
+  }
+
+  delete f;
+
+  return true;
+}
