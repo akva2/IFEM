@@ -134,6 +134,14 @@ public:
                             const RealArray* gpar, bool = false,
                             int deriv = 0, int nf = 0) const;
 
+  //! \brief Evaluates the projected solution field at all visualization points.
+  //! \param[out] sField Solution field
+  //! \param[in] locSol Solution vector local to current patch
+  //! \param[in] npe Number of visualization nodes over each knot span
+  //! \param[in] nf If nonzero, mixed evaluates nf fields on first basis
+  virtual bool evalProjSolution(Matrix& sField, const Vector& locSol,
+                                const int* npe, int nf = 0) const;
+
   //! \brief Evaluates the secondary solution field at the given points.
   //! \param[out] sField Solution field
   //! \param[in] integrand Object with problem-specific data and methods
@@ -162,14 +170,6 @@ public:
   //! \param[in] basis Which basis (or 0 for both) to extract nodal values for
   virtual bool injectNodeVec(const Vector& nodeVec, Vector& globVec,
                              unsigned char = 0, int basis = 0) const;
-
-  //! \brief Projects the secondary solution using a discrete global L2-norm.
-  //! \param[out] sField Secondary solution field control point values
-  //! \param[in] integrand Object with problem-specific data and methods
-  //! \param[in] continuous If \e true, a continuous L2-projection is used
-  virtual bool globalL2projection(Matrix& sField,
-                                  const IntegrandBase& integrand,
-                                  bool continuous = false) const;
 
 
   //! \brief Returns the number of projection nodes for this patch.
