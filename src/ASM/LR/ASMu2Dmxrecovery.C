@@ -68,31 +68,33 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
 
   // === Assembly loop over all elements in the patch ==========================
+  LR::LRSplineSurface* geoSurf;
+  if (m_basis[geoBasis-1]->nBasisFunctions() == projBasis->nBasisFunctions())
+    geoSurf = m_basis[geoBasis-1].get();
+  else
+    geoSurf = projBasis.get();
 
-  std::vector<LR::Element*>::iterator el1 = m_basis[geoBasis-1]->elementBegin();
-  for (int iel = 1; el1 != m_basis[geoBasis-1]->elementEnd(); ++el1, ++iel)
+  for (auto el1 : geoSurf->getAllElements())
   {
-    double uh = ((*el1)->umin()+(*el1)->umax())/2.0;
-    double vh = ((*el1)->vmin()+(*el1)->vmax())/2.0;
+    double uh = (el1->umin()+el1->umax())/2.0;
+    double vh = (el1->vmin()+el1->vmax())/2.0;
     std::vector<size_t> els;
     els.push_back(projBasis->getElementContaining(uh, vh)+1);
     els.push_back(m_basis[geoBasis-1]->getElementContaining(uh,vh)+1);
 
-    int geoEl = els[1];
-
     if (continuous)
     {
       // Set up control point (nodal) coordinates for current element
-      if (!this->getElementCoordinates(Xnod,geoEl))
+      if (!this->getElementCoordinates(Xnod,els[1]))
         return false;
-      else if ((dA = 0.25*this->getParametricArea(geoEl)) < 0.0)
+      else if ((dA = 0.25*this->getParametricArea(els[1])) < 0.0)
         return false; // topology error (probably logic error)
     }
 
     // Compute parameter values of the Gauss points over this element
     RealArray gpar[2], unstrGpar[2];
-    this->getGaussPointParameters(gpar[0],0,ng1,geoEl,xg);
-    this->getGaussPointParameters(gpar[1],1,ng2,geoEl,yg);
+    this->getGaussPointParameters(gpar[0],0,ng1,els[1],xg);
+    this->getGaussPointParameters(gpar[1],1,ng2,els[1],yg);
 
     // convert to unstructred mesh representation
     expandTensorGrid(gpar, unstrGpar);
@@ -104,14 +106,14 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
     // set up basis function size (for extractBasis subroutine)
     const LR::Element* elm = projBasis->getElement(els[0]-1);
     phi[0].resize(elm->nBasisFunctions());
-    phi[1].resize(m_basis[geoBasis-1]->getElement(els[1]-1)->nBasisFunctions());
+    phi[1].resize(el1->nBasisFunctions());
     IntVec lmnpc;
     if (projBasis != m_basis[0]) {
       lmnpc.reserve(phi[0].size());
       for (const LR::Basisfunction* f : elm->support())
         lmnpc.push_back(f->getId());
     }
-    const IntVec& mnpc = projBasis == m_basis[0] ? MNPC[els[0]-1] : lmnpc;
+    const IntVec& mnpc = projBasis == m_basis[0] ? MNPC[els[1]-1] : lmnpc;
 
     // --- Integration loop over all Gauss points in each direction ----------
     int ip = 0;
