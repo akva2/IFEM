@@ -966,6 +966,11 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   // which basis to refine
   size_t bas = (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2 ||
                 ASMmxBase::Type == ASMmxBase::FULL_CONT_RAISE_BASIS2) ? 1 : 0;
+  LR::LRSplineSurface* refSurf = projBasis != m_basis[0] ?
+                                 projBasis.get() : m_basis[bas].get();
+
+  if (projBasis != m_basis[0] && ASMmxBase::Type != ASMmxBase::SUBGRID)
+    bas = m_basis.size();
 
   // to pick up if LR splines get stuck while doing refinement
   // print entry and exit point of this function
@@ -974,9 +979,11 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   int    multiplicity = prm.options.size() > 1 ? prm.options[1]       : 1;
   if (multiplicity > 1)
     for (int d = 0; d < geo->nVariate(); d++) {
-      int p = m_basis[bas]->order(d) - 1;
+      int p = refSurf->order(d) - 1;
       if (multiplicity > p) multiplicity = p;
     }
+
+  multiplicity = 1;
 
   enum refinementStrategy strat = LR_FULLSPAN;
   if (prm.options.size() > 2)
@@ -991,12 +998,12 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
 
   // set refinement parameters
   if (maxTjoints > 0)
-    m_basis[bas]->setMaxTjoints(maxTjoints);
+    refSurf->setMaxTjoints(maxTjoints);
   if (maxAspectRatio > 0)
-    m_basis[bas]->setMaxAspectRatio((double)maxAspectRatio);
-  m_basis[bas]->setCloseGaps(closeGaps);
-  m_basis[bas]->setRefMultiplicity(multiplicity);
-  m_basis[bas]->setRefStrat(strat);
+    refSurf->setMaxAspectRatio((double)maxAspectRatio);
+  refSurf->setCloseGaps(closeGaps);
+  refSurf->setRefMultiplicity(multiplicity);
+  refSurf->setRefStrat(strat);
 
   for (size_t j = 0; j < sol.size(); ++j) {
     size_t ofs = 0;
@@ -1008,26 +1015,32 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
 
   // do actual refinement
   if (doRefine == 'E')
-    m_basis[bas]->refineByDimensionIncrease(prm.errors,beta);
+    refSurf->refineByDimensionIncrease(prm.errors,beta);
   else if (strat == LR_STRUCTURED_MESH)
-    m_basis[bas]->refineBasisFunction(prm.elements);
+    refSurf->refineBasisFunction(prm.elements);
   else
-    m_basis[bas]->refineElement(prm.elements);
+    refSurf->refineElement(prm.elements);
 
-  const std::vector<LR::Meshline*> lines = m_basis[bas]->getAllMeshlines();
+  refSurf->generateIDs();
+  const std::vector<LR::Meshline*> lines = refSurf->getAllMeshlines();
+  size_t start = ASMmxBase::Type == ASMmxBase::SUBGRID ? 1 : 0;
   for (const LR::Meshline* line : lines)
-    for (size_t j = 0; j < m_basis.size(); ++j)
+    for (size_t j = start; j < m_basis.size(); ++j)
       if (j == bas)
         continue;
       else {
+        int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
         int mult = 1;
         if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
             ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
-          int p = m_basis[bas]->order(line->span_u_line_ ? 1 : 0)-1;
-          int k = p - line->multiplicity_;
-          int q = m_basis[j]->order(line->span_u_line_ ? 1 : 0)-1;
-          mult = std::max(1,q-k);
-        }
+          if (line->multiplicity_ > 1)
+            mult = p;
+          else
+            mult = (j == 0 && ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1) ||
+                   (j == 1 && ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2) ? 2 : 1;
+        } else
+          mult = 1;
+
         if (line->span_u_line_)
           m_basis[j]->insert_const_v_edge(line->const_par_,
                                           line->start_, line->stop_, mult);
@@ -1035,6 +1048,15 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
           m_basis[j]->insert_const_u_edge(line->const_par_,
                                           line->start_, line->stop_, mult);
       }
+
+  // Uniformly refine to find basis 1
+  if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
+    m_basis[0].reset(projBasis->copy());
+    size_t nFunc = projBasis->nBasisFunctions();
+    IntVec elems(nFunc);
+    std::iota(elems.begin(),elems.end(),0);
+    m_basis[0]->refineBasisFunction(elems);
+  }
 
   size_t len = 0;
   for (size_t j = 0; j< m_basis.size(); ++j) {
@@ -1054,7 +1076,7 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   if (fName)
     storeMesh();
 
-#ifdef SP_DEBUG
+//#ifdef SP_DEBUG
   std::cout <<"Refined mesh: ";
   for (const auto& it : m_basis)
     std::cout << it->nElements() <<" ";
@@ -1062,7 +1084,8 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   for (const auto& it : m_basis)
     std::cout << it->nBasisFunctions() <<" ";
   std::cout <<"nodes."<< std::endl;
-#endif
+  std::cout << "Projection basis: " << projBasis->nElements() << " " << projBasis->nBasisFunctions() << std::endl;
+//#endif
 
   return true;
 }
@@ -1138,7 +1161,7 @@ void ASMu2Dmx::getBoundaryNodes (int lIndex, IntVec& nodes, int basis,
 void ASMu2Dmx::remapErrors(RealArray& errors,
                            const RealArray& origErr, bool elemErrors) const
 {
-  const LR::LRSplineSurface* basis = this->getBasis(1);
+  const LR::LRSplineSurface* basis = projBasis.get();
   const LR::LRSplineSurface* geo = this->getBasis(ASMmxBase::geoBasis);
 
   for (const LR::Element* elm : basis->getAllElements()) {
@@ -1174,6 +1197,9 @@ bool ASMu2Dmx::evalProjSolution (Matrix& sField, const Vector& locSol,
 #ifdef SP_DEBUG
   std::cout <<"ASMu2D::evalProjSolution(Matrix&,const Vector&,const int*,int)\n";
 #endif
+  if (projBasis == m_basis[0])
+    return this->evalSolution(sField, locSol, npe, nf);
+
   // Compute parameter values of the result sampling points
   std::array<RealArray,2> gpar;
   for (int dir = 0; dir < 2; dir++)
@@ -1181,7 +1207,7 @@ bool ASMu2Dmx::evalProjSolution (Matrix& sField, const Vector& locSol,
       return false;
 
   size_t nComp = locSol.size() / this->getNoProjectionNodes();
-  if (nComp*this->getNoNodes() != locSol.size())
+  if (nComp*this->getNoProjectionNodes() != locSol.size())
     return false;
 
   size_t nPoints = gpar[0].size();
