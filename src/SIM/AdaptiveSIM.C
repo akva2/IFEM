@@ -345,8 +345,8 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   std::vector<DblIdx> errors;
   if (scheme == 2) // use errors per function
   {
-    errors.reserve(model.getNoNodes());
-    for (i = 0; i < model.getNoNodes(); i++)
+    errors.reserve(model.getFEModel()[0]->getNoProjectionNodes());
+    for (i = 0; i < model.getFEModel()[0]->getNoProjectionNodes(); i++)
       errors.push_back(DblIdx(0.0,i));
 
     for (ASMbase* patch : model.getFEModel()) {
@@ -363,12 +363,13 @@ bool AdaptiveSIM::adaptMesh (int iStep)
         locNorm(i) = eNorm(eRow, patch->getElmID(i));
 
       // remap from geometry basis to refinement basis
-      Vector locErr(patch->getNoNodes(rBasis));
+      Vector locErr(patch->getNoProjectionNodes());
       static_cast<ASMunstruct*>(patch)->remapErrors(locErr, locNorm);
 
       // insert into global error array
       for (i = 0; i < locErr.size(); ++i)
-        errors[patch->getNodeID(i+1+nOfs)-1].first += locErr[i];
+//        errors[patch->getNodeID(i+1+nOfs)-1].first += locErr[i];
+        errors[i].first += locErr[i];
     }
   }
   else { // use errors per element
