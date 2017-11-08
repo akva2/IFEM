@@ -21,6 +21,7 @@
 #include "SparseMatrix.h"
 #include "SplineUtils.h"
 #include "Profiler.h"
+#include "matrix.h"
 #include <numeric>
 
 
@@ -116,6 +117,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
     const IntVec& mnpc = projBasis == m_basis[0] ? MNPC[els[1]-1] : lmnpc;
 
     // --- Integration loop over all Gauss points in each direction ----------
+    Matrix eA(phi[0].size(), phi[0].size());
     int ip = 0;
     for (int j = 0; j < ng2; j++)
       for (int i = 0; i < ng1; i++, ip++)
@@ -142,20 +144,22 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
           if (dJw == 0.0) continue; // skip singular points
         }
 
-        // Integrate the linear system A*x=B
+        // Integrate the mass matrix
+        eA.outer_product(phi[0], phi[0], true, dJw);
+
+        // Integrate the rhs vector B
         size_t ncmp = sField.rows();
         for (size_t ii = 0; ii < phi[0].size(); ii++)
         {
           int inod = mnpc[ii]+1;
-          for (size_t jj = 0; jj < phi[0].size(); jj++)
-          {
-            int jnod = mnpc[jj]+1;
-            A(inod, jnod) += phi[0][ii]*phi[0][jj]*dJw;
-          }
           for (size_t r = 1; r <= ncmp; ++r)
             B(inod + (r-1)*nnod) += phi[0][ii]*sField(r,ip+1)*dJw;
         }
       }
+
+    for (size_t j = 1; j <= eA.cols(); ++j)
+      for (size_t i = 1; i <= eA.rows(); ++i)
+        A(mnpc[i-1]+1, mnpc[j-1]+1) += eA(i,j);
   }
 
   return true;
