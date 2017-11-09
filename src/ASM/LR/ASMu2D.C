@@ -1006,6 +1006,13 @@ bool ASMu2D::integrate (Integrand& integrand,
           X[i] = X0[i];
       }
 
+      if (integrand.getIntegrandType() & Integrand::G_MATRIX)
+      {
+        // Element size in parametric space
+        dXidu[0] = lrspline->getElement(iel-1)->umax()-lrspline->getElement(iel-1)->umin();
+        dXidu[1] = lrspline->getElement(iel-1)->vmax()-lrspline->getElement(iel-1)->vmin();
+      }
+
       // Initialize element quantities
       LocalIntegral* A = integrand.getLocalIntegral(fe.N.size(),fe.iel);
       if (!integrand.initElement(MNPC[iel-1],fe,X,nRed*nRed,*A))
@@ -1105,6 +1112,10 @@ bool ASMu2D::integrate (Integrand& integrand,
               ok = false;
               continue;
             }
+
+          // Compute G-matrix
+          if (integrand.getIntegrandType() & Integrand::G_MATRIX)
+            utl::getGmat(Jac,dXidu,fe.G);
 
 #if SP_DEBUG > 4
           if (iel == dbgElm || iel == -dbgElm || dbgElm == 0)
