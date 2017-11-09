@@ -48,6 +48,9 @@ public:
   //! \param[in] withRF Whether nodal reaction forces should be computed or not
   bool solveStep(const char* inputfile, int iStep, bool withRF = false);
 
+  //! \brief Assemble and solve the equation system.
+  virtual bool solveSystem(bool withRF);
+
   //! \brief Refines the current mesh based on the element norms.
   //! \param[in] iStep Refinement step counter
   bool adaptMesh(int iStep);
@@ -55,7 +58,7 @@ public:
   //! \brief Writes current mesh and results to the VTF-file.
   //! \param[in] infile File name used to construct the VTF-file name from
   //! \param[in] iStep  Refinement step identifier
-  bool writeGlv(const char* infile, int iStep);
+  virtual bool writeGlv(const char* infile, int iStep);
 
   //! \brief Prints out the global norms to the log stream.
   void printNorms(size_t w = 36) const;
@@ -72,6 +75,9 @@ public:
   //! \brief Parses a data section from an XML document.
   //! \param[in] elem The XML element to parse
   virtual bool parse(const TiXmlElement* elem);
+
+protected:
+  Vectors solution; //!< All solutions (galerkin projections)
 
 private:
   SIMoutput& model; //!< The isogeometric FE model
@@ -98,7 +104,6 @@ private:
 
   size_t  adaptor;  //!< Norm group to base the mesh adaptation on
   size_t  adNorm;   //!< Which norm to base the mesh adaptation on
-  Vectors solution; //!< All solutions (galerkin projections)
   Vectors gNorm;    //!< Global norms
   Matrix  eNorm;    //!< Element norms
 

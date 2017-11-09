@@ -16,6 +16,30 @@
 
 #include "SIMSolver.h"
 #include "AdaptiveSIM.h"
+#include "TimeStep.h"
+
+
+  template<class Solver>
+class AdaptiveISolver : public AdaptiveSIM
+{
+public:
+  AdaptiveISolver(Solver& sim, bool sa=true) :
+    AdaptiveSIM(sim, sa), model(sim) {}
+
+  virtual bool solveSystem(bool withRF)
+  {
+    TimeStep dummy;
+    model.init(dummy);
+    bool result = model.solveStep(dummy);
+    if (result)
+      solution = model.getSolutions();
+
+    return result;
+  }
+
+protected:
+  Solver& model;
+};
 
 
 /*!
@@ -24,7 +48,8 @@
   ISolver interface. It provides an adaptive loop with data output.
 */
 
-template<class T1> class SIMSolverAdap : public SIMSolver<T1>
+  template<class T1, class AdapSim=AdaptiveSIM>
+class SIMSolverAdap : public SIMSolver<T1>
 {
 public:
   //! \brief The constructor forwards to the parent class constructor.
@@ -67,7 +92,7 @@ protected:
     return this->SIMSolver<T1>::parse(elem) && aSim.parse(elem);
   }
 
-  AdaptiveSIM aSim; //!< Adaptive simulation driver
+  AdapSim aSim; //!< Adaptive simulation driver
 };
 
 #endif
