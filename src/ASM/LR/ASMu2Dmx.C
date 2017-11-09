@@ -839,7 +839,7 @@ bool ASMu2Dmx::evalSolution (Matrix& sField, const IntegrandBase& integrand,
                              const RealArray* gpar, bool) const
 {
 #ifdef SP_DEBUG
-  std::cout <<"ASMu2D::evalSolution(Matrix&,const IntegrandBase&,const RealArray*,bool)\n";
+  std::cout <<"ASMu2Dmx::evalSolution(Matrix&,const IntegrandBase&,const RealArray*,bool)\n";
 #endif
 
   sField.resize(0,0);
