@@ -143,6 +143,14 @@ public:
   virtual bool evalSolution(Matrix& sField, const IntegrandBase& integrand,
                             const RealArray* gpar, bool = false) const;
 
+  //! \brief Evaluates the projected solution field at all visualization points.
+  //! \param[out] sField Solution field
+  //! \param[in] locSol Solution vector local to current patch
+  //! \param[in] npe Number of visualization nodes over each knot span
+  //! \param[in] nf If nonzero, mixed evaluates nf fields on first basis
+  virtual bool evalProjSolution(Matrix& sField, const Vector& locSol,
+                                const int* npe, int nf = 0) const;
+
   //! \brief Extracts nodal results for this patch from the global vector.
   //! \param[in] globVec Global solution vector in DOF-order
   //! \param[out] nodeVec Nodal result vector for this patch
@@ -179,6 +187,16 @@ public:
   //! \param[in] elemErrors If true, map to elements instead of basis functions
   virtual void remapErrors(RealArray& errors,
                            const RealArray& origErr, bool elemErrors) const;
+
+protected:
+  //! \brief Assembles L2-projection matrices for the secondary solution.
+  //! \param[out] A Left-hand-side matrix
+  //! \param[out] B Right-hand-side vectors
+  //! \param[in] integrand Object with problem-specific data and methods
+  //! \param[in] continuous If \e false, a discrete L2-projection is used
+  virtual bool assembleL2matrices(SparseMatrix& A, StdVector& B,
+                                  const IntegrandBase& integrand,
+                                  bool continuous) const;
 
 private:
   std::vector<std::shared_ptr<LR::LRSplineVolume>> m_basis; //!< Spline bases
