@@ -190,11 +190,18 @@ bool ASMu2Dmx::generateFEMTopology ()
         ASMmxBase::Type == ASMmxBase::SUBGRID) {
       auto vec2 = ASMmxBase::establishBases(tensorspline,
                                             ASMmxBase::FULL_CONT_RAISE_BASIS1);
-      projBasis.reset(new LR::LRSplineSurface(vec2.front().get()));
-      projBasis->generateIDs();
+      if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
+        projBasis = m_basis[0];
+        refBasis.reset(new LR::LRSplineSurface(vec2.front().get()));
+      } else {
+        projBasis.reset(new LR::LRSplineSurface(vec2.front().get()));
+        refBasis = projBasis;
+      }
     } else
-     projBasis = m_basis[0];
+     projBasis = refBasis = m_basis[0];
   }
+  projBasis->generateIDs();
+  refBasis->generateIDs();
   lrspline = m_basis[geoBasis-1];
 
   nb.resize(m_basis.size());
@@ -951,15 +958,6 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
     return true; // No refinement
   }
 
-  // which basis to refine
-  size_t bas = (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2 ||
-                ASMmxBase::Type == ASMmxBase::FULL_CONT_RAISE_BASIS2) ? 1 : 0;
-  LR::LRSplineSurface* refSurf = projBasis != m_basis[0] ?
-                                 projBasis.get() : m_basis[bas].get();
-
-  if (projBasis != m_basis[0] && ASMmxBase::Type != ASMmxBase::SUBGRID)
-    bas = m_basis.size();
-
   // to pick up if LR splines get stuck while doing refinement
   // print entry and exit point of this function
 
@@ -967,7 +965,7 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   int    multiplicity = prm.options.size() > 1 ? prm.options[1]       : 1;
   if (multiplicity > 1)
     for (int d = 0; d < geo->nVariate(); d++) {
-      int p = refSurf->order(d) - 1;
+      int p = refBasis->order(d) - 1;
       if (multiplicity > p) multiplicity = p;
     }
 
@@ -986,12 +984,12 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
 
   // set refinement parameters
   if (maxTjoints > 0)
-    refSurf->setMaxTjoints(maxTjoints);
+    refBasis->setMaxTjoints(maxTjoints);
   if (maxAspectRatio > 0)
-    refSurf->setMaxAspectRatio((double)maxAspectRatio);
-  refSurf->setCloseGaps(closeGaps);
-  refSurf->setRefMultiplicity(multiplicity);
-  refSurf->setRefStrat(strat);
+    refBasis->setMaxAspectRatio((double)maxAspectRatio);
+  refBasis->setCloseGaps(closeGaps);
+  refBasis->setRefMultiplicity(multiplicity);
+  refBasis->setRefStrat(strat);
 
   for (size_t j = 0; j < sol.size(); ++j) {
     size_t ofs = 0;
@@ -1003,18 +1001,17 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
 
   // do actual refinement
   if (doRefine == 'E')
-    refSurf->refineByDimensionIncrease(prm.errors,beta);
+    refBasis->refineByDimensionIncrease(prm.errors,beta);
   else if (strat == LR_STRUCTURED_MESH)
-    refSurf->refineBasisFunction(prm.elements);
+    refBasis->refineBasisFunction(prm.elements);
   else
-    refSurf->refineElement(prm.elements);
+    refBasis->refineElement(prm.elements);
 
-  refSurf->generateIDs();
-  const std::vector<LR::Meshline*> lines = refSurf->getAllMeshlines();
-  size_t start = ASMmxBase::Type == ASMmxBase::SUBGRID ? 1 : 0;
+  refBasis->generateIDs();
+  const std::vector<LR::Meshline*> lines = refBasis->getAllMeshlines();
   for (const LR::Meshline* line : lines)
-    for (size_t j = start; j < m_basis.size(); ++j)
-      if (j == bas)
+    for (size_t j = 0; j < m_basis.size(); ++j)
+      if (refBasis == m_basis[j])
         continue;
       else {
         int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
@@ -1026,8 +1023,7 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
           else
             mult = (j == 0 && ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1) ||
                    (j == 1 && ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2) ? 2 : 1;
-        } else
-          mult = 1;
+        }
 
         if (line->span_u_line_)
           m_basis[j]->insert_const_v_edge(line->const_par_,
@@ -1039,8 +1035,9 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
 
   // Uniformly refine to find basis 1
   if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
-    m_basis[0].reset(projBasis->copy());
-    size_t nFunc = projBasis->nBasisFunctions();
+    m_basis[0].reset(refBasis->copy());
+    projBasis = m_basis[0];
+    size_t nFunc = refBasis->nBasisFunctions();
     IntVec elems(nFunc);
     std::iota(elems.begin(),elems.end(),0);
     m_basis[0]->refineBasisFunction(elems);
@@ -1148,7 +1145,7 @@ void ASMu2Dmx::getBoundaryNodes (int lIndex, IntVec& nodes, int basis,
 
 void ASMu2Dmx::remapErrors(RealArray& errors, const RealArray& origErr) const
 {
-  const LR::LRSplineSurface* basis = projBasis.get();
+  const LR::LRSplineSurface* basis = refBasis.get();
   const LR::LRSplineSurface* geo = this->getBasis(ASMmxBase::geoBasis);
 
   for (const LR::Element* elm : basis->getAllElements()) {
