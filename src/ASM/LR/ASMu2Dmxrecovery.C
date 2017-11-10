@@ -69,13 +69,8 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
 
   // === Assembly loop over all elements in the patch ==========================
-  LR::LRSplineSurface* geoSurf;
-  if (m_basis[geoBasis-1]->nBasisFunctions() == projBasis->nBasisFunctions())
-    geoSurf = m_basis[geoBasis-1].get();
-  else
-    geoSurf = projBasis.get();
 
-  for (auto el1 : geoSurf->getAllElements())
+  for (auto el1 : m_basis[geoBasis-1]->getAllElements())
   {
     double uh = (el1->umin()+el1->umax())/2.0;
     double vh = (el1->vmin()+el1->vmax())/2.0;
@@ -127,7 +122,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
           projBasis->computeBasis(gpar[0][i], gpar[1][j], spl1[0], els[0]-1);
           SplineUtils::extractBasis(spl1[0],phi[0],dNdu[0]);
           m_basis[geoBasis-1]->computeBasis(gpar[0][i], gpar[1][j],
-                                            spl1[1], els[1]-1);
+                                spl1[1], els[1]-1);
           SplineUtils::extractBasis(spl1[1], phi[1], dNdu[1]);
         }
         else
