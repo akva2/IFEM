@@ -40,6 +40,15 @@ public:
   //! \param[in] name Name of spline field
   SplineFields2D(const ASMs2D* patch, const RealArray& v,
                  char basis = 1, const char* name = nullptr);
+
+  //! \brief Construct directly from surface.
+  //! \param[in] srf The spline surface to use
+  //! \param[in] v Array of control point field values
+  //! \param[in] ncmp Number of field components
+  //! \param[in] name Name of spline field
+  SplineFields2D(const Go::SplineSurface* srf, const RealArray& v, int ncmp,
+                 const char* name = nullptr);
+
   //! \brief Empty destructor.
   virtual ~SplineFields2D() {}
 
