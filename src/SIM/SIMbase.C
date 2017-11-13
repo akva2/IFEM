@@ -1597,7 +1597,7 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
     for (i = 0; i < myModel.size(); i++)
     {
       if (myModel[i]->empty()) continue; // skip empty patches
-      ngNodes += myModel[i]->getNoProjectionNodes()*myProblem->getNoFields(2);
+      ngNodes += myModel[i]->getNoProjectionNodes();
     }
   }
 
