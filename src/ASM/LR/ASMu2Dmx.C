@@ -1175,10 +1175,7 @@ void ASMu2Dmx::remapErrors(RealArray& errors,
 
 Fields* ASMu2Dmx::getProjectedFields(const Vector& coefs, size_t nf) const
 {
-  if (projBasis != m_basis[0])
-    return new LRSplineFields2D(projBasis.get(), coefs, nf);
-
-  return nullptr;
+  return new LRSplineFields2D(projBasis.get(), coefs, nf);
 }
 
 
