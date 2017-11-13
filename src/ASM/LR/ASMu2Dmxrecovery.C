@@ -122,7 +122,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
           projBasis->computeBasis(gpar[0][i], gpar[1][j], spl1[0], els[0]-1);
           SplineUtils::extractBasis(spl1[0],phi[0],dNdu[0]);
           m_basis[geoBasis-1]->computeBasis(gpar[0][i], gpar[1][j],
-                                spl1[1], els[1]-1);
+                                            spl1[1], els[1]-1);
           SplineUtils::extractBasis(spl1[1], phi[1], dNdu[1]);
         }
         else
