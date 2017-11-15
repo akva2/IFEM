@@ -1081,7 +1081,12 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   for (const auto& it : m_basis)
     std::cout << it->nBasisFunctions() <<" ";
   std::cout <<"nodes."<< std::endl;
-  std::cout << "Projection basis: " << projBasis->nElements() << " " << projBasis->nBasisFunctions() << std::endl;
+  std::cout << "Projection basis: "
+            << projBasis->nElements() << " elements "
+            << projBasis->nBasisFunctions() << " nodes" << std::endl;
+  std::cout << "Refinement basis: "
+            << refBasis->nElements() << " elements "
+            << refBasis->nBasisFunctions() << " nodes" << std::endl;
 //#endif
 
   return true;
