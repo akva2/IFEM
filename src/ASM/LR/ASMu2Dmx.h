@@ -175,6 +175,9 @@ public:
   //! \brief Returns the number of projection nodes for this patch.
   virtual size_t getNoProjectionNodes() const;
 
+  //! \brief Returns the number of projection nodes for this patch.
+  virtual size_t getNoRefineNodes() const;
+
   //! \brief Returns a field using the projection basis.
   //! \param[in] coefs The coefficients for the field
   //! \param[in] nf Number of components

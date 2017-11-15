@@ -41,7 +41,7 @@
 
 
 ASMu2Dmx::ASMu2Dmx (unsigned char n_s, const CharVec& n_f)
-  : ASMu2D(n_s), ASMmxBase(n_f)
+  : ASMu2D(n_s, *std::max_element(n_f.begin(),n_f.end())), ASMmxBase(n_f)
 {
   threadBasis = nullptr;
 }
@@ -1182,6 +1182,12 @@ Fields* ASMu2Dmx::getProjectedFields(const Vector& coefs, size_t nf) const
 size_t ASMu2Dmx::getNoProjectionNodes() const
 {
   return projBasis->nBasisFunctions();
+}
+
+
+size_t ASMu2Dmx::getNoRefineNodes() const
+{
+  return refBasis->nBasisFunctions();
 }
 
 
