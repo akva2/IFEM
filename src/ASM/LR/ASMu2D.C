@@ -1955,8 +1955,10 @@ bool ASMu2D::transferGaussPtVars (const LR::LRSplineSurface* oldBasis,
 {
   const LR::LRSplineSurface* newBasis = this->getBasis();
 
-  size_t nGp = nGauss*nGauss;
-  newVars.resize(newBasis->nElements()*nGp);
+  size_t nGP = nGauss*nGauss;
+  //newVars.resize(newBasis->nElements()*nGp);
+  newVars.clear();
+  newVars.reserve(nGP*newBasis->nElements());
 
   const double* xi = GaussQuadrature::getCoord(nGauss);
   LagrangeInterpolator interp(Vector(xi,nGauss));
@@ -1975,7 +1977,37 @@ bool ASMu2D::transferGaussPtVars (const LR::LRSplineSurface* oldBasis,
     }
     const LR::Element* oldEl = oldBasis->getElement(iOld);
 
-    std::array<Matrix,2> I;
+    // find parameters of old gauss points
+    std::vector<std::array<double,2>> oGP(nGP);
+    double umin = oldEl->umin();
+    double vmin = oldEl->vmin();
+    double umax = oldEl->umax();
+    double vmax = oldEl->vmax();
+    size_t k = 0;
+    for (int j = 0; j < nGauss; ++j)
+      for (int i = 0; i < nGauss; ++i, ++k) {
+        oGP[k][0] = umin + i*(umax-umin) / (nGauss-1);
+        oGP[k][1] = vmin + j*(vmax-vmin) / (nGauss-1);
+      }
+
+    // params of new gauss points
+    umin = newEl->umin();
+    vmin = newEl->vmin();
+    umax = newEl->umax();
+    vmax = newEl->vmax();
+    for (int j = 0; j < nGauss; ++j)
+      for (int i = 0; i < nGauss; ++i) {
+        double u = umin + i*(umax-umin) / (nGauss-1);
+        double v = vmin + j*(vmax-vmin) / (nGauss-1);
+        double dist = 1e16;
+        size_t near = 0;
+        for (size_t k = 0; k < nGP; ++k)
+          if (hypot(oGP[k][0]-u, oGP[k][1]-v) < dist)
+            near = k;
+        newVars.push_back(oldVars[iOld*nGP+near]);
+      }
+
+/*    //std::array<Matrix,2> I;
     for (int i = 0; i < 2; i++)
     {
       RealArray UGP;
@@ -1994,7 +2026,7 @@ bool ASMu2D::transferGaussPtVars (const LR::LRSplineSurface* oldBasis,
 
     Matrix newdata;
     newdata.multiply(I[0]*data,I[1],false,true);
-    std::copy(newdata.ptr(), newdata.ptr()+nGp, newVars.begin()+iEl*nGp);
+    std::copy(newdata.ptr(), newdata.ptr()+nGp, newVars.begin()+iEl*nGp);*/
   }
 
   return true;
