@@ -965,6 +965,7 @@ bool ASMu2D::integrate (Integrand& integrand,
       fe.iel = MLGE[iel-1];
       Matrix   dNdu, Xnod, Jac;
       Matrix3D d2Ndu2, Hess;
+      double   dXidu[2];
       double   param[3] = { 0.0, 0.0, 0.0 };
       Vec4     X(param);
 
