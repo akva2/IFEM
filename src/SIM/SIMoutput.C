@@ -1029,8 +1029,8 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
   NormBase* norm = myProblem->getNormIntegrand(mySol);
 
   Matrix field;
-  std::array<IntVec,30> sID;
-  const size_t maxN = sID.size();
+  std::vector<IntVec> sID;
+  bool firstPatch = true;
 
   size_t i, j, k, l, m;
   int geomID = myGeomID;
@@ -1054,7 +1054,7 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
     }
 
     j = l = 1;
-    for (k = m = 0; m < field.rows() && k < maxN; m++)
+    for (k = m = 0; m < field.rows(); m++)
     {
       if (l > norm->getNoFields(j))
         l = 1, ++j;
@@ -1062,14 +1062,19 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
       if (norm->hasElementContributions(j,l++))
         if (!myVtf->writeEres(field.getRow(1+m),++nBlock,geomID))
           return false;
-        else
-          sID[k++].push_back(nBlock);
+        else {
+          if (firstPatch)
+            sID.push_back({nBlock});
+          else
+            sID[k++].push_back(nBlock);
+        }
     }
+    firstPatch = false;
   }
 
   std::string normName;
   j = l = 1;
-  for (k = 0; k < maxN && !sID[k].empty(); l++)
+  for (k = 0; k < sID.size() && !sID[k].empty(); l++)
   {
     if (l > norm->getNoFields(j))
       l = 1, ++j;
