@@ -16,6 +16,37 @@
 
 #include "SIMSolver.h"
 #include "AdaptiveSIM.h"
+#include "TimeStep.h"
+
+/*!
+  \brief Adaptive simulator driver using the ISolver interface.
+*/
+
+template<class T1>
+class AdaptiveISolver : public AdaptiveSIM
+{
+public:
+  //! \brief The constructor initializes default adaptation parameters.
+  //! \param sim The FE model
+  //! \param sa If \e true, this is a stand-alone driver
+  AdaptiveISolver(T1& sim, bool sa=true) :
+    AdaptiveSIM(sim, sa), model(sim) {}
+
+  //! \brief Assemble and solve the equation system.
+  virtual bool solveSystem()
+  {
+    TimeStep dummy;
+    model.init(dummy);
+    bool result = model.solveStep(dummy);
+    if (result)
+      solution = model.getSolutions();
+
+    return result;
+  }
+
+protected:
+  T1& model; //!< Reference to the actual sim
+};
 
 
 /*!
@@ -24,17 +55,18 @@
   ISolver interface. It provides an adaptive loop with data output.
 */
 
-template<class T1> class SIMSolverAdap : public SIMSolver<T1>
+template<class T1, class AdapSim>
+class SIMSolverAdapImpl : public SIMSolver<T1>
 {
 public:
   //! \brief The constructor forwards to the parent class constructor.
-  SIMSolverAdap(T1& s1) : SIMSolver<T1>(s1), aSim(s1,false)
+  SIMSolverAdapImpl(T1& s1) : SIMSolver<T1>(s1), aSim(s1,false)
   {
     this->S1.setSol(&aSim.getSolution());
   }
 
   //! \brief Empty destructor.
-  virtual ~SIMSolverAdap() {}
+  virtual ~SIMSolverAdapImpl() {}
 
   //! \brief Solves the problem up to the final time.
   virtual int solveProblem(char* infile, const char* heading, bool = false)
@@ -67,7 +99,10 @@ protected:
     return this->SIMSolver<T1>::parse(elem) && aSim.parse(elem);
   }
 
-  AdaptiveSIM aSim; //!< Adaptive simulation driver
+  AdapSim aSim; //!< Adaptive simulation driver
 };
+
+template<class T1>
+using SIMSolverAdap = SIMSolverAdapImpl<T1, AdaptiveSIM>; //!< Convenience typedef
 
 #endif
