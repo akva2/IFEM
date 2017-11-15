@@ -214,6 +214,22 @@ bool AdaptiveSIM::initAdaptor (size_t normGroup)
 }
 
 
+bool AdaptiveSIM::solveSystem()
+{
+  // Assemble the linear FE equation system
+  model.setMode(SIM::STATIC,true);
+  model.setQuadratureRule(opt.nGauss[0],true);
+  if (!model.assembleSystem())
+    return false;
+
+  // Solve the linear system of equations
+  if (!model.solveMatrixSystem(solution,1))
+    return false;
+
+  return true;
+}
+
+
 bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF)
 {
   model.getProcessAdm().cout <<"\nAdaptive step "<< iStep << std::endl;
@@ -233,15 +249,9 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF)
     // Output the initial grid to eps-file
     model.refine(LR::RefineData(),"mesh_001.eps");
 
-  // Assemble the linear FE equation system
-  model.setMode(SIM::STATIC,true);
+  // Assemble and solve the FE equation system
   model.initSystem(opt.solver,1,model.getNoRHS(),0,withRF);
-  model.setQuadratureRule(opt.nGauss[0],true);
-  if (!model.assembleSystem())
-    return false;
-
-  // Solve the linear system of equations
-  if (!model.solveMatrixSystem(solution,1))
+  if (!this->solveSystem())
     return false;
 
   eNorm.clear();
