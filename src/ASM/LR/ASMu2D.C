@@ -2045,6 +2045,7 @@ bool ASMu2D::transferGaussPtVarsN (const LR::LRSplineSurface* oldBasis,
   struct Param{ double u,v; };
   std::vector<Param> oGP(nGP);
 
+  const double* xi = GaussQuadrature::getCoord(nGauss);
   for (int iEl = 0; iEl < newBasis->nElements(); iEl++)
   {
     const LR::Element* newEl = newBasis->getElement(iEl);
@@ -2062,24 +2063,24 @@ bool ASMu2D::transferGaussPtVarsN (const LR::LRSplineSurface* oldBasis,
     // find parameters of old gauss points
     double umin = oldEl->umin();
     double vmin = oldEl->vmin();
-    double du = (oldEl->umax() - umin) / (nGauss-1);
-    double dv = (oldEl->vmax() - vmin) / (nGauss-1);
+    double du = (oldEl->umax() - umin);
+    double dv = (oldEl->vmax() - vmin);
     size_t k = 0;
     for (int j = 0; j < nGauss; ++j)
       for (int i = 0; i < nGauss; ++i, ++k) {
-        oGP[k].u = umin + i*du;
-        oGP[k].v = vmin + j*dv;
+        oGP[k].u = umin + du * (xi[i] + 1.0) / 2.0;
+        oGP[k].v = vmin + dv * (xi[j] + 1.0) / 2.0;
       }
 
     // parameters of new gauss points
     umin = newEl->umin();
     vmin = newEl->vmin();
-    du = (newEl->umax() - umin) / (nGauss-1);
-    dv = (newEl->vmax() - vmin) / (nGauss-1);
+    du = (newEl->umax() - umin);
+    dv = (newEl->vmax() - vmin);
     for (int j = 0; j < nGauss; ++j)
       for (int i = 0; i < nGauss; ++i) {
-        double u = umin + i*du;
-        double v = vmin + j*dv;
+        double u = umin + du * (xi[i] + 1.0) / 2.0;
+        double v = vmin + dv * (xi[j] + 1.0) / 2.0;
         double dist = 1.0e16;
         size_t near = 0;
         for (size_t k = 0; k < nGP; ++k)
