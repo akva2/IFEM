@@ -39,6 +39,7 @@ ASMu3D::ASMu3D (unsigned char n_f)
   : ASMunstruct(3,3,n_f), lrspline(nullptr), tensorspline(nullptr),
     myGeoBasis(1), bezierExtract(myBezierExtract)
 {
+  vMin = 0.0;
 }
 
 
@@ -46,6 +47,8 @@ ASMu3D::ASMu3D (const ASMu3D& patch, unsigned char n_f)
   : ASMunstruct(patch,n_f), lrspline(patch.lrspline), tensorspline(nullptr),
     myGeoBasis(1), bezierExtract(patch.myBezierExtract)
 {
+  vMin = 0.0;
+
   // Need to set nnod here,
   // as hasXNodes might be invoked before the FE data is generated
   if (nnod == 0 && lrspline)
@@ -2439,4 +2442,60 @@ bool ASMu3D::transferCntrlPtVars (const LR::LRSpline* oldBasis1,
   }
 
   return true;
+}
+
+
+/*!
+  Refines all elements for which refC(X0) < refTol,
+  where X0 is the element center.
+*/
+
+bool ASMu3D::refine (const RealFunc& refC, double refTol)
+{
+  Go::Point X0;
+  std::vector<int> elements;
+  std::vector<LR::Element*>::const_iterator eit = lrspline->elementBegin();
+  for (int iel = 0; eit != lrspline->elementEnd(); iel++, ++eit)
+  {
+    double u0 = 0.5*((*eit)->umin() + (*eit)->umax());
+    double v0 = 0.5*((*eit)->vmin() + (*eit)->vmax());
+    double w0 = 0.5*((*eit)->wmin() + (*eit)->wmax());
+    lrspline->point(X0,u0,v0,w0);
+    if (refC(SplineUtils::toVec3(X0,nsd)) < refTol)
+      elements.push_back(iel);
+  }
+
+  Vectors dummySol;
+  LR::RefineData prm(true);
+  prm.options = { 10, 1, 2 };
+  prm.elements = this->getFunctionsForElements(elements);
+  return this->refine(prm,dummySol);
+}
+
+
+double ASMu3D::getMinimumSize (int nrefinements) const
+{
+  if (vMin > 0.0 || lrspline->nElements() <= 0)
+    return vMin;
+
+  double redMax = pow(2.0,nrefinements);
+  vMin = lrspline->getElement(0)->volume()/(redMax*redMax*redMax);
+  return vMin;
+}
+
+
+bool ASMu3D::checkElementSize (int elmId, bool globalNum) const
+{
+  if (globalNum)
+  {
+    IntVec::const_iterator it = std::find(MLGE.begin(),MLGE.end(),1+elmId);
+    if (it == MLGE.end()) return false;
+
+    elmId = it - MLGE.begin();
+  }
+
+  if (elmId < lrspline->nElements())
+    return lrspline->getElement(elmId)->volume() > vMin+1.0e-12;
+  else
+    return false;
 }

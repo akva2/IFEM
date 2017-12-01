@@ -209,6 +209,11 @@ public:
   virtual bool transferCntrlPtVars(const LR::LRSpline* oldBasis,
                                    RealArray& newVars, int nGauss) const = 0;
 
+  //! \brief Refines the parametrization based on a mesh density function.
+  //! \param[in] refC Mesh refinement criteria function
+  //! \param[in] refTol Mesh refinement threshold
+  virtual bool refine(const RealFunc& refC, double refTol) = 0;
+
 protected:
   LR::LRSpline* geo; //!< Pointer to the actual spline geometry object
 

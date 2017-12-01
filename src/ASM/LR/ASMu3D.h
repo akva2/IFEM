@@ -139,6 +139,14 @@ public:
   //! \param[in] rw Number of times to raise the order in w-direction
   virtual bool raiseOrder(int ru, int rv, int rw);
 
+  //! \brief Defines the minimum element area for adaptive refinement.
+  //! \param[in] nrefinements Maximum number of adaptive refinement levels
+  virtual double getMinimumSize(int nrefinements) const;
+  //! \brief Checks if the specified element is larger than the minimum size.
+  //! \param[in] elmId Global/patch-local element index
+  //! \param[in] globalNum If \e true, \a elmId is global otherwise patch-local
+  virtual bool checkElementSize(int elmId, bool globalNum = true) const;
+
 
   // Various methods for preprocessing of boundary conditions and patch topology
   // ===========================================================================
@@ -363,6 +371,11 @@ public:
   virtual bool transferCntrlPtVars(const LR::LRSpline* oldBasis,
                                    RealArray& newVars, int nGauss) const;
 
+  //! \brief Refines the parametrization based on a mesh density function.
+  //! \param[in] refC Mesh refinement criteria function
+  //! \param[in] refTol Mesh refinement threshold
+  virtual bool refine(const RealFunc& refC, double refTol);
+
 private:
   //! \brief Struct representing an inhomogeneous Dirichlet boundary condition.
   struct DirichletFace
@@ -548,6 +561,7 @@ protected:
   Matrices      myBezierExtract; //!< Bezier extraction matrices
 
   ThreadGroups threadGroups; //!< Element groups for multi-threaded assembly
+  mutable double vMin; //!< Minimum element volume for adaptive refinement
 };
 
 #endif
