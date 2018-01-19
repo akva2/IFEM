@@ -860,6 +860,26 @@ Real SAM::normL2 (const Vector& x, char dofType) const
 }
 
 
+Real SAM::normL2 (const Vector& x, char dofType, int dofs, size_t& len) const
+{
+  if (x.empty())
+    return Real(0);
+
+  // Consider only the dofType nodes
+  int i, j, n = x.size(), dof;
+  Real retVal = Real(0);
+  for (len = i = 0; i < nnod; i++)
+    if (nodeType.empty() || nodeType[i] == dofType)
+      for (j = madof[i]-1, dof = 0; j < madof[i+1]-1 && j < n && dof < dofs; j++, dof++)
+      {
+        retVal += x[j]*x[j];
+        len++;
+      }
+
+  return len > 0 ? sqrt(retVal/len) : retVal;
+}
+
+
 Real SAM::normInf (const Vector& x, size_t& comp, char dofType) const
 {
   if (x.empty() || comp < 1)

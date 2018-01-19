@@ -258,6 +258,12 @@ public:
   //! \param[in] x The vector to compute the norm of
   //! \param[in] dofType Only consider nodes of this type (for mixed methods)
   virtual Real normL2(const Vector& x, char dofType = 'D') const;
+  //! \brief Computes the L2-norm of a vector of length NDOF.
+  //! \param[in] x The vector to compute the norm of
+  //! \param[in] dofType Only consider nodes of this type (for mixed methods)
+  //! \param[in] dofs Number of DOFs to include
+  //! \param[in] Count Number of entries added
+  Real normL2(const Vector& x, char dofType, int dofs, size_t& len) const;
   //! \brief Computes the L_infinity-norm of a vector of length NDOF.
   //! \param[in] x The vector to compute the norm of
   //! \param comp Local nodal DOF on input, index of the largest value on output
