@@ -135,8 +135,8 @@ Real PETScVector::Linfnorm() const
 
 PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar,
                           LinAlg::LinearSystemType ltype) :
- SparseMatrix(SUPERLU, 1), nsp(nullptr), adm(padm), solParams(spar, adm),
- linsysType(ltype)
+ SparseMatrix(SUPERLU, 1), mxv(nullptr), mxvOwnMatrix(true),
+ nsp(nullptr), adm(padm), solParams(spar, adm), linsysType(ltype)
 {
   // Create matrix object, by default the matrix type is AIJ
   MatCreate(*adm.getCommunicator(),&A);
@@ -185,6 +185,10 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
 
   const SAMpatchPETSc* samp = dynamic_cast<const SAMpatchPETSc*>(&sam);
   if (!samp)
+    return;
+
+  bool mxv = solParams.getIntValue("matrixfree") ? true : false;
+  if (mxv && !mxvOwnMatrix)
     return;
 
   // Get number of local equations in linear system
@@ -407,6 +411,9 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
 
 bool PETScMatrix::beginAssembly()
 {
+  if (mxv && !mxvOwnMatrix)
+    return true;
+
   if (matvec.empty()) {
     for (size_t j = 0; j < cols(); ++j)
       for (int i = IA[j]; i < IA[j+1]; ++i)
@@ -432,6 +439,9 @@ bool PETScMatrix::beginAssembly()
 
 bool PETScMatrix::endAssembly()
 {
+  if (mxv && !mxvOwnMatrix)
+    return true;
+
   // Finalizes parallel assembly process
   MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY);
   return true;
@@ -441,6 +451,9 @@ bool PETScMatrix::endAssembly()
 void PETScMatrix::init ()
 {
   SparseMatrix::init();
+
+  if (mxv && !mxvOwnMatrix)
+    return;
 
   // Set all matrix elements to zero
   if (matvec.empty())
@@ -511,6 +524,17 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     }
 
   if (setParams) {
+    if (mxv) {
+      if (mxvOwnMatrix) {
+        matvec.resize(1);
+        MatDuplicate(A, MAT_COPY_VALUES, &matvec.front());
+      }
+      const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
+      MatCreateShell(*adm.getCommunicator(), neq, neq,
+                     PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
+      MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&PETScSIMMxV);
+      MatSetUp(A);
+    }
 #if PETSC_VERSION_MINOR < 5
     KSPSetOperators(ksp,A,A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
 #else
