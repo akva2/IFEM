@@ -410,3 +410,12 @@ void PETScSolParams::setupSchurComplement(const std::vector<Mat>& matvec)
   MatDestroy(&tmp);
   MatDestroy(&tmp2);
 }
+
+
+extern "C" PetscErrorCode PETScSIMMxV(Mat A, Vec x, Vec y)
+{
+  void* p;
+  MatShellGetContext(A, &p);
+  PETScMxV* sim = static_cast<PETScMxV*>(p);
+  return sim->evalMxV(x,y) ? 0 : 1;
+}

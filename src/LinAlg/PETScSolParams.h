@@ -54,6 +54,12 @@ public:
 };
 
 
+extern "C" {
+  //! \brief Evaluate the matrix-vector product y=A*x
+  PetscErrorCode PETScSIMMxV(Mat A, Vec x, Vec y);
+}
+
+
 /*!
   \brief Class for PETSc solver parameters.
   \details It contains information about solver method, preconditioner
