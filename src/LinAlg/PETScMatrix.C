@@ -524,6 +524,7 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     }
 
   if (setParams) {
+    Mat P;
     if (mxv) {
       if (mxvOwnMatrix) {
         matvec.resize(1);
@@ -534,11 +535,12 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
                      PETSC_DETERMINE, PETSC_DETERMINE, mxv, &A);
       MatShellSetOperation(A, MATOP_MULT, (void(*)(void))&PETScSIMMxV);
       MatSetUp(A);
+      mxv->evalPC(P);
     }
 #if PETSC_VERSION_MINOR < 5
-    KSPSetOperators(ksp,A,A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
+    KSPSetOperators(ksp,A,mxv ? P : A, newLHS ? SAME_NONZERO_PATTERN : SAME_PRECONDITIONER);
 #else
-    KSPSetOperators(ksp,A,A);
+    KSPSetOperators(ksp,A,mxv ? P : A);
     KSPSetReusePreconditioner(ksp, newLHS ? PETSC_FALSE : PETSC_TRUE);
 #endif
     if (!setParameters())
