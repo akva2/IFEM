@@ -543,7 +543,7 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool newLHS, bool knoll)
     KSPSetOperators(ksp,A,mxv ? P : A);
     KSPSetReusePreconditioner(ksp, newLHS ? PETSC_FALSE : PETSC_TRUE);
 #endif
-    if (!setParameters())
+    if (!mxv && !setParameters())
       return false;
     setParams = false;
   }
