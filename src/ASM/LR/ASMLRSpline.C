@@ -15,6 +15,7 @@
 #include "IFEM.h"
 #include "LRSpline/LRSplineSurface.h"
 #include "LRSpline/Basisfunction.h"
+#include "GlobalNodes.h"
 #include "Profiler.h"
 #include "ThreadGroups.h"
 #include <fstream>
@@ -334,15 +335,16 @@ void ASMunstruct::getFunctionsForElements (IntSet& functions,
 IntVec ASMunstruct::getBoundaryNodesCovered (const IntSet& nodes) const
 {
   IntSet result;
+  const LR::LRSpline* refBasis = this->getRefinementBasis();
   int numbEdges = (this->getNoParamDim() == 2) ? 4 : 6;
   for (int edge = 1; edge <= numbEdges; edge++)
   {
-    IntVec oneBoundary;
-    this->getBoundaryNodes(edge, oneBoundary, 1, 1, 0, true); // this returns a 1-indexed list
+    IntVec bnd = GlobalNodes::getBoundaryNodes(*refBasis,
+                                               this->getNoParamDim()-1, edge, 0);
     for (const int i : nodes)
-      for (const int j : oneBoundary)
-        if (geo->getBasisfunction(i)->contains(*geo->getBasisfunction(j-1)))
-          result.insert(j-1);
+      for (const int j : bnd)
+        if (refBasis->getBasisfunction(i)->contains(*refBasis->getBasisfunction(j)))
+          result.insert(j);
   }
 
   return IntVec(result.begin(), result.end());
@@ -352,9 +354,10 @@ IntVec ASMunstruct::getBoundaryNodesCovered (const IntSet& nodes) const
 IntVec ASMunstruct::getOverlappingNodes (const IntSet& nodes, int dir) const
 {
   IntSet result;
+  const LR::LRSpline* refBasis = this->getRefinementBasis();
   for (const int i : nodes)
   {
-    LR::Basisfunction *b = geo->getBasisfunction(i);
+    const LR::Basisfunction *b = refBasis->getBasisfunction(i);
     for (auto el : b->support()) // for all elements where *b has support
       for (auto basis : el->support()) // for all functions on this element
       {
