@@ -16,6 +16,9 @@
 #include "SIMenums.h"
 #include "ASMunstruct.h"
 #include "ASMmxBase.h"
+#ifdef HAS_LRSPLINE
+#include "GlobalNodes.h"
+#endif
 #include "IntegrandBase.h"
 #include "Utilities.h"
 #include "IFEM.h"
@@ -346,24 +349,24 @@ bool AdaptiveSIM::adaptMesh (int iStep)
   std::vector<DblIdx> errors;
   if (scheme == 2) // use errors per function
   {
-    if (model.getFEModel()[0]->getNoRefineNodes() !=
-        model.getFEModel()[0]->getNoNodes(1)) {
-      if (model.getNoPatches() > 1) {
-        std::cerr <<" *** AdaptiveSIM::adaptMesh: Multi-patch refinement"
-                  <<" is not available for mixed models."<< std::endl;
-        return false;
-      }
-      errors.reserve(model.getFEModel()[0]->getNoRefineNodes());
-      for (i = 0; i < model.getFEModel()[0]->getNoRefineNodes(); i++)
-        errors.push_back(DblIdx(0.0,i));
-    } else {
-      errors.reserve(model.getNoNodes());
-      for (i = 0; i < model.getNoNodes(); i++)
-        errors.push_back(DblIdx(0.0,i));
+    size_t nNodes = model.getFEModel()[0]->getNoRefineNodes();
+    if (model.getNoPatches() > 1) {
+      std::vector<const LR::LRSpline*> refBasis;
+      for (ASMbase* pch : model.getFEModel())
+        refBasis.push_back(dynamic_cast<ASMunstruct*>(pch)->getRefinementBasis());
+
+#ifdef HAS_LRSPLINE
+      prm.MLGN = GlobalNodes::calcGlobalNodes(refBasis, model.getInterfaces());
+      nNodes = *std::max_element(prm.MLGN.back().begin(), prm.MLGN.back().end()) + 1;
+#endif
     }
+    errors.reserve(nNodes);
+    for (i = 0; i < nNodes; i++)
+      errors.push_back(DblIdx(0.0,i));
 
     for (ASMbase* patch : model.getFEModel()) {
-      if (!patch) return false;
+      if (!patch)
+        return false;
 
       // extract element norms for this patch
       Vector locNorm(patch->getNoElms());
@@ -371,13 +374,13 @@ bool AdaptiveSIM::adaptMesh (int iStep)
         locNorm(i) = eNorm(eRow, patch->getElmID(i));
 
       // remap from geometry basis to refinement basis
-      Vector locErr(patch->getNoProjectionNodes());
+      Vector locErr(patch->getNoRefineNodes());
       static_cast<ASMunstruct*>(patch)->remapErrors(locErr, locNorm);
 
       // insert into global error array
       for (i = 0; i < locErr.size(); ++i)
         if (model.getNoPatches() > 1)
-          errors[patch->getNodeID(i+1)-1].first += locErr[i];
+          errors[prm.MLGN[patch->idx][i]].first += locErr[i];
         else
           errors[i].first += locErr[i];
     }
