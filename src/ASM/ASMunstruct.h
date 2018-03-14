@@ -46,6 +46,7 @@ namespace LR //! Utilities for LR-splines.
     IntVec    options;  //!< Parameters used to control the refinement
     IntVec    elements; //!< 0-based indices of the elements to refine
     RealArray errors;   //!< List of error indicators for the elements
+    std::vector<IntVec> MLGN; //!< MLGN mapping to use for multipatch
 
     //! \brief Default constructor.
     explicit RefineData(bool rs = false) : refShare(rs) {}
@@ -213,6 +214,9 @@ public:
   //! \param[in] refC Mesh refinement criteria function
   //! \param[in] refTol Mesh refinement threshold
   virtual bool refine(const RealFunc& refC, double refTol) = 0;
+
+  //! \brief Obtain the refinement basis.
+  virtual const LR::LRSpline* getRefinementBasis() const { return geo; }
 
 protected:
   //! \brief Refines the mesh adaptively.
