@@ -1268,6 +1268,34 @@ bool ASMs2D::getElementCoordinates (Matrix& X, int iel) const
 }
 
 
+bool ASMs2D::getGeoElementCoordinates (Matrix& X, int node) const
+{
+  const Go::SplineSurface* mgeo = static_cast<const Go::SplineSurface*>(geo);
+  X.resize(nsd,mgeo->order_u()*mgeo->order_v());
+
+  RealArray::const_iterator cit = mgeo->coefs_begin();
+
+  double u = surf->knotSpan(0, nodeInd[node-1].I);
+  double v = surf->knotSpan(1, nodeInd[node-1].J);
+  int ni = mgeo->basis_u().knotInterval(u)-1;
+  int nj = mgeo->basis_u().knotInterval(v)-1;
+
+  size_t n = 0;
+  for (int i2 = 0; i2 < mgeo->order_v(); ++i2)
+    for (int i1 = 0; i1 < mgeo->order_u(); ++i1, n++)
+    {
+      auto it = mgeo->coefs_begin() + (ni + i1 + (nj + i2)*mgeo->numCoefs_u())*mgeo->dimension();
+      for (size_t i = 0; i < nsd; i++)
+        X(i+1,n+1) = *it++;
+    }
+
+#if SP_DEBUG > 2
+  std::cout <<"\nCoordinates for geometry element "<< iel << X << std::endl;
+#endif
+  return true;
+}
+
+
 void ASMs2D::getNodalCoordinates (Matrix& X) const
 {
   const int n1 = surf->numCoefs_u();
@@ -1515,12 +1543,16 @@ bool ASMs2D::integrate (Integrand& integrand,
 
   // Evaluate basis function derivatives at all integration points
   std::vector<Go::BasisDerivsSf>  spline;
+  std::vector<Go::BasisDerivsSf>  splineg;
   std::vector<Go::BasisDerivsSf2> spline2;
   std::vector<Go::BasisDerivsSf>  splineRed;
   if (use2ndDer)
     surf->computeBasisGrid(gpar[0],gpar[1],spline2);
   else
     surf->computeBasisGrid(gpar[0],gpar[1],spline);
+
+  static_cast<const Go::SplineSurface*>(geo)->computeBasisGrid(gpar[0],gpar[1],splineg);
+
   if (xr)
     surf->computeBasisGrid(redpar[0],redpar[1],splineRed);
 
@@ -1544,7 +1576,7 @@ bool ASMs2D::integrate (Integrand& integrand,
     for (size_t t = 0; t < threadGroups[g].size(); t++)
     {
       FiniteElement fe(p1*p2);
-      Matrix   dNdu, Xnod, Jac;
+      Matrix   dNdu, Xnod, Jac, Xnodg;
       Matrix3D d2Ndu2, Hess;
       double   dXidu[2];
       double   param[3] = { 0.0, 0.0, 0.0 };
@@ -1573,6 +1605,13 @@ bool ASMs2D::integrate (Integrand& integrand,
 
         // Set up control point (nodal) coordinates for current element
         if (!this->getElementCoordinates(Xnod,iel))
+        {
+          ok = false;
+          break;
+        }
+
+        // Set up control point (nodal) coordinates for current geo element
+        if (!this->getGeoElementCoordinates(Xnodg,MNPC[iel-1].back()))
         {
           ok = false;
           break;
@@ -1698,8 +1737,13 @@ bool ASMs2D::integrate (Integrand& integrand,
             else
               SplineUtils::extractBasis(spline[ip],fe.N,dNdu);
 
+            Vector Ng;
+            Matrix dNgdu, dummy;
+            SplineUtils::extractBasis(splineg[ip],Ng,dNgdu);
+
             // Compute Jacobian inverse of coordinate mapping and derivatives
             fe.detJxW = utl::Jacobian(Jac,fe.dNdX,Xnod,dNdu);
+            fe.detJxW = utl::Jacobian(Jac,dummy,Xnodg,dNgdu);
             if (fe.detJxW == 0.0) continue; // skip singular points
 
             // Compute Hessian of coordinate mapping and 2nd order derivatives
