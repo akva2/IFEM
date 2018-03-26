@@ -69,13 +69,13 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
   // === Assembly loop over all elements in the patch ==========================
 
-  for (const LR::Element* el1 : m_basis[geoBasis-1]->getAllElements())
+  for (const LR::Element* el1 : m_basis[elmBasis-1]->getAllElements())
   {
     double uh = (el1->umin()+el1->umax())/2.0;
     double vh = (el1->vmin()+el1->vmax())/2.0;
     std::array<size_t, 2> els;
     els[0] = projBasis->getElementContaining(uh,vh)+1;
-    els[1] = m_basis[geoBasis-1]->getElementContaining(uh,vh)+1;
+    els[1] = m_basis[elmBasis-1]->getElementContaining(uh,vh)+1;
 
     if (continuous)
     {
@@ -121,7 +121,7 @@ bool ASMu2Dmx::assembleL2matrices (SparseMatrix& A, StdVector& B,
         {
           projBasis->computeBasis(gpar[0][i], gpar[1][j], spl1[0], els[0]-1);
           SplineUtils::extractBasis(spl1[0],phi[0],dNdu[0]);
-          m_basis[geoBasis-1]->computeBasis(gpar[0][i], gpar[1][j],
+          m_basis[elmBasis-1]->computeBasis(gpar[0][i], gpar[1][j],
                                             spl1[1], els[1]-1);
           SplineUtils::extractBasis(spl1[1], phi[1], dNdu[1]);
         }
