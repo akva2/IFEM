@@ -66,6 +66,9 @@ public:
   //! \param[in] integr Object with problem-specific data and methods
   virtual Go::GeomObject* evalSolution(const IntegrandBase& integr) const = 0;
 
+  //! \brief Returns the spline object that returns the geometry.
+  const Go::GeomObject* getGeometry() const { return geo; }
+
 protected:
   //! \brief Adds extraordinary nodes associated with a patch boundary.
   //! \param[in] dim Dimension of the boundary

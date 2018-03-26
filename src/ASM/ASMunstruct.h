@@ -219,6 +219,9 @@ public:
   //! \brief Obtain the refinement basis.
   virtual const LR::LRSpline* getRefinementBasis() const { return geo; }
 
+  //! \brief Returns the spline describing the geometry.
+  const LR::LRSpline* getGeometry() const { return geo; }
+
 protected:
   //! \brief Refines the mesh adaptively.
   //! \param[in] prm Input data used to control the mesh refinement
