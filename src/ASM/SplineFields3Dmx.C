@@ -110,7 +110,7 @@ bool SplineFields3Dmx::gradFE (const ItgPoint& x, Matrix& grad) const
   // Evaluate the basis functions at the given point
   Matrix Xnod, Jac, dNdX;
   std::vector<int> ip;
-  const Go::SplineVolume* geo = svol->getBasis(ASMmxBase::geoBasis);
+  const Go::SplineVolume* geo = svol->getBasis(ASMmxBase::elmBasis);
   if (!geo)
     geo = svol->getBasis(1);
   if (!SplineField::evalMapping(*geo,x,ip,Xnod,Jac,dNdX))

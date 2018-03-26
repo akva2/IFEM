@@ -101,7 +101,7 @@ bool LRSplineFields2Dmx::gradFE (const ItgPoint& x, Matrix& grad) const
   // Evaluate the basis functions at the given point
   Matrix Xnod, Jac, dNdX;
   const LR::Element* elm;
-  const LR::LRSplineSurface* geo = surf->getBasis(ASMmxBase::geoBasis);
+  const LR::LRSplineSurface* geo = surf->getBasis(ASMmxBase::elmBasis);
   if (!geo)
     geo = surf->getBasis(1);
   if (!LRSplineField::evalMapping(*geo,x,elm,Xnod,Jac,dNdX))
