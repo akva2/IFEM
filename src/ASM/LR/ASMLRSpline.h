@@ -181,6 +181,9 @@ public:
   //! \brief Computes the total number of integration points in this patch.
   virtual void getNoIntPoints(size_t& nPt, size_t& nIPt);
 
+  //! \brief Returns the spline describing the geometry.
+  const LR::LRSpline* getGeometry() const { return geo; }
+
 protected:
   //! \brief Refines the mesh adaptively.
   //! \param[in] prm Input data used to control the mesh refinement

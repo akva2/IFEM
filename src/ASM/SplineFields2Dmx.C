@@ -109,7 +109,7 @@ bool SplineFields2Dmx::gradFE (const ItgPoint& x, Matrix& grad) const
   // Evaluate the basis functions at the given point
   Matrix Xnod, Jac, dNdX;
   std::vector<int> ip;
-  const Go::SplineSurface* geo = surf->getBasis(ASMmxBase::elmBasis);
+  const Go::SplineSurface* geo = surf->getGeometry();
   if (!geo)
     geo = surf->getBasis(1);
   if (!SplineField::evalMapping(*geo,surf->getNoSpaceDim(),x,ip,Xnod,Jac,dNdX))

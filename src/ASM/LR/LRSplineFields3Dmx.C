@@ -101,7 +101,7 @@ bool LRSplineFields3Dmx::gradFE (const ItgPoint& x, Matrix& grad) const
 
   // Evaluate the basis functions at the given point
   Matrix Xnod, Jac, dNdX;
-  const LR::LRSplineVolume* geo = vol->getBasis(ASMmxBase::elmBasis);
+  const LR::LRSplineVolume* geo = vol->getGeometry();
   if (!geo)
     geo = vol->getBasis(1);
   const LR::Element* elm;
