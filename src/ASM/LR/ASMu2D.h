@@ -113,6 +113,12 @@ public:
   //! in one element
   virtual bool getElementCoordinates(Matrix& X, int iel) const;
 
+  //! \brief Returns a matrix with nodal coordinates for geometry.
+  //! \param[in,out] iel 1-based element index on entry, 0 based geometry elem on return
+  //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes
+  //! in one element
+  bool getGeoElementCoordinates(Matrix& X, int& iel) const;
+
   //! \brief Returns a matrix with all nodal coordinates within the patch.
   //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes
   //! in the patch

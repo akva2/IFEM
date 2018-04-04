@@ -124,7 +124,6 @@ if(EXISTS ${PROJECT_SOURCE_DIR}/${STOKES_SRC})
       if(EXISTS ${PROJECT_SOURCE_DIR}/${FSI_SRC})
         add_subdirectory(${FSI_SRC})
       endif()
-
     endif()
   endif()
 endif()
