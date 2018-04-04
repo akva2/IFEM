@@ -193,9 +193,9 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   std::vector<Go::BasisPtsSf>    spl0;
   std::vector<Go::BasisDerivsSf> spl1;
   if (continuous)
-    surf->computeBasisGrid(gpar[0],gpar[1],spl1);
-  else
-    surf->computeBasisGrid(gpar[0],gpar[1],spl0);
+    static_cast<const Go::SplineSurface*>(geo)->computeBasisGrid(gpar[0],gpar[1],spl1);
+
+  surf->computeBasisGrid(gpar[0],gpar[1],spl0);
 
   // Evaluate the secondary solution at all integration points
   Matrix sField;
@@ -207,8 +207,8 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   }
 
   double dA = 1.0;
-  Vector phi(p1*p2);
-  Matrix dNdu, Xnod, J;
+  Vector phi(p1*p2), phig;
+  Matrix dNdu, Xnod, J, Xnodg;
 
 
   // === Assembly loop over all elements in the patch ==========================
@@ -221,11 +221,11 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
       if (continuous)
       {
-	// Set up control point (nodal) coordinates for current element
-	if (!this->getElementCoordinates(Xnod,1+iel))
-	  return false;
-	else if ((dA = 0.25*this->getParametricArea(1+iel)) < 0.0)
-	  return false; // topology error (probably logic error)
+        // Set up control point (nodal) coordinates for current element
+        if (!this->getGeoElementCoordinates(Xnod,MNPC[iel].front()))
+          return false;
+        else if ((dA = 0.25*this->getParametricArea(1+iel)) < 0.0)
+          return false; // topology error (probably logic error)
       }
 
       // --- Integration loop over all Gauss points in each direction ----------
@@ -234,37 +234,38 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
       Vectors eB(sField.rows(), Vector(p1*p1));
       int ip = (i2*ng1*nel1 + i1)*ng2;
       for (int j = 0; j < ng2; j++, ip += ng1*(nel1-1))
-	for (int i = 0; i < ng1; i++, ip++)
-	{
-	  if (continuous)
-	    SplineUtils::extractBasis(spl1[ip],phi,dNdu);
-	  else
-	    phi = spl0[ip].basisValues;
+        for (int i = 0; i < ng1; i++, ip++)
+        {
+          if (continuous)
+            SplineUtils::extractBasis(spl1[ip],phig,dNdu);
 
-	  // Compute the Jacobian inverse and derivatives
-	  double dJw = 1.0;
-	  if (continuous)
-	  {
-	    dJw = dA*wg[i]*wg[j]*utl::Jacobian(J,dNdu,Xnod,dNdu,false);
-	    if (dJw == 0.0) continue; // skip singular points
-	  }
+          phi = spl0[ip].basisValues;
+
+          // Compute the Jacobian inverse and derivatives
+          double dJw = 1.0;
+          if (continuous)
+          {
+            SplineUtils::extractBasis(spl1[ip], phig, dNdu);
+            dJw = dA*wg[i]*wg[j]*utl::Jacobian(J,dNdu,Xnod,dNdu,false);
+            if (dJw == 0.0) continue; // skip singular points
+          }
 
           // Integrate the mass matrix
           eA.outer_product(phi, phi, true, dJw);
 
-	  // Integrate the rhs vector B
+          // Integrate the rhs vector B
           for (size_t r = 1; r <= sField.rows(); r++)
             eB[r-1].add(phi,sField(r,ip+1)*dJw);
-	}
+        }
 
-      for (int i = 0; i < p1*p2; ++i) {
-        for (int j = 0; j < p1*p2; ++j)
-          A(MNPC[iel][i]+1, MNPC[iel][j]+1) += eA(i+1, j+1);
+        for (int i = 0; i < p1*p2; ++i) {
+          for (int j = 0; j < p1*p2; ++j)
+            A(MNPC[iel][i]+1, MNPC[iel][j]+1) += eA(i+1, j+1);
 
-        int jp = MNPC[iel][i]+1;
-        for (size_t r = 0; r < sField.rows(); r++, jp += nnod)
-          B(jp) += eB[r](1+i);
-      }
+          int jp = MNPC[iel][i]+1;
+          for (size_t r = 0; r < sField.rows(); r++, jp += nnod)
+            B(jp) += eB[r](1+i);
+        }
     }
 
   return true;
