@@ -53,7 +53,7 @@ ASMs2Dmx::ASMs2Dmx (const ASMs2Dmx& patch,
 Go::SplineSurface* ASMs2Dmx::getBasis (int basis) const
 {
   if (basis < 1 || basis > (int)m_basis.size())
-    return surf;
+    return surf.get();
 
   return m_basis[basis-1].get();
 }
@@ -87,7 +87,7 @@ void ASMs2Dmx::clear (bool retainGeometry)
 {
   // Erase the spline data
   if (!retainGeometry)
-    delete surf, surf = 0;
+    surf.reset();
 
   for (auto& it : m_basis)
     it.reset();
@@ -151,14 +151,14 @@ void ASMs2Dmx::initMADOF (const int* sysMadof)
 
 
 void ASMs2Dmx::extractNodeVec (const Vector& globRes, Vector& nodeVec,
-			       unsigned char, int basis) const
+                               unsigned char, int basis) const
 {
   this->extractNodeVecMx(globRes,nodeVec,basis);
 }
 
 
 bool ASMs2Dmx::injectNodeVec (const Vector& nodeRes, Vector& globRes,
-			      unsigned char, int basis) const
+                              unsigned char, int basis) const
 {
   this->injectNodeVecMx(globRes,nodeRes,basis);
   return true;
@@ -166,7 +166,7 @@ bool ASMs2Dmx::injectNodeVec (const Vector& nodeRes, Vector& globRes,
 
 
 bool ASMs2Dmx::getSolution (Matrix& sField, const Vector& locSol,
-			    const IntVec& nodes) const
+                            const IntVec& nodes) const
 {
   return this->getSolutionMx(sField,locSol,nodes);
 }
@@ -177,18 +177,17 @@ bool ASMs2Dmx::generateFEMTopology ()
   if (!surf) return false;
 
   if (m_basis.empty()) {
-    m_basis = ASMmxBase::establishBases(surf, ASMmxBase::Type);
+    m_basis = ASMmxBase::establishBases(surf.get(), ASMmxBase::Type);
 
     // we need to project on something that is not one of our bases
     if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
         ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
-      projBasis = ASMmxBase::establishBases(surf,
+      projBasis = ASMmxBase::establishBases(surf.get(),
                                             ASMmxBase::FULL_CONT_RAISE_BASIS1).front();
     else
       projBasis = m_basis.front();
   }
-  delete surf;
-  geo = surf = m_basis[elmBasis-1]->clone();
+  surf = m_basis[elmBasis-1];
 
   nb.clear();
   for (auto it : m_basis)
@@ -532,6 +531,9 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
     else
       m_basis[i]->computeBasisGrid(gpar[0],gpar[1],splinex[i]);
 
+  std::vector<Go::BasisDerivsSf> splineg;
+  static_cast<const Go::SplineSurface*>(geo)->computeBasisGrid(gpar[0],gpar[1],splineg);
+
   const int p1 = surf->order_u();
   const int p2 = surf->order_v();
   const int n1 = surf->numCoefs_u();
@@ -540,6 +542,10 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
   std::vector<size_t> elem_sizes;
   for (auto& it : m_basis)
     elem_sizes.push_back(it->order_u()*it->order_v());
+
+  size_t elm_ofs = 0;
+  for (int i = 0; i < elmBasis-1; ++i)
+    elm_ofs += m_basis[i]->order_u()*m_basis[i]->order_v();
 
   // === Assembly loop over all elements in the patch ==========================
 
@@ -552,9 +558,10 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
       std::vector<Matrix3D> d2Nxdu2(m_basis.size());
       Matrix3D Hess;
       double dXidu[2];
-      Matrix Xnod, Jac;
+      Matrix Xnod, Jac, Xnodg, dNgdu;
       double   param[3] = { 0.0, 0.0, 0.0 };
       Vec4   X(param);
+      Vector Ng;
       for (size_t i = 0; i < threadGroups[g][t].size() && ok; ++i)
       {
         int iel = threadGroups[g][t][i];
@@ -574,6 +581,13 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
 
         // Set up control point (nodal) coordinates for current element
         if (!this->getElementCoordinates(Xnod,iel))
+        {
+          ok = false;
+          break;
+        }
+
+        // Set up control point (nodal) coordinates for current element
+        if (!this->getGeoElementCoordinates(Xnodg,MNPC[iel-1][elm_ofs]))
         {
           ok = false;
           break;
@@ -623,14 +637,14 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
               else
                 SplineUtils::extractBasis(splinex[b][ip],fe.basis(b+1),dNxdu[b]);
 
+            SplineUtils::extractBasis(splineg[ip],Ng,dNgdu);
+
             // Compute Jacobian inverse of the coordinate mapping and
             // basis function derivatives w.r.t. Cartesian coordinates
-            fe.detJxW = utl::Jacobian(Jac,fe.grad(elmBasis),Xnod,
-                                      dNxdu[elmBasis-1]);
+            fe.detJxW = utl::Jacobian(Jac,fe.grad(1),Xnodg,dNgdu,false);
             if (fe.detJxW == 0.0) continue; // skip singular points
             for (size_t b = 0; b < m_basis.size(); ++b)
-              if (b != (size_t)elmBasis-1)
-                fe.grad(b+1).multiply(dNxdu[b],Jac);
+              fe.grad(b+1).multiply(dNxdu[b],Jac);
 
             // Compute Hessian of coordinate mapping and 2nd order derivatives
             if (integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES) {
@@ -649,7 +663,7 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
               utl::getGmat(Jac,dXidu,fe.G);
 
             // Cartesian coordinates of current integration point
-            X.assign(Xnod * fe.basis(elmBasis));
+            X.assign(Xnodg * Ng);
             X.t = time.t;
 
             // Evaluate the integrand and accumulate element contributions
@@ -676,8 +690,8 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
 
 
 bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
-			  GlobalIntegral& glInt,
-			  const TimeDomain& time)
+                          GlobalIntegral& glInt,
+                          const TimeDomain& time)
 {
   if (!surf) return true; // silently ignore empty patches
 
