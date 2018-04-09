@@ -991,12 +991,12 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
         if (refBasis == m_basis[j])
           continue;
         else {
-          int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
+//          int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
           int mult = 1;
           if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
               ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
             if (line->multiplicity_ > 1)
-              mult = p;
+              mult = line->multiplicity_;
             else
               mult = (j == 0 && ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1) ||
                      (j == 1 && ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2) ? 2 : 1;
@@ -1038,7 +1038,7 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
     if (fName)
       storeMesh();
 
-  #ifdef SP_DEBUG
+#ifdef SP_DEBUG
     std::cout <<"Refined mesh: ";
     for (const auto& it : m_basis)
       std::cout << it->nElements() <<" ";
@@ -1052,7 +1052,7 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
     std::cout << "Refinement basis: "
               << refBasis->nElements() << " elements "
               << refBasis->nBasisFunctions() << " nodes" << std::endl;
-  #endif
+#endif
 
     return true;
   }
