@@ -141,30 +141,32 @@ bool ASMunstruct::refine (const LR::RefineData& prm,
 {
   PROFILE2("ASMunstruct::refine()");
 
-  if (!geo)
+  LR::LRSpline* refBasis = this->getRefinementBasis();
+
+  if (!refBasis)
     return false;
   else if (shareFE && !prm.refShare)
   {
-    nnod = geo->nBasisFunctions();
+    nnod = refBasis->nBasisFunctions();
     return true;
   }
 
   std::vector<int> nf(sol.size());
   if (!prm.errors.empty() || !prm.elements.empty()) {
     for (size_t j = 0; j < sol.size(); j++)
-      if (!(nf[j] = LR::extendControlPoints(geo,sol[j],this->getNoFields(1))))
+      if (!(nf[j] = LR::extendControlPoints(refBasis,sol[j],this->getNoFields(1))))
         return false;
   }
   else
     return true;
 
-  if (doRefine(prm, geo))
+  if (this->doRefine(prm, refBasis))
   {
-    nnod = geo->nBasisFunctions();
+    nnod = refBasis->nBasisFunctions();
 
     for (int i = sol.size()-1; i >= 0; i--) {
-      sol[i].resize(nf[i]*geo->nBasisFunctions());
-      LR::contractControlPoints(geo,sol[i],nf[i]);
+      sol[i].resize(nf[i]*refBasis->nBasisFunctions());
+      LR::contractControlPoints(refBasis,sol[i],nf[i]);
     }
 
     if (fName)
@@ -174,10 +176,10 @@ bool ASMunstruct::refine (const LR::RefineData& prm,
       strcpy(fullFileName, "lrspline_");
       strcat(fullFileName, fName);
       std::ofstream lrOut(fullFileName);
-      lrOut << *geo;
+      lrOut << *refBasis;
       lrOut.close();
 
-      LR::LRSplineSurface* lr = dynamic_cast<LR::LRSplineSurface*>(geo);
+      LR::LRSplineSurface* lr = dynamic_cast<LR::LRSplineSurface*>(refBasis);
       if (lr) {
         // open files for writing
         strcpy(fullFileName, "param_");
@@ -209,19 +211,19 @@ bool ASMunstruct::refine (const LR::RefineData& prm,
       }
     }
 
-    IFEM::cout <<"Refined mesh: "<< geo->nElements() <<" elements "
-               << geo->nBasisFunctions() <<" nodes."<< std::endl;
+    IFEM::cout <<"Refined mesh: "<< refBasis->nElements() <<" elements "
+               << refBasis->nBasisFunctions() <<" nodes."<< std::endl;
 
     bool linIndepTest   = prm.options.size() > 3 ? prm.options[3] != 0 : false;
     if (linIndepTest)
     {
       std::cout <<"Testing for linear independence by overloading "<< std::endl;
-      bool isLinIndep = geo->isLinearIndepByOverloading(false);
+      bool isLinIndep = refBasis->isLinearIndepByOverloading(false);
       if (!isLinIndep) {
         std::cout <<"Inconclusive..."<< std::endl;
   #ifdef HAS_BOOST
         std::cout <<"Testing for linear independence by full tensor expansion "<< std::endl;
-        isLinIndep = geo->isLinearIndepByMappingMatrix(false);
+        isLinIndep = refBasis->isLinearIndepByMappingMatrix(false);
   #endif
       }
       if (isLinIndep)
@@ -304,19 +306,20 @@ Go::BsplineBasis ASMunstruct::getBezierBasis (int p, double start, double end)
 
 
 IntVec ASMunstruct::getFunctionsForElements (const IntVec& elements,
+                                             const LR::LRSpline* lrspline,
                                              bool globalId) const
 {
   IntSet functions; // to get unique function IDs
-  this->getFunctionsForElements(functions,elements,globalId);
+  this->getFunctionsForElements(functions,elements,lrspline,globalId);
   return IntVec(functions.begin(), functions.end());
 }
 
 
 void ASMunstruct::getFunctionsForElements (IntSet& functions,
                                            const IntVec& elements,
+                                           const LR::LRSpline* lrspline,
                                            bool globalId) const
 {
-  geo->generateIDs();
   for (int elmId : elements)
   {
     int iel = elmId;
@@ -325,8 +328,8 @@ void ASMunstruct::getFunctionsForElements (IntSet& functions,
       IntVec::const_iterator it = std::find(MLGE.begin(),MLGE.end(),1+elmId);
       iel = it != MLGE.end() ? it - MLGE.begin() : -1;
     }
-    if (iel >= 0 && iel < geo->nElements())
-      for (LR::Basisfunction* b : geo->getElement(iel)->support())
+    if (iel >= 0 && iel < lrspline->nElements())
+      for (LR::Basisfunction* b : lrspline->getElement(iel)->support())
         functions.insert(globalId ? this->getNodeID(b->getId()+1)-1:b->getId());
   }
 }

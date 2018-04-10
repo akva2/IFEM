@@ -225,6 +225,9 @@ public:
   //! \brief Obtain the refinement basis.
   virtual const LR::LRSpline* getRefinementBasis() const;
 
+  //! \brief Obtain the refinement basis.
+  virtual LR::LRSpline* getRefinementBasis();
+
 protected:
   //! \brief Assembles L2-projection matrices for the secondary solution.
   //! \param[out] A Left-hand-side matrix

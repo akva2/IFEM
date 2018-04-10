@@ -178,7 +178,6 @@ bool ASMu2Dmx::generateFEMTopology ()
   if (!myMLGN.empty())
     return true;
 
-  geo = new LR::LRSplineSurface(tensorspline);
   if (m_basis.empty()) {
     auto vec = ASMmxBase::establishBases(tensorspline, ASMmxBase::Type);
     m_basis.resize(vec.size());
@@ -262,6 +261,12 @@ bool ASMu2Dmx::generateFEMTopology ()
   std::cout <<"NEL = "<< nel <<" NNOD = "<< nnod << std::endl;
 #endif
 
+  static int lev = 0;
+  std::stringstream str;
+  str << "geo_mesh" << ++lev << ".eps";
+  std::ofstream of(str.str());
+  static_cast<const LR::LRSplineSurface*>(geo.get())->writePostscriptMesh(of);
+
   return true;
 }
 
@@ -342,8 +347,10 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
       if (integrand.getIntegrandType() & Integrand::G_MATRIX)
       {
         // Element size in parametric space
-        dXidu[0] = geo->getElement(elmEl-1)->umax()-geo->getElement(elmEl-1)->umin();
-        dXidu[1] = geo->getElement(elmEl-1)->vmax()-geo->getElement(elmEl-1)->vmin();
+        dXidu[0] = m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->umax() -
+                   m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->umin();
+        dXidu[1] = m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->vmax() -
+                   m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->vmin();
       }
 
       // Compute parameter values of the Gauss points over this element
@@ -391,17 +398,15 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
             }
 
           Go::BasisDerivsSf splineg;
-          static_cast<const LR::LRSplineSurface*>(geo)->computeBasis(fe.u, fe.v, splineg, geoEl);
+          static_cast<const LR::LRSplineSurface*>(geo.get())->computeBasis(fe.u, fe.v, splineg, geoEl);
           SplineUtils::extractBasis(splineg,Ng,dNxdu.back());
 
           // Compute Jacobian inverse of coordinate mapping and derivatives
           // basis function derivatives w.r.t. Cartesian coordinates
-          fe.detJxW = utl::Jacobian(Jac,fe.grad(elmBasis),Xnodg,dNxdu.back());
+          fe.detJxW = utl::Jacobian(Jac,fe.grad(elmBasis),Xnodg,dNxdu.back(),false);
           if (fe.detJxW == 0.0) continue; // skip singular points
-          utl::Jacobian(Jac,fe.grad(elmBasis),Xnod,dNxdu[elmBasis-1]);
           for (size_t b = 0; b < m_basis.size(); ++b)
-            if (b != (size_t)elmBasis-1)
-              fe.grad(b+1).multiply(dNxdu[b],Jac);
+            fe.grad(b+1).multiply(dNxdu[b],Jac);
 
           // Compute Hessian of coordinate mapping and 2nd order derivatives
           if (use2ndDer) {
@@ -991,7 +996,6 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
         if (refBasis == m_basis[j])
           continue;
         else {
-//          int p = m_basis[j]->order(line->span_u_line_ ? 1 : 0);
           int mult = 1;
           if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
               ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
@@ -1212,6 +1216,12 @@ bool ASMu2Dmx::evalProjSolution (Matrix& sField, const Vector& locSol,
 
 
 const LR::LRSpline* ASMu2Dmx::getRefinementBasis() const
+{
+  return refBasis.get();
+}
+
+
+LR::LRSpline* ASMu2Dmx::getRefinementBasis()
 {
   return refBasis.get();
 }

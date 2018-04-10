@@ -16,6 +16,7 @@
 
 #include "ASMbase.h"
 #include "GoTools/geometry/BsplineBasis.h"
+#include <memory>
 
 typedef std::set<int> IntSet; //!< General integer set
 
@@ -132,9 +133,11 @@ public:
 
   //! \brief Returns a list of basis functions having support on given elements.
   IntVec getFunctionsForElements(const IntVec& elements,
+                                 const LR::LRSpline* lrspline,
                                  bool globalId = false) const;
   //! \brief Returns a list of basis functions having support on given elements.
   void getFunctionsForElements(IntSet& functions, const IntVec& elements,
+                               const LR::LRSpline* lrspline,
                                bool globalId = true) const;
 
   //! \brief Sort basis functions based on local knot vectors.
@@ -216,11 +219,14 @@ public:
   //! \param[in] refTol Mesh refinement threshold
   virtual bool refine(const RealFunc& refC, double refTol) = 0;
 
-  //! \brief Obtain the refinement basis.
-  virtual const LR::LRSpline* getRefinementBasis() const { return geo; }
-
   //! \brief Returns the spline describing the geometry.
-  const LR::LRSpline* getGeometry() const { return geo; }
+  const LR::LRSpline* getGeometry() const { return geo.get(); }
+
+  //! \brief Obtain the refinement basis.
+  virtual const LR::LRSpline* getRefinementBasis() const = 0;
+
+  //! \brief Obtain the refinement basis.
+  virtual LR::LRSpline* getRefinementBasis() = 0;
 
 protected:
   //! \brief Refines the mesh adaptively.
@@ -228,7 +234,7 @@ protected:
   //! \param lrspline The spline to perform adaptation for
   bool doRefine(const LR::RefineData& prm, LR::LRSpline* lrspline);
 
-  LR::LRSpline* geo; //!< Pointer to the actual spline geometry object
+  std::shared_ptr<LR::LRSpline> geo; //!< Pointer to the actual spline geometry object
 
   static int gEl;  //!< Global element counter
   static int gNod; //!< Global node counter

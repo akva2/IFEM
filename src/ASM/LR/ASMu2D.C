@@ -76,6 +76,7 @@ bool ASMu2D::read (std::istream& is)
     is >> *tensorspline;
     lrspline.reset(new LR::LRSplineSurface(tensorspline));
   }
+  geo.reset(lrspline->copy());
 
   // Eat white-space characters to see if there is more data to read
   char c;
@@ -107,7 +108,6 @@ bool ASMu2D::read (std::istream& is)
     nsd = lrspline->dimension();
   }
 
-  geo = lrspline.get();
   return true;
 }
 
@@ -252,7 +252,6 @@ bool ASMu2D::uniformRefine (int dir, int nInsert)
     tensorspline->insertKnot_v(extraKnots);
 
   lrspline.reset(new LR::LRSplineSurface(tensorspline));
-  geo = lrspline.get();
   return true;
 }
 
@@ -285,7 +284,6 @@ bool ASMu2D::refine (int dir, const RealArray& xi, double scale)
     tensorspline->insertKnot_v(extraKnots);
 
   lrspline.reset(new LR::LRSplineSurface(tensorspline));
-  geo = lrspline.get();
   return true;
 }
 
@@ -312,7 +310,7 @@ bool ASMu2D::refine (const RealFunc& refC, double refTol)
   Vectors dummySol;
   LR::RefineData prm(true);
   prm.options = { 10, 1, 2 };
-  prm.elements = this->getFunctionsForElements(elements);
+  prm.elements = this->getFunctionsForElements(elements,lrspline.get());
   return this->refine(prm,dummySol);
 }
 
@@ -402,7 +400,6 @@ bool ASMu2D::raiseOrder (int ru, int rv)
 
   tensorspline->raiseOrder(ru,rv);
   lrspline.reset(new LR::LRSplineSurface(tensorspline));
-  geo = lrspline.get();
   return true;
 }
 
@@ -925,7 +922,7 @@ bool ASMu2D::getGeoElementCoordinates (Matrix& X, int& iel) const
   const LR::Element* el = lrspline->getElement(iel-1);
   double u_center = 0.5*(el->umin() + el->umax());
   double v_center = 0.5*(el->vmin() + el->vmax());
-  const LR::LRSplineSurface* lrg = static_cast<const LR::LRSplineSurface*>(geo);
+  const LR::LRSplineSurface* lrg = static_cast<const LR::LRSplineSurface*>(geo.get());
   iel = lrg->getElementContaining(u_center, v_center);
   if (el < 0)
     return false;
@@ -1166,7 +1163,7 @@ bool ASMu2D::integrate (Integrand& integrand,
 
             // Compute basis function derivatives at current point
             Go::BasisDerivsSf spline, splineg;
-            static_cast<const LR::LRSplineSurface*>(geo)->computeBasis(fe.u,fe.v,splineg,gEl);
+            static_cast<const LR::LRSplineSurface*>(geo.get())->computeBasis(fe.u,fe.v,splineg,gEl);
             SplineUtils::extractBasis(splineg,Ng,dNgdu);
             lrspline->computeBasis(fe.u,fe.v,spline,iel-1);
             SplineUtils::extractBasis(spline,fe.N,dNdu);
@@ -1232,13 +1229,13 @@ bool ASMu2D::integrate (Integrand& integrand,
 #endif
           }
           Go::BasisDerivsSf splineg;
-          static_cast<const LR::LRSplineSurface*>(geo)->computeBasis(fe.u,fe.v,splineg,gEl);
+          static_cast<const LR::LRSplineSurface*>(geo.get())->computeBasis(fe.u,fe.v,splineg,gEl);
           SplineUtils::extractBasis(splineg,Ng,dNgdu);
 
           // Compute Jacobian inverse of coordinate mapping and derivatives
           fe.detJxW = utl::Jacobian(Jac,fe.dNdX,Xnodg,dNgdu,false);
           if (fe.detJxW == 0.0) continue; // skip singular points
-          utl::Jacobian(Jac,fe.dNdX,Xnod,dNdu);
+          fe.dNdX.multiply(dNdu, Jac);
 
           // Compute Hessian of coordinate mapping and 2nd order derivatives
           if (integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES)
@@ -1735,8 +1732,7 @@ bool ASMu2D::tesselate (ElementBlock& grid, const int* npe) const
   Go::Point pt;
   std::vector<LR::Element*>::iterator el;
   int inod = 0;
-  int iel = 0;
-  for(el=lrspline->elementBegin(); el<lrspline->elementEnd(); el++, iel++) {
+  for(el=lrspline->elementBegin(); el<lrspline->elementEnd(); el++) {
     // evaluate element at element corner points
     double umin = (**el).umin();
     double umax = (**el).umax();
@@ -1746,7 +1742,7 @@ bool ASMu2D::tesselate (ElementBlock& grid, const int* npe) const
       for(int iu=0; iu<npe[0]; iu++, inod++) {
         double u = umin + (umax-umin)/(npe[0]-1)*iu;
         double v = vmin + (vmax-vmin)/(npe[1]-1)*iv;
-        static_cast<const LR::LRSplineSurface*>(geo)->point(pt, u,v, iel, iu!=npe[0]-1, iv!=npe[1]-1);
+        static_cast<const LR::LRSplineSurface*>(geo.get())->point(pt, u,v, -1, iu!=npe[0]-1, iv!=npe[1]-1);
         grid.setCoor(inod, SplineUtils::toVec3(pt,nsd));
         grid.setParams(inod, u, v);
       }
@@ -1754,7 +1750,7 @@ bool ASMu2D::tesselate (ElementBlock& grid, const int* npe) const
   }
 
   int ip = 0;
-  iel = 0;
+  int iel = 0;
   for(int i=0; i<lrspline->nElements(); i++) {
     int iStart = i*nNodesPerElement;
     for(int iv=0; iv<npe[1]-1; iv++) {
@@ -2048,8 +2044,8 @@ void ASMu2D::getBoundaryNodes (int lIndex, IntVec& nodes, int basis,
 
 bool ASMu2D::getOrder (int& p1, int& p2, int& p3) const
 {
-  p1 = geo->order(0);
-  p2 = geo->order(1);
+  p1 = lrspline->order(0);
+  p2 = lrspline->order(1);
   p3 = 0;
 
   return true;
@@ -2411,4 +2407,16 @@ RealArray ASMu2D::InterfaceChecker::getIntersections (int iel, int edge,
     *cont = it->second.continuity;
 
   return it->second.pts;
+}
+
+
+const LR::LRSpline* ASMu2D::getRefinementBasis() const
+{
+  return lrspline.get();
+}
+
+
+LR::LRSpline* ASMu2D::getRefinementBasis()
+{
+  return lrspline.get();
 }
