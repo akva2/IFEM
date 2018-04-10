@@ -187,13 +187,16 @@ GlobalNodes::calcDDMapping(const GlobalNodes::LRSplineVec& pchs,
                            const std::vector<GlobalNodes::IntVec>& MLGN,
                            const SIMbase& sim, int& nNodes)
 {
+  IntVec result;
+
+#ifdef HAVE_MPI
   const ProcessAdm& adm = sim.getProcessAdm();
 
   int minNode = 0;
   if (adm.getProcId() > 0)
     adm.receive(minNode, adm.getProcId()-1);
 
-  IntVec result(*std::max_element(MLGN.back().begin(), MLGN.back().end()) + 1);
+  result.resize(*std::max_element(MLGN.back().begin(), MLGN.back().end()) + 1);
   std::iota(result.begin(), result.end(), minNode);
   int maxNode = adm.getProcId() == 0 ? 0 : minNode;
 
@@ -251,7 +254,6 @@ GlobalNodes::calcDDMapping(const GlobalNodes::LRSplineVec& pchs,
     adm.send(glbNodes, adm.dd.getPatchOwner(it.slave));
   }
 
-#ifdef HAVE_MPI
   nNodes = adm.allReduce(adm.getProcId() == adm.getNoProcs()-1 ? maxNode : 0, MPI_SUM);
 #endif
 
