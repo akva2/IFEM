@@ -282,8 +282,6 @@ bool ASMu3Dmx::generateFEMTopology ()
   std::cout <<"NEL = "<< nel <<" NNOD = "<< nnod << std::endl;
 #endif
 
-  geo = m_basis[elmBasis-1].get();
-
   return true;
 }
 
@@ -1105,6 +1103,12 @@ bool ASMu3Dmx::connectPatch (int face, ASM3D& neighbor, int nface, int norient,
 
 
 const LR::LRSpline* ASMu3Dmx::getRefinementBasis() const
+{
+  return refBasis.get();
+}
+
+
+LR::LRSpline* ASMu3Dmx::getRefinementBasis()
 {
   return refBasis.get();
 }
