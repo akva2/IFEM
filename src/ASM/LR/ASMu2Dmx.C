@@ -24,6 +24,7 @@
 #include "TimeDomain.h"
 #include "FiniteElement.h"
 #include "GlobalIntegral.h"
+#include "IFEM.h"
 #include "LocalIntegral.h"
 #include "IntegrandBase.h"
 #include "CoordinateMapping.h"
@@ -86,7 +87,7 @@ void ASMu2Dmx::clear (bool retainGeometry)
 {
   if (!retainGeometry) {
     // Erase the spline data
-    for (auto& patch : m_basis)
+    for (std::shared_ptr<LR::LRSplineSurface>& patch : m_basis)
       patch.reset();
 
     m_basis.clear();
@@ -134,7 +135,8 @@ char ASMu2Dmx::getNodeType (size_t inod) const
 {
   if (this->isLMn(inod))
     return 'L';
-  size_t nbc=nb.front();
+
+  size_t nbc = nb.front();
   if (inod <= nbc)
     return 'D';
   else for (size_t i = 1; i < nb.size(); i++)
@@ -181,7 +183,7 @@ bool ASMu2Dmx::generateFEMTopology ()
   if (m_basis.empty()) {
     auto vec = ASMmxBase::establishBases(tensorspline, ASMmxBase::Type);
     m_basis.resize(vec.size());
-    for (size_t i=0;i<vec.size();++i)
+    for (size_t i = 0; i < vec.size(); ++i)
       m_basis[i].reset(new LR::LRSplineSurface(vec[i].get()));
 
     // we need to project on something that is not one of our bases
@@ -205,7 +207,7 @@ bool ASMu2Dmx::generateFEMTopology ()
   lrspline = m_basis[elmBasis-1];
 
   nb.resize(m_basis.size());
-  for (size_t i=0; i < m_basis.size(); ++i)
+  for (size_t i = 0; i < m_basis.size(); ++i)
     nb[i] = m_basis[i]->nBasisFunctions();
 
   if (shareFE == 'F') return true;
@@ -226,30 +228,30 @@ bool ASMu2Dmx::generateFEMTopology ()
   myMLGE.resize(nel,0);
   myMLGN.resize(nnod);
   myMNPC.resize(nel);
-  for (auto&& it : m_basis)
+  for (std::shared_ptr<LR::LRSplineSurface>& it : m_basis)
     it->generateIDs();
 
-  std::vector<LR::Element*>::iterator el_it1 = m_basis[elmBasis-1]->elementBegin();
-  for (size_t iel=0; iel<nel; iel++, ++el_it1)
+  for (LR::Element* el1 : m_basis[elmBasis-1]->getAllElements())
   {
-    double uh = ((*el_it1)->umin()+(*el_it1)->umax())/2.0;
-    double vh = ((*el_it1)->vmin()+(*el_it1)->vmax())/2.0;
+    double uh = (el1->umin() + el1->umax()) / 2.0;
+    double vh = (el1->vmin() + el1->vmax()) / 2.0;
     size_t nfunc = 0;
-    for (size_t i=0; i<m_basis.size();++i) {
-      auto el_it2 = m_basis[i]->elementBegin() +
-                    m_basis[i]->getElementContaining(uh, vh);
-      nfunc += (*el_it2)->nBasisFunctions();
+    for (size_t i = 0; i < m_basis.size(); ++i) {
+      auto el2 = m_basis[i]->elementBegin() +
+                 m_basis[i]->getElementContaining(uh, vh);
+      nfunc += (*el2)->nBasisFunctions();
     }
+    int iel = el1->getId();
     myMLGE[iel] = ++gEl; // global element number over all patches
     myMNPC[iel].resize(nfunc);
 
     int lnod = 0;
-    size_t ofs=0;
-    for (size_t i=0; i<m_basis.size();++i) {
+    size_t ofs = 0;
+    for (size_t i = 0; i < m_basis.size(); ++i) {
       auto el_it2 = m_basis[i]->elementBegin() +
                     m_basis[i]->getElementContaining(uh, vh);
       for (LR::Basisfunction *b : (*el_it2)->support())
-        myMNPC[iel][lnod++] = b->getId()+ofs;
+        myMNPC[iel][lnod++] = b->getId() + ofs;
       ofs += nb[i];
     }
   }
@@ -266,6 +268,10 @@ bool ASMu2Dmx::generateFEMTopology ()
   str << "geo_mesh" << ++lev << ".eps";
   std::ofstream of(str.str());
   static_cast<const LR::LRSplineSurface*>(geo.get())->writePostscriptMesh(of);
+  str.str("");
+  str << "ref_mesh" << lev << ".eps";
+  std::ofstream of2(str.str());
+  static_cast<const LR::LRSplineSurface*>(getRefinementBasis())->writePostscriptMesh(of2);
 
   return true;
 }
@@ -295,10 +301,11 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
     {
       if (!ok)
         continue;
+
       int iel = threadGroups[0][t][e] + 1;
-      auto el1 = threadBasis->elementBegin()+iel-1;
-      double uh = ((*el1)->umin()+(*el1)->umax())/2.0;
-      double vh = ((*el1)->vmin()+(*el1)->vmax())/2.0;
+      LR::Element* el1 = *(threadBasis->elementBegin()+iel-1);
+      double uh = (el1->umin() + el1->umax()) / 2.0;
+      double vh = (el1->vmin() + el1->vmax()) / 2.0;
       std::vector<size_t> els;
       std::vector<size_t> elem_sizes;
       for (size_t i=0; i < m_basis.size(); ++i) {
@@ -347,10 +354,10 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
       if (integrand.getIntegrandType() & Integrand::G_MATRIX)
       {
         // Element size in parametric space
-        dXidu[0] = m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->umax() -
-                   m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->umin();
-        dXidu[1] = m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->vmax() -
-                   m_basis[ASMmxBase::elmBasis-1]->getElement(elmEl-1)->vmin();
+        dXidu[0] = m_basis[elmBasis-1]->getElement(elmEl-1)->umax() -
+                   m_basis[elmBasis-1]->getElement(elmEl-1)->umin();
+        dXidu[1] = m_basis[elmBasis-1]->getElement(elmEl-1)->vmax() -
+                   m_basis[elmBasis-1]->getElement(elmEl-1)->vmin();
       }
 
       // Compute parameter values of the Gauss points over this element
@@ -993,10 +1000,11 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm,
   if (doRefine(prm, refBasis.get())) {
     for (const LR::Meshline* line : refBasis->getAllMeshlines())
       for (size_t j = 0; j < m_basis.size(); ++j)
-        if (refBasis == m_basis[j])
+        if (refBasis == m_basis[j] ||
+            (ASMmxBase::Type == ASMmxBase::SUBGRID && j == 0))
           continue;
         else {
-          int mult = 1;
+          int mult = std::min(line->multiplicity_, m_basis[j]->order(0));
           if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
               ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
             if (line->multiplicity_ > 1)
@@ -1098,10 +1106,10 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
   LR::generateThreadGroups(threadGroups,threadBasis);
   if (silence || threadGroups[0].size() < 2) return;
 
-  std::cout <<"\nMultiple threads are utilized during element assembly.";
+  IFEM::cout <<"\nMultiple threads are utilized during element assembly.";
   for (size_t i = 0; i < threadGroups[0].size(); i++)
-    std::cout <<"\n Color "<< i+1 <<": "
-              << threadGroups[0][i].size() <<" elements";
+    IFEM::cout <<"\n Color "<< i+1 <<": "
+               << threadGroups[0][i].size() <<" elements";
 }
 
 

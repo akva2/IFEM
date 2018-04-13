@@ -161,6 +161,7 @@ bool ASMu2D::cornerRefine (int minBasisfunctions)
   return true;
 }
 
+
 bool ASMu2D::diagonalRefine (int minBasisfunctions)
 {
   if (!lrspline) return false;
@@ -190,6 +191,7 @@ bool ASMu2D::diagonalRefine (int minBasisfunctions)
   lrspline->writePostscriptMesh(meshFile);
   return true;
 }
+
 
 bool ASMu2D::uniformRefine (int minBasisfunctions)
 {
@@ -225,6 +227,7 @@ bool ASMu2D::uniformRefine (int minBasisfunctions)
   lrspline->writePostscriptMesh(meshFile);
   return true;
 }
+
 
 bool ASMu2D::uniformRefine (int dir, int nInsert)
 {
@@ -2308,6 +2311,18 @@ bool ASMu2D::evaluate (const FunctionBase* func, RealArray& vec,
 }
 
 
+const LR::LRSpline* ASMu2D::getRefinementBasis() const
+{
+  return lrspline.get();
+}
+
+
+LR::LRSpline* ASMu2D::getRefinementBasis()
+{
+  return lrspline.get();
+}
+
+
 ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) : myPatch(pch)
 {
   const LR::LRSplineSurface* lr = myPatch.getBasis(1);
@@ -2407,16 +2422,4 @@ RealArray ASMu2D::InterfaceChecker::getIntersections (int iel, int edge,
     *cont = it->second.continuity;
 
   return it->second.pts;
-}
-
-
-const LR::LRSpline* ASMu2D::getRefinementBasis() const
-{
-  return lrspline.get();
-}
-
-
-LR::LRSpline* ASMu2D::getRefinementBasis()
-{
-  return lrspline.get();
 }
