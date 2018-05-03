@@ -1274,8 +1274,6 @@ bool ASMs2D::getGeoElementCoordinates (Matrix& X, int node) const
   const Go::SplineSurface* mgeo = static_cast<const Go::SplineSurface*>(geo);
   X.resize(nsd,mgeo->order_u()*mgeo->order_v());
 
-  RealArray::const_iterator cit = mgeo->coefs_begin();
-
   double u = surf->basis_u().getKnots()[nodeInd[node].I + surf->order_u() - 1];
   double v = surf->basis_v().getKnots()[nodeInd[node].J + surf->order_v() - 1];
   int ni = mgeo->basis_u().knotInterval(u) - mgeo->order_u() + 1;

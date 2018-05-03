@@ -16,7 +16,7 @@
 #include "SIMbase.h"
 #include "DomainDecomposition.h"
 #include "Utilities.h"
-
+#include <numeric>
 
 GlobalNodes::IntVec GlobalNodes::getBoundaryNodes(const LR::LRSpline& lr,
                                                   int dim, int lidx, int orient)

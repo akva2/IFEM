@@ -1462,8 +1462,6 @@ bool ASMs3D::getGeoElementCoordinates (Matrix& X, int node) const
   const Go::SplineVolume* mgeo = static_cast<const Go::SplineVolume*>(geo);
   X.resize(nsd,mgeo->order(0)*mgeo->order(1)*mgeo->order(2));
 
-  RealArray::const_iterator cit = mgeo->coefs_begin();
-
   double u = *(svol->basis(0).begin() + nodeInd[node].I + svol->order(0) - 1);
   double v = *(svol->basis(1).begin() + nodeInd[node].J + svol->order(1) - 1);
   double w = *(svol->basis(2).begin() + nodeInd[node].K + svol->order(2) - 1);

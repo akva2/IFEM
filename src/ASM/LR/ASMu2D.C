@@ -1082,6 +1082,7 @@ bool ASMu2D::integrate (Integrand& integrand,
       double   param[3] = { 0.0, 0.0, 0.0 };
       Vec4     X(param);
       Vector   Ng;
+      Matrix   Xnod, Xnodg, dNdu, dNgdu, Jac;
 
       // Get element area in the parameter space
       double dA = this->getParametricArea(iel);
