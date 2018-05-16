@@ -243,6 +243,10 @@ bool SIM2D::parseGeometryTag (const TiXmlElement* elem)
 
     IFEM::cout <<"\tCollapsed edge P"<< patch <<" E"<< edge << std::endl;
     ASMs2D* pch = dynamic_cast<ASMs2D*>(this->getPatch(patch,true));
+#ifdef USE_OPENMP
+      // Cannot do multi-threaded assembly with collapsed edges
+      omp_set_num_threads(1);
+#endif
     if (pch) return pch->collapseEdge(edge);
   }
 
