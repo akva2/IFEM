@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# This script performs a single vtf regression test.
+# It is used by the 'make test' target in the buildsystems
+# Usually you should use 'make test' rather than calling this script directly
+#
+# Parameters: $1 = Application binary
+#             $2 = Regression test file
+# A vtf regression test file is of the format:
+# parameters to application
+# blank line
+# output from vtfls application to compare to
+
+mysim=$1
+
+cd `dirname $2`
+MAPFILE=`head -n1 $2`
+VTFFILE=`head -n2 $2 | tail -n1`
+tmpnew=`mktemp -t ifemlogXXXXXX`
+tmpold=`mktemp -t ifemlogXXXXXX`
+tmpvtf=`mktemp -t ifemXXXXXX.vtf`
+$mysim $MAPFILE -vtf 0 -vtffile $tmpvtf 2>&1 > /dev/null
+test $? -eq 0 || exit 1
+tail -n +3 $2 > $tmpold
+@VTFLS_COMMAND@ $tmpvtf > $tmpnew
+
+diff -u $tmpold $tmpnew
+res=$?
+rm $tmpnew $tmpold $tmplog $tmpvtf
+
+exit $res

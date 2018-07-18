@@ -127,6 +127,22 @@ function(IFEM_add_restart_test name binary rlevel)
   endif(IFEM_TEST_MEMCHECK)
 endfunction()
 
+function(IFEM_add_vtf_test name binary)
+  if(NOT VTFWRITER_FOUND OR NOT VTFLS_COMMAND)
+    return()
+  endif()
+  separate_arguments(MEMCHECK_COMMAND)
+  if(IFEM_TEST_EXTRA)
+    set(test-name "vtf+${binary}+${IFEM_TEST_EXTRA}+${name}")
+  else()
+    set(test-name "vtf+${binary}+${name}")
+  endif()
+  string(REGEX MATCH "^(.*)\\.[^.]*$" dummy ${name})
+  set(rfile ${CMAKE_MATCH_1})
+  get_filename_component(rfile ${rfile} NAME)
+  add_test("${test-name}" vtftest.sh ${EXECUTABLE_OUTPUT_PATH}/${binary} ${PROJECT_SOURCE_DIR}/${TEST_SUBDIR}/Test/${name})
+endfunction()
+
 macro(add_check_target)
   add_custom_target(check ${CMAKE_CTEST_COMMAND} WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
   add_custom_command(TARGET check PRE_BUILD COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/failed.log)
@@ -208,10 +224,13 @@ elseif(NOT IFEM_AS_SUBMODULE AND NOT IFEM_LIBRARY_BUILD
   endif()
 endif()
 
+find_program(VTFLS_COMMAND vtfls)
+
 # Generate regtest script with correct paths
 configure_file(${IFEM_REGTEST_SCRIPT} regtest.sh)
 configure_file(${IFEM_CLANG_CHECK_TEST_SCRIPT} clang-check-test.sh)
 configure_file(${IFEM_CPPCHECK_TEST_SCRIPT} cppcheck-test.sh)
+configure_file(${IFEM_VTFTEST_SCRIPT} vtftest.sh)
 
 if(IFEM_BUILD_TESTING)
   set(EXCL_ALL)
