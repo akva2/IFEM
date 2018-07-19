@@ -154,6 +154,15 @@ bool SIMoptions::parseOutputTag (const TiXmlElement* elem)
     utl::getAttribute(elem,"nw",nViz[2]);
   }
 
+  else if (!strcasecmp(elem->Value(),"vtffile")) {
+    if (elem->FirstChild()) {
+      vtf = elem->FirstChild()->Value();
+      size_t pos = vtf.find_last_of('.');
+      if (pos < vtf.size())
+        vtf.erase(pos);
+    }
+  }
+
   else if (!strcasecmp(elem->Value(),"stride")) {
     value = utl::getValue(elem,"stride");
     if (value) saveInc = atoi(value);
@@ -307,6 +316,11 @@ bool SIMoptions::parseOldOptions (int argc, char** argv, int& i)
       hdf5 = strtok(argv[++i],".");
     else // use the default output file name
       hdf5 = "(default)";
+  }
+  else if (!strcmp(argv[i],"-vtffile"))
+  {
+    if (i < argc-1 && argv[i+1][0] != '-')
+      vtf = strtok(argv[++i],".");
   }
   else if (!strcmp(argv[i],"-saveInc") && i < argc-1)
     dtSave = atof(argv[++i]);
