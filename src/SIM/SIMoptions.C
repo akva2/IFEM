@@ -147,6 +147,11 @@ bool SIMoptions::parseOutputTag (const TiXmlElement* elem)
       else if (!strcasecmp(elem->FirstChild()->Value(),"binary"))
         format = 1;
     }
+    if (utl::getAttribute(elem,"file",vtf)) {
+      size_t pos = vtf.find_last_of('.');
+      if (pos < vtf.size())
+        vtf.erase(pos);
+    }
     if (utl::getAttribute(elem,"nviz",nViz[0]))
       nViz[2] = nViz[1] = nViz[0];
     utl::getAttribute(elem,"nu",nViz[0]);
