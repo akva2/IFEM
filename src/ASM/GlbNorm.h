@@ -31,7 +31,8 @@ public:
   //! \brief The constructor initializes a reference to the global norm vector.
   //! \param[in] v Vector of global norm quantities
   //! \param[in] op Operation to be performed after accumulating element norms
-  GlbNorm(Vectors& v, ASM::FinalNormOp op = ASM::NONE) : myVals(v), myOp(op) {}
+  GlbNorm(Vectors& v, ASM::FinalNormOp op = ASM::NONE) : myVals(v), myOp(op)
+  { extElm = false; }
   //! \brief The destructor applies the operation \a myOp on \a myVals
   virtual ~GlbNorm();
 
@@ -40,10 +41,16 @@ public:
   //! \param[in] elmId Global number of the element associated with \a *elmObj
   virtual bool assemble(const LocalIntegral* elmObj, int elmId = 0);
 
+  //! \brief Returns \e true if all elements can be assembled in parallel.
+  virtual bool threadSafe() const { return extElm; }
+  //! \brief Sets that this norm assembles its element values in the final stage.
+  void delayAssembly() { extElm = true; }
+
 private:
   //! \brief Applies the operation \a myOp on the given \a value.
   void applyFinalOp(double& value) const;
 
+  bool             extElm; //!< If \e true, assembly is delayed
   Vectors&         myVals; //!< Reference to a vector of global norm values
   ASM::FinalNormOp myOp;   //!< Operation to be performed on summed values
 };

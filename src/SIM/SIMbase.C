@@ -1343,6 +1343,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   LintegralVec elementNorms;
   if (eNorm)
   {
+    globalNorm.delayAssembly();
     eNorm->resize(nNorms,mySam->getNoElms(),true);
     elementNorms.reserve(eNorm->cols());
     for (i = 0; i < eNorm->cols(); i++)
@@ -1371,8 +1372,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
           else if (this->fieldProjections()) {
             size_t ndof = pch->getNoProjectionNodes()*myProblem->getNoFields(2);
             Vector c(ndof);
-            std::copy(ssol[k].begin()+projOfs,
-                ssol[k].begin()+projOfs+ndof, c.begin());
+            std::copy(ssol[k].begin()+projOfs, ssol[k].begin()+projOfs+ndof, c.begin());
             Fields* f = pch->getProjectedFields(c, myProblem->getNoFields(2));
             norm->setProjectedFields(f, k);
             projOfs += ndof;
