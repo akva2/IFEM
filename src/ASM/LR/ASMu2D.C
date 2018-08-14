@@ -1037,19 +1037,23 @@ bool ASMu2D::integrate (Integrand& integrand,
     }
   }
 
+  ThreadGroups oneGroup;
+  if (glInt.threadSafe())
+    oneGroup.oneGroup(lrspline->nElements());
+  const ThreadGroups& tg = glInt.threadSafe() ? oneGroup : threadGroups;
 
   // === Assembly loop over all elements in the patch ==========================
 
   bool ok = true;
-  for (size_t t = 0; t < threadGroups[0].size() && ok; ++t)
+  for (size_t t = 0; t < tg[0].size() && ok; ++t)
   {
 #pragma omp parallel for schedule(static)
-    for (size_t e = 0; e < threadGroups[0][t].size(); ++e)
+    for (size_t e = 0; e < tg[0][t].size(); ++e)
     {
       if (!ok)
         continue;
 
-      int iel = threadGroups[0][t][e] + 1;
+      int iel = tg[0][t][e] + 1;
 #if defined(SP_DEBUG) && !defined(USE_OPENMP)
       if (dbgElm < 0 && iel != -dbgElm)
         continue; // Skipping all elements, except for -dbgElm
