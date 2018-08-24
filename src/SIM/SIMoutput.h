@@ -98,6 +98,7 @@ public:
   //! \param[in] iStep Load/time step identifier
   //! \param nBlock Running result block counter
   //! \param[in] idBlock Result block ID number
+  //! \details Field is assumed to be on basis 1.
   bool writeGlvS(const Vector& scl, const char* fieldName,
                  int iStep, int& nBlock, int idBlock = 2) const;
 

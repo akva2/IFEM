@@ -467,8 +467,9 @@ bool SIMoutput::writeGlvS (const Vector& scl, const char* fieldName,
     if (msgLevel > 1)
       IFEM::cout <<"Writing scalar field for patch "<< i+1 << std::endl;
 
-    myModel[i]->extractNodeVec(scl,lovec,1);
-    if (!myModel[i]->evalSolution(field,lovec,opt.nViz))
+    int nc = scl.size()/this->getNoNodes(1);
+    this->extractPatchSolution(scl,lovec,myModel[i],1,nc);
+    if (!myModel[i]->evalSolution(field,lovec,opt.nViz,nc))
       return false;
 
     if (!myVtf->writeNres(field,++nBlock,++geomID))
