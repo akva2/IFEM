@@ -655,7 +655,6 @@ protected:
   //! \param[in] other If \e true, include other bases in MADOF as well
   bool addMADOF(unsigned char basis, unsigned char nndof, bool other = true);
 
-private:
   //! \brief Returns an extraordinary MADOF array.
   //! \param[in] basis The basis to specify number of DOFs for
   //! \param[in] nndof Number of nodal DOFs on the given basis
