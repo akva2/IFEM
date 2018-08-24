@@ -31,6 +31,21 @@ void SIMdependency::registerDependency (SIMdependency* sim,
 
 
 void SIMdependency::registerDependency (SIMdependency* sim,
+                                        const std::string& name,
+                                        short int nvc,
+                                        const PatchVec& patches,
+                                        char diffBasis,
+                                        const std::vector<int>& MADOF)
+{
+  this->SIMdependency::registerDependency(sim,name,nvc);
+  depFields.back().patches = patches;
+  depFields.back().differentBasis = -diffBasis;
+  depFields.back().comp_use = 0;
+  depFields.back().MADOF = &MADOF;
+}
+
+
+void SIMdependency::registerDependency (SIMdependency* sim,
                                         const std::string& name, short int nvc)
 {
 #ifdef SP_DEBUG
@@ -141,9 +156,12 @@ bool SIMdependency::extractPatchDependencies (IntegrandBase* problem,
     patch = pindx < it->patches.size() ? it->patches[pindx] : model[pindx];
     // See ASMbase::extractNodeVec for interpretation of negative value on basis
     int basis = it->components < 0 ? it->components : it->differentBasis;
-    if (it->differentBasis && it->components != patch->getNoFields(basis))
-      patch->extractNodeVec(*gvec,*lvec);
-    else
+    if (it->differentBasis && it->components != patch->getNoFields(basis)) {
+      if (it->MADOF)
+        patch->extractNodalVec(*gvec,*lvec,it->MADOF->data(),it->MADOF->size());
+      else
+        patch->extractNodeVec(*gvec,*lvec);
+    } else
       patch->extractNodeVec(*gvec,*lvec,abs(it->components),basis);
     if (it->differentBasis > 0) {
       if (it->components == 1)
