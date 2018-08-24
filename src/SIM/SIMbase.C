@@ -1703,7 +1703,7 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
 
     case SIMoptions::LEASTSQ:
       if (msgLevel > 1 && i == 0)
-	IFEM::cout <<"\tLeast squares projection"<< std::endl;
+        IFEM::cout <<"\tLeast squares projection"<< std::endl;
       ok = myModel[i]->evalSolution(values,*myProblem,nullptr,'W');
       break;
 
@@ -1790,7 +1790,7 @@ bool SIMbase::project (Vector& values, const FunctionBase* f,
     }
 
     if (nFields <= (int)f->dim())
-      ok &= myModel[j]->injectNodeVec(loc_values,values,f->dim(),basis);
+      ok &= this->injectPatchSolution(values,loc_values,myModel[j],f->dim(),basis);
     else if (f->dim() > 1)
     {
       std::cerr <<" *** SIMbase::project: Cannot interleave non-scalar function"
