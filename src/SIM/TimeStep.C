@@ -188,6 +188,12 @@ bool TimeStep::multiSteps () const
 }
 
 
+bool TimeStep::multiStepSize () const
+{
+  return mySteps.size() > 1;
+}
+
+
 bool TimeStep::hasReached (double t) const
 {
   const double epsT = 1.0e-6;

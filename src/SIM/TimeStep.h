@@ -48,6 +48,8 @@ public:
 
   //! \brief Returns \e true if the simulation consists of several time steps.
   bool multiSteps() const;
+  //! \brief Returns \e true if the simulation consists has several time step sizes.
+  bool multiStepSize() const;
   //! \brief Returns \e true if the given time \a t has been reached.
   bool hasReached(double t) const;
 
