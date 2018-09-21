@@ -62,6 +62,15 @@ public:
                            WeakOperators::ConvectionForm form=WeakOperators::CONVECTIVE,
                            int basis=1);
 
+    //! \brief Compute a curl term.
+    //! \param[out] EM The element matrix to add contribution to
+    //! \param[in] fe The finite element to evaluate for
+    //! \param[in] scale Scaling factor for contribution
+    //! \param[in] basis Basis to use for basis function
+    //! \param[in] tbasis Basis to use for test function
+    static void Curl(Matrix& EM, const FiniteElement& fe,
+                     double scale, int basis=1, int tbasis=1);
+
     //! \brief Compute a divergence term.
     //! \param[out] EM The element matrix to add contribution to
     //! \param[in] fe The finite element to evaluate for

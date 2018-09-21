@@ -120,6 +120,32 @@ void EqualOrderOperators::Weak::Divergence(Matrix& EM, const FiniteElement& fe,
 }
 
 
+void EqualOrderOperators::Weak::Curl(Matrix& EM, const FiniteElement& fe,
+                                     double scale, int basis, int tbasis)
+{
+  size_t cmp = EM.rows() / fe.basis(tbasis).size();
+  const Vector& N = fe.basis(basis);
+  const Matrix& D = fe.grad(tbasis);
+  if (cmp == 2) {
+    for (size_t i = 1; i <= fe.basis(tbasis).size(); ++i)
+      for (size_t j = 1; j <= fe.basis(basis).size(); ++j) {
+        EM((i-1)*2+2,(j-1)*2+1) += N(j)*D(i,1)*fe.detJxW;
+        EM((i-1)*2+1,(j-1)*2+1) -= N(j)*D(i,2)*fe.detJxW;
+      }
+  } else {
+    for (size_t i = 1; i <= fe.basis(tbasis).size(); ++i)
+      for (size_t j = 1; j <= fe.basis(basis).size(); ++j) {
+        EM((i-1)*3+3, (j-1)*3+1) += N(j)*D(i,2)*fe.detJxW;
+        EM((i-1)*3+2, (j-1)*3+1) -= N(j)*D(i,3)*fe.detJxW;
+        EM((i-1)*3+1, (j-1)*3+2) += N(j)*D(i,3)*fe.detJxW;
+        EM((i-1)*3+3, (j-1)*3+2) -= N(j)*D(i,1)*fe.detJxW;
+        EM((i-1)*3+2, (j-1)*3+3) += N(j)*D(i,1)*fe.detJxW;
+        EM((i-1)*3+1, (j-1)*3+3) -= N(j)*D(i,2)*fe.detJxW;
+      }
+  }
+}
+
+
 void EqualOrderOperators::Weak::Gradient(Matrix& EM, const FiniteElement& fe,
                                          double scale, int basis, int tbasis)
 {

@@ -194,6 +194,16 @@ protected:
 
   //! \brief Evaluates the function expressions.
   virtual Ret evaluate(const Vec3& X) const;
+
+  //! \brief Returns the function value as an array.
+  virtual std::vector<Real> getValue(const Vec3& X) const
+  {
+    std::vector<Real> result(nsd);
+    for (size_t i = 0; i < nsd; ++i)
+      result[i] = (*p[i])(X);
+
+    return result;
+  }
 };
 
 //! Vector-valued function expression
