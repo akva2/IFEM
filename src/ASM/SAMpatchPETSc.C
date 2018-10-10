@@ -54,7 +54,7 @@ Real SAMpatchPETSc::dot (const Vector& x, const Vector& y, char dofType) const
 {
 #ifdef HAVE_MPI
   if (adm.isParallel()) {
-    const DofIS& dofIS = this->getIS(dofType);
+    DofIS& dis = const_cast<DofIS&>(this->getIS(dofType));
 
     Vec lx, ly;
     VecCreateSeqWithArray(PETSC_COMM_SELF, 1, x.size(), x.data(), &lx);
@@ -95,7 +95,7 @@ Real SAMpatchPETSc::normL2 (const Vector& x, char dofType) const
 {
 #ifdef HAVE_MPI
   if (adm.isParallel()) {
-    const DofIS& dis = this->getIS(dofType);
+    DofIS& dis = const_cast<DofIS&>(this->getIS(dofType));
 
     Vec lx;
     VecCreateSeqWithArray(PETSC_COMM_SELF, 1, x.size(), x.data(), &lx);
@@ -140,7 +140,7 @@ Real SAMpatchPETSc::normInf (const Vector& x, size_t& comp, char dofType) const
 
 
 #ifdef HAVE_MPI
-DofIS& SAMpatchPETSc::getIS (char dofType) const
+const SAMpatchPETSc::DofIS& SAMpatchPETSc::getIS (char dofType) const
 {
   std::map<char,DofIS>::const_iterator it = dofIS.find(dofType);
   if (it != dofIS.end())

@@ -113,7 +113,7 @@ private:
   mutable std::map<char,DofIS> dofIS; //!< Map of dof type scatter info
 
   //! \brief Returns a parallel index set for a given dofType.
-  DofIS& getIS(char dofType) const;
+  const DofIS& getIS(char dofType) const;
 #endif
 };
 
