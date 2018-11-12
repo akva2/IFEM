@@ -222,3 +222,57 @@ void utl::getGmat (const matrix<Real>& Ji, const Real* du, matrix<Real>& G)
         G(k,l) += Ji(m,k)*Ji(m,l)*scale;
     }
 }
+
+
+bool utl::Hessian2 (matrix4d<Real>& d3NdX3,
+                    const matrix<Real>& Ji, const matrix<Real>& X,
+                    const matrix4d<Real>& d3Ndu3, const matrix<Real>& dNdX)
+{
+  PROFILE4("utl::Hessian2");
+
+  if (dNdX.empty())
+  {
+    // Probably a singular point, silently ignore
+    d3NdX3.resize(0,0,0,true);
+    return true;
+  }
+  else if (Ji.cols() <= 2 && Ji.rows() > Ji.cols())
+  {
+    // Special treatment for one-parametric elements in multi-dimension space
+    // as well as two-parametric elements in 3D space (shells)
+    d3NdX3 = d3Ndu3;
+    return true;
+  }
+
+  // Check that the matrix dimensions are compatible
+/*  size_t nsd = X.rows();
+  if (Ji.rows() != nsd || Ji.cols() != nsd)
+  {
+    std::cerr <<"Hessian: Invalid dimension on Jacobian inverse, Ji("
+              << Ji.rows() <<","<< Ji.cols() <<"), nsd="<< nsd << std::endl;
+    return false;
+  }
+
+  // Compute the second order derivatives of the basis functions, w.r.t. X
+  d2NdX2.resize(dNdX.rows(),nsd,nsd,true);
+  size_t i1, i2, i3, i4, i6;
+  for (size_t n = 1; n <= dNdX.rows(); n++)
+    for (i1 = 1; i1 <= nsd; i1++)
+      for (i2 = 1; i2 <= i1; i2++)
+      {
+        Real& v = d2NdX2(n,i1,i2);
+        for (i3 = 1; i3 <= nsd; i3++)
+          for (i4 = 1; i4 <= nsd; i4++)
+          {
+            Real Ji31x42 = Ji(i3,i1)*Ji(i4,i2);
+            v += d2Ndu2(n,i3,i4)*Ji31x42;
+            for (i6 = 1; i6 <= nsd; i6++)
+              v -= dNdX(n,i6)*H(i6,i3,i4)*Ji31x42;
+          }
+
+        if (i2 < i1)
+          d2NdX2(n,i2,i1) = v; // symmetry
+      }
+*/
+  return true;
+}
