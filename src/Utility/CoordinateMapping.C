@@ -245,7 +245,7 @@ bool utl::Hessian2 (matrix4d<Real>& d3NdX3,
   }
 
   // Check that the matrix dimensions are compatible
-/*  size_t nsd = X.rows();
+  size_t nsd = X.rows();
   if (Ji.rows() != nsd || Ji.cols() != nsd)
   {
     std::cerr <<"Hessian: Invalid dimension on Jacobian inverse, Ji("
@@ -254,7 +254,7 @@ bool utl::Hessian2 (matrix4d<Real>& d3NdX3,
   }
 
   // Compute the second order derivatives of the basis functions, w.r.t. X
-  d2NdX2.resize(dNdX.rows(),nsd,nsd,true);
+  d3NdX3.resize(dNdX.rows(),nsd,nsd,nsd,true);
   size_t i1, i2, i3, i4, i6;
   for (size_t n = 1; n <= dNdX.rows(); n++)
     for (i1 = 1; i1 <= nsd; i1++)
@@ -273,6 +273,5 @@ bool utl::Hessian2 (matrix4d<Real>& d3NdX3,
         if (i2 < i1)
           d2NdX2(n,i2,i1) = v; // symmetry
       }
-*/
   return true;
 }

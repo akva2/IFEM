@@ -1519,6 +1519,7 @@ bool ASMs2D::integrate (Integrand& integrand,
   PROFILE2("ASMs2D::integrate(I)");
 
   bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
+  bool use3rdDer = integrand.getIntegrandType() & Integrand::THIRD_DERIVATIVES;
   bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
 
   const int p1 = surf->order_u();
@@ -1560,8 +1561,11 @@ bool ASMs2D::integrate (Integrand& integrand,
   // Evaluate basis function derivatives at all integration points
   std::vector<Go::BasisDerivsSf>  spline;
   std::vector<Go::BasisDerivsSf2> spline2;
+  std::vector<Go::BasisDerivsSf3> spline3;
   std::vector<Go::BasisDerivsSf>  splineRed;
-  if (use2ndDer)
+  if (use3rdDer)
+    surf->computeBasisGrid(gpar[0],gpar[1],spline3);
+  else if (use2ndDer)
     surf->computeBasisGrid(gpar[0],gpar[1],spline2);
   else
     surf->computeBasisGrid(gpar[0],gpar[1],spline);
@@ -1593,6 +1597,7 @@ bool ASMs2D::integrate (Integrand& integrand,
       fe.q = p2 - 1;
       Matrix   dNdu, Xnod, Jac;
       Matrix3D d2Ndu2, Hess;
+      Matrix4D d3Ndu3;
       double   dXidu[2];
       double   param[3] = { 0.0, 0.0, 0.0 };
       Vec4     X(param);
@@ -1752,7 +1757,9 @@ bool ASMs2D::integrate (Integrand& integrand,
             fe.v = param[1] = gpar[1](j+1,i2-p2+1);
 
             // Fetch basis function derivatives at current integration point
-            if (use2ndDer)
+            if (use3rdDer)
+              SplineUtils::extractBasis(spline3[ip],fe.N,dNdu,d2Ndu2,d3Ndu3);
+            else if (use2ndDer)
               SplineUtils::extractBasis(spline2[ip],fe.N,dNdu,d2Ndu2);
             else
               SplineUtils::extractBasis(spline[ip],fe.N,dNdu);
