@@ -1518,7 +1518,7 @@ bool ASMs2D::integrate (Integrand& integrand,
 
   PROFILE2("ASMs2D::integrate(I)");
 
-  bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
+  bool use2ndDer = integrand.getIntegrandType() & (Integrand::SECOND_DERIVATIVES|Integrand::THIRD_DERIVATIVES);
   bool use3rdDer = integrand.getIntegrandType() & Integrand::THIRD_DERIVATIVES;
   bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
 
@@ -1775,6 +1775,12 @@ bool ASMs2D::integrate (Integrand& integrand,
                 ok = false;
               else if (nsd > 2)
                 utl::Hessian(Hess,fe.H);
+            }
+
+            if (use3rdDer)
+            {
+              if (!utl::Hessian2(fe.d3NdX3,Jac,Xnod,d3Ndu3,fe.dNdX))
+                ok = false;
             }
 
             // Compute G-matrix
@@ -2677,13 +2683,17 @@ bool ASMs2D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
 
   // Evaluate the basis functions and their derivatives at all points
   size_t nPoints = gpar[0].size();
-  bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
+  bool use2ndDer = integrand.getIntegrandType() & (Integrand::SECOND_DERIVATIVES|Integrand::THIRD_DERIVATIVES);
+  bool use3rdDer = integrand.getIntegrandType() & Integrand::THIRD_DERIVATIVES;
   std::vector<Go::BasisDerivsSf>  spline1(regular ||  use2ndDer ? 0 : nPoints);
   std::vector<Go::BasisDerivsSf2> spline2(regular || !use2ndDer ? 0 : nPoints);
+  std::vector<Go::BasisDerivsSf3> spline3(regular || !use3rdDer ? 0 : nPoints);
   if (regular)
   {
     nPoints *= gpar[1].size();
-    if (use2ndDer)
+    if (use3rdDer)
+      surf->computeBasisGrid(gpar[0],gpar[1],spline3);
+    else if (use2ndDer)
       surf->computeBasisGrid(gpar[0],gpar[1],spline2);
     else
       surf->computeBasisGrid(gpar[0],gpar[1],spline1);
@@ -2691,7 +2701,9 @@ bool ASMs2D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
   else if (gpar[0].size() == gpar[1].size())
   {
     for (size_t i = 0; i < nPoints; i++)
-      if (use2ndDer)
+      if (use3rdDer)
+        surf->computeBasis(gpar[0][i],gpar[1][i],spline3[i]);
+      else if (use2ndDer)
         surf->computeBasis(gpar[0][i],gpar[1][i],spline2[i]);
       else
         surf->computeBasis(gpar[0][i],gpar[1][i],spline1[i]);
@@ -2720,13 +2732,20 @@ bool ASMs2D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
   Vector   solPt;
   Matrix   dNdu, Jac;
   Matrix3D d2Ndu2, Hess;
+  Matrix4D d3Ndu3;
 
   // Evaluate the secondary solution field at each point
   for (size_t i = 0; i < nPoints; i++, fe.iGP++)
   {
     // Fetch indices of the non-zero basis functions at this point
     IntVec ip;
-    if (use2ndDer)
+    if (use3rdDer)
+    {
+      scatterInd(n1,n2,p1,p2,spline3[i].left_idx,ip);
+      fe.u = spline3[i].param[0];
+      fe.v = spline3[i].param[1];
+    }
+    else if (use2ndDer)
     {
       scatterInd(n1,n2,p1,p2,spline2[i].left_idx,ip);
       fe.u = spline2[i].param[0];
@@ -2743,7 +2762,9 @@ bool ASMs2D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
     utl::gather(ip,nsd,Xnod,Xtmp);
 
     // Fetch basis function derivatives at current integration point
-    if (use2ndDer)
+    if (use3rdDer)
+      SplineUtils::extractBasis(spline3[i],fe.N,dNdu,d2Ndu2,d3Ndu3);
+    else if (use2ndDer)
       SplineUtils::extractBasis(spline2[i],fe.N,dNdu,d2Ndu2);
     else
       SplineUtils::extractBasis(spline1[i],fe.N,dNdu);
@@ -2760,6 +2781,10 @@ bool ASMs2D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
       else if (nsd > 2)
         utl::Hessian(Hess,fe.H);
     }
+
+    if (use3rdDer)
+      if (!utl::Hessian2(fe.d3NdX3,Jac,Xtmp,d3Ndu3,fe.dNdX))
+        continue;
 
     // Store tangent vectors in fe.G for shells
     if (nsd > 2) fe.G = Jac;

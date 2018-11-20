@@ -186,6 +186,28 @@ bool utl::Hessian (matrix3d<Real>& H, matrix3d<Real>& d2NdX2,
           d2NdX2(n,i2,i1) = v; // symmetry
       }
 
+/*  matrix3d<Real> d2NdX22;
+  d2NdX22.resize(dNdX.rows(),nsd,nsd,true);
+
+  for (size_t i = 1; i <= dNdX.rows(); ++i) {
+    d2NdX22(i,1,1) =  d2Ndu2(i,1,1)*Ji(1,1)*Ji(1,1)
+                     +d2Ndu2(i,2,2)*Ji(2,1)*Ji(2,1)
+                     +2*d2Ndu2(i,1,2)*Ji(1,1)*Ji(2,1);
+    d2NdX22(i,2,2) =  d2Ndu2(i,1,1)*Ji(1,2)*Ji(1,2)
+                     +d2Ndu2(i,2,2)*Ji(2,2)*Ji(2,2)
+                     +2*d2Ndu2(i,1,2)*Ji(1,2)*Ji(2,2);
+    d2NdX22(i,1,2) =
+    d2NdX22(i,2,1) = d2Ndu2(i,1,1)*Ji(1,1)*Ji(1,2) +
+                     d2Ndu2(i,1,2)*Ji(2,1)*Ji(1,2) +
+                     d2Ndu2(i,1,2)*Ji(1,1)*Ji(2,2) +
+                     d2Ndu2(i,2,2)*Ji(2,1)*Ji(2,2);
+
+    std::cout << "hmm " << d2NdX22(i,1,1) << " " << d2NdX2(i,1,1) << std::endl;
+    std::cout << "hmm " << d2NdX22(i,2,2) << " " << d2NdX2(i,2,2) << std::endl;
+    std::cout << "hmm " << d2NdX22(i,1,2) << " " << d2NdX2(i,1,2) << std::endl;
+    std::cout << "hmm " << d2NdX22(i,2,1) << " " << d2NdX2(i,2,1) << std::endl;
+  }
+*/
   return true;
 }
 
@@ -253,25 +275,41 @@ bool utl::Hessian2 (matrix4d<Real>& d3NdX3,
     return false;
   }
 
-  // Compute the second order derivatives of the basis functions, w.r.t. X
+  // Compute the third order derivatives of the basis functions, w.r.t. X
   d3NdX3.resize(dNdX.rows(),nsd,nsd,nsd,true);
-  size_t i1, i2, i3, i4, i6;
-  for (size_t n = 1; n <= dNdX.rows(); n++)
-    for (i1 = 1; i1 <= nsd; i1++)
-      for (i2 = 1; i2 <= i1; i2++)
-      {
-        Real& v = d2NdX2(n,i1,i2);
-        for (i3 = 1; i3 <= nsd; i3++)
-          for (i4 = 1; i4 <= nsd; i4++)
-          {
-            Real Ji31x42 = Ji(i3,i1)*Ji(i4,i2);
-            v += d2Ndu2(n,i3,i4)*Ji31x42;
-            for (i6 = 1; i6 <= nsd; i6++)
-              v -= dNdX(n,i6)*H(i6,i3,i4)*Ji31x42;
-          }
+  for (size_t i = 1; i <= dNdX.rows(); ++i) {
+    d3NdX3(i,1,1,1) =    d3Ndu3(i,1,1,1)*Ji(1,1)*Ji(1,1)*Ji(1,1) +
+                         d3Ndu3(i,1,2,2)*Ji(2,1)*Ji(2,1)*Ji(1,1) +
+                       2*d3Ndu3(i,1,1,2)*Ji(1,1)*Ji(1,1)*Ji(2,1) +
+                         d3Ndu3(i,2,2,2)*Ji(2,1)*Ji(2,1)*Ji(2,1) +
+                         d3Ndu3(i,1,1,2)*Ji(1,1)*Ji(1,1)*Ji(2,1) +
+                       2*d3Ndu3(i,1,2,2)*Ji(1,1)*Ji(2,1)*Ji(2,1);
 
-        if (i2 < i1)
-          d2NdX2(n,i2,i1) = v; // symmetry
-      }
+    d3NdX3(i,2,2,2) =    d3Ndu3(i,1,1,1)*Ji(1,2)*Ji(1,2)*Ji(1,2) +
+                         d3Ndu3(i,1,2,2)*Ji(2,2)*Ji(2,2)*Ji(1,2) +
+                       2*d3Ndu3(i,1,1,2)*Ji(1,2)*Ji(1,2)*Ji(2,2) +
+                         d3Ndu3(i,1,1,2)*Ji(1,2)*Ji(1,2)*Ji(2,2) +
+                         d3Ndu3(i,2,2,2)*Ji(1,2)*Ji(1,2)*Ji(1,2) +
+                       2*d3Ndu3(i,1,2,2)*Ji(1,2)*Ji(2,2)*Ji(2,2);
+
+    d3NdX3(i,1,1,2) =
+    d3NdX3(i,2,1,1) =
+    d3NdX3(i,1,2,1) =    d3Ndu3(i,1,1,1)*Ji(1,1)*Ji(1,1)*Ji(1,2) +
+                         d3Ndu3(i,1,2,2)*Ji(2,1)*Ji(2,1)*Ji(1,2) +
+                       2*d3Ndu3(i,1,1,2)*Ji(1,1)*Ji(1,2)*Ji(2,1) +
+                         d3Ndu3(i,1,1,2)*Ji(1,1)*Ji(1,1)*Ji(2,2) +
+                         d3Ndu3(i,2,2,2)*Ji(2,1)*Ji(2,1)*Ji(2,2) +
+                       2*d3Ndu3(i,1,2,2)*Ji(1,1)*Ji(2,1)*Ji(2,2);
+
+    d3NdX3(i,1,2,2) =
+    d3NdX3(i,2,2,1) =
+    d3NdX3(i,2,1,2) =   d3Ndu3(i,1,1,1)*Ji(1,1)*Ji(1,2)*Ji(1,2) +
+                        d3Ndu3(i,1,2,2)*Ji(1,1)*Ji(2,2)*Ji(2,2) +
+                      2*d3Ndu3(i,1,1,2)*Ji(1,1)*Ji(1,2)*Ji(2,2) +
+                        d3Ndu3(i,1,1,2)*Ji(1,2)*Ji(1,2)*Ji(2,1) +
+                        d3Ndu3(i,2,2,2)*Ji(2,1)*Ji(2,2)*Ji(2,2) +
+                      2*d3Ndu3(i,1,2,2)*Ji(1,2)*Ji(2,1)*Ji(2,2);
+  }
+
   return true;
 }

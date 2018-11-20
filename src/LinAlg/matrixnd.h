@@ -279,6 +279,19 @@ namespace utl //! General utility classes and functions.
       return static_cast<matrix4d<T>&>(this->matrixBase<T>::multiply(c));
     }
 
+    //! \brief Extract a column from the matrix.
+    vector<T> getColumn(size_t i2, size_t i3, size_t i4) const
+    {
+      CHECK_INDEX("matrix3d::getColumn: Second index ",i2,this->n[1]);
+      CHECK_INDEX("matrix3d::getColumn: Third index " ,i3,this->n[2]);
+      CHECK_INDEX("matrix3d::getColumn: Fourth index ",i4,this->n[3]);
+      if (this->n[1] < 2 && this->n[2] < 2 && this->n[3] < 2) return this->elem;
+      vector<T> col(this->n[0]);
+      memcpy(col.ptr(),this->ptr(i2-1+this->n[1]*((i3-1) + (i4-1)*this->n[2])),col.size()*sizeof(T));
+      return col;
+    }
+
+
     //! \brief Fill a column of the matrix.
     void fillColumn(size_t i2, size_t i3, size_t i4, const std::vector<T>& data)
     {
@@ -291,9 +304,10 @@ namespace utl //! General utility classes and functions.
 
   protected:
     //! \brief Clears the content if any of the first two dimensions changed.
-    virtual void clearIfNrowChanged(size_t n1, size_t n2, size_t)
+    virtual void clearIfNrowChanged(size_t n1, size_t n2, size_t n3)
     {
-      if (n1 != this->n[0] || n2 != this->n[1]) this->elem.clear();
+      if (n1 != this->n[0] || n2 != this->n[1] || n3 != this->n[2])
+        this->elem.clear();
     }
   };
 
