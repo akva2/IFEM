@@ -16,7 +16,7 @@
 #include "GoTools/geometry/ObjectHeader.h"
 #include "GoTools/geometry/SplineSurface.h"
 #include "gtest/gtest.h"
-#include <fstream>
+#include <sstream>
 #include <numeric>
 
 
@@ -42,10 +42,33 @@ INSTANTIATE_TEST_CASE_P(TestASMs2D, TestASMs2D, testing::ValuesIn(orientations2D
 
 TEST(TestASMs2D, ExtractBasis)
 {
-  std::ifstream iff("srf.g2");
+  std::stringstream str;
+  str.str("200 1 0 0\n"
+          "2 1\n"
+          "4 4\n"
+          "0 0 0 0 1 1 1 1\n"
+          "4 4\n"
+          "0 0 0 0 1 1 1 1\n"
+          "0 0 1\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0.5 0 0.5\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n"
+          "0 0 0\n");
+
   Go::ObjectHeader head;
   Go::SplineSurface srf;
-  iff >> head >> srf;
+  str >> head >> srf;
 
   auto&& value = [](double x, double y)
     {
