@@ -1351,6 +1351,10 @@ bool ASMs1D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
 
   const int p1 = curv->order();
 
+  bool use2ndDer = integrand.getIntegrandType() & (Integrand::SECOND_DERIVATIVES |
+                                                   Integrand::THIRD_DERIVATIVES);
+  bool use3rdDer = integrand.getIntegrandType() & Integrand::THIRD_DERIVATIVES;
+
   // Fetch nodal (control point) coordinates
   FiniteElement fe(p1,firstIp);
   this->getNodalCoordinates(fe.Xn);
@@ -1358,8 +1362,9 @@ bool ASMs1D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
   Vector   solPt;
   Matrix   dNdu, Jac, Xtmp;
   Matrix3D d2Ndu2, Hess;
+  Matrix4D d3Ndu3;
 
-  if (nsd > 1 && (integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES))
+  if (nsd > 1 && use2ndDer)
     fe.G.resize(nsd,2); // For storing d{X}/du and d2{X}/du2
 
   // Evaluate the secondary solution field at each point
@@ -1372,7 +1377,9 @@ bool ASMs1D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
     // Fetch basis function derivatives at current integration point
     if (integrand.getIntegrandType() & Integrand::NO_DERIVATIVES)
       this->extractBasis(fe.u,fe.N);
-    else if (integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES)
+    else if (use3rdDer)
+      this->extractBasis(fe.u,fe.N,dNdu,d2Ndu2,d3Ndu3);
+    else if (use2ndDer)
       this->extractBasis(fe.u,fe.N,dNdu,d2Ndu2);
     else
       this->extractBasis(fe.u,fe.N,dNdu);
@@ -1390,7 +1397,7 @@ bool ASMs1D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
       fe.detJxW = utl::Jacobian(Jac,fe.dNdX,Xtmp,dNdu);
 
       // Compute Hessian of coordinate mapping and 2nd order derivatives
-      if (integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES)
+      if (use2ndDer)
       {
         if (!utl::Hessian(Hess,fe.d2NdX2,Jac,Xtmp,d2Ndu2,fe.dNdX))
           continue;
@@ -1402,6 +1409,10 @@ bool ASMs1D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
           fe.G.fillColumn(2,Hess.ptr());
         }
       }
+
+      if (use3rdDer)
+        if (!utl::Hessian2(fe.d3NdX3,Jac,Xtmp,d3Ndu3,fe.dNdX))
+          continue;
     }
 
     // Now evaluate the solution field

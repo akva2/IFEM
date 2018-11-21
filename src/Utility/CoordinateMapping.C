@@ -258,7 +258,7 @@ bool utl::Hessian2 (matrix4d<Real>& d3NdX3,
     d3NdX3.resize(0,0,0,true);
     return true;
   }
-  else if (Ji.cols() <= 2 && Ji.rows() > Ji.cols())
+  else if (Ji.cols() <= 2)
   {
     // Special treatment for one-parametric elements in multi-dimension space
     // as well as two-parametric elements in 3D space (shells)
