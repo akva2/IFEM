@@ -6,7 +6,7 @@
 //!
 //! \author Arne Morten Kvarving / SINTEF
 //!
-//! \brief Various weak, discrete div-compatible operators.
+//! \brief Various weak, discrete div/curl-compatible operators.
 //!
 //==============================================================================
 
@@ -14,6 +14,7 @@
 #include "EqualOrderOperators.h"
 #include "FiniteElement.h"
 #include "Vec3.h"
+#include <cassert>
 
 
 void CompatibleOperators::Weak::Advection(std::vector<Matrix>& EM,
@@ -50,6 +51,26 @@ void CompatibleOperators::Weak::Convection(std::vector<Matrix>& EM,
               conv += U[k-1] * fe.grad(n)(j,k);
           EM[vidx[m-1][n-1]](i,j) += scale * conv * fe.basis(m)(i) * fe.detJxW;
         }
+}
+
+
+void CompatibleOperators::Weak::Curl(std::vector<Matrix>& EM,
+                                     const FiniteElement& fe,
+                                     double scale)
+{
+  size_t nsd = fe.grad(1).cols();
+  if (nsd == 3)
+    assert(0);
+  else {
+    EM[1].outer_product(fe.grad(1).getColumn(2),
+                        fe.grad(1).getColumn(2),true,scale*fe.detJxW);
+    EM[2].outer_product(fe.grad(2).getColumn(1),
+                        fe.grad(2).getColumn(1),true,scale*fe.detJxW);
+    EM[3].outer_product(fe.grad(1).getColumn(2),
+                        fe.grad(2).getColumn(1),true,scale*fe.detJxW);
+    EM[4].outer_product(fe.grad(1).getColumn(1),
+                        fe.grad(2).getColumn(2),true,scale*fe.detJxW);
+  }
 }
 
 

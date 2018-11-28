@@ -67,6 +67,7 @@ public:
     FULL_CONT_RAISE_BASIS2,    //!< Full continuity, raise order and use as basis 2
     REDUCED_CONT_RAISE_BASIS2, //!< Reduced continuity, raise order and use as basis 2
     DIV_COMPATIBLE,            //!< Div-compatible space for incompressible problems
+    CURL_COMPATIBLE,            //!< Curl-compatible space for electromagnetic problems
     SUBGRID,                   //!< Sub-grid spaces
   };
 

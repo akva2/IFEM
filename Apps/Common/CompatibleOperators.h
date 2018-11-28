@@ -6,7 +6,7 @@
 //!
 //! \author Arne Morten Kvarving / SINTEF
 //!
-//! \brief Various weak, div-compatible discrete operators.
+//! \brief Various weak, div/curl-compatible discrete operators.
 //!
 //==============================================================================
 
@@ -20,14 +20,14 @@ class Vec3;
 #include "MatVec.h"
 #include "EqualOrderOperators.h"
 
-/*! \brief Common operators using div-compatible discretizations.
+/*! \brief Common operators using div/curl-compatible discretizations.
  *  \details The operators use the block ordering used in the BlockElmMats class.
  */
 
 class CompatibleOperators
 {
 public:
-  //! \brief Common weak operators using div-compatible discretizations.
+  //! \brief Common weak operators using div/curl-compatible discretizations.
   class Weak {
   public:
     //! \brief Compute an advection term.
@@ -48,6 +48,13 @@ public:
     static void Convection(std::vector<Matrix>& EM, const FiniteElement& fe,
                            const Vec3& U, const Tensor& dUdX, double scale,
                            WeakOperators::ConvectionForm form=WeakOperators::CONVECTIVE);
+
+    //! \brief Compute a curl term.
+    //! \param[out] EM The element matrix to add contribution to
+    //! \param[in] fe The finite element to evaluate for
+    //! \param[in] scale Scaling factor for contribution
+    static void Curl(std::vector<Matrix>& EM,
+                     const FiniteElement& fe, double scale=1.0);
 
     //! \brief Compute a gradient term.
     //! \param[out] EM The element matrix to add contribution to

@@ -187,7 +187,8 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases(Go::SplineSurface* surf,
     result[0]->raiseOrder(1,1);
     result[1].reset(new Go::SplineSurface(*surf));
   }
-  else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+  else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+           ASMmxBase::Type == ASMmxBase::CURL_COMPATIBLE)
   {
     result.resize(3);
 
@@ -224,6 +225,8 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases(Go::SplineSurface* surf,
                                                                   u0,vg,XYZ1,ndim,
                                                                   false,XYZ1));
     geoBasis = 3;
+    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+      std::swap(result[0], result[1]);
   } else if (type == SUBGRID) {
     // basis1 should be one degree higher than basis2 and C^p-1 continuous
     int ndim = surf->dimension();
