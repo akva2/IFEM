@@ -605,10 +605,10 @@ protected:
   const Matrices& bezierExtract; //!< Bezier extraction matrices
   Matrices      myBezierExtract; //!< Bezier extraction matrices
 
-private:
   Go::BsplineBasis bezier_u; //!< Bezier basis in the u-direction
   Go::BsplineBasis bezier_v; //!< Bezier basis in the v-direction
 
+private:
   mutable double aMin; //!< Minimum element area for adaptive refinement
 };
 
