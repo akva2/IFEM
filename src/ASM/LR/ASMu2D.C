@@ -987,15 +987,15 @@ double ASMu2D::getElementCorners (int iel, Vec3Vec& XC) const
   const LR::Element* el = lrspline->getElement(iel-1);
   double u[4] = { el->umin(), el->umax(), el->umin(), el->umax() };
   double v[4] = { el->vmin(), el->vmin(), el->vmax(), el->vmax() };
+  double du = lrspline->endparam(0)-lrspline->startparam(0);
+  double dv = lrspline->endparam(1)-lrspline->startparam(1);
 
-  XC.clear();
-  XC.reserve(4);
-  Go::Point point;
-
+  XC.resize(4);
+  double param[2];
   for (int i = 0; i < 4; i++)
   {
-    lrspline->point(point,u[i],v[i],iel-1);
-    XC.push_back(SplineUtils::toVec3(point,nsd));
+    double xi[2] = {(u[i]-lrspline->startparam(0))/du, (v[i]-lrspline->startparam(1))/dv};
+    this->evalPoint(xi, param, XC[i]);
   }
 
   return getElementSize(XC);
@@ -2520,9 +2520,23 @@ bool ASMu2D::refine (const LR::RefineData& prm,
 }
 
 
-void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf& bas, int iel) const
+void ASMu2D::computeBasis(double u, double v, Go::BasisPtsSf& bas, int iel,
+                          const LR::LRSplineSurface* spline) const
 {
-  lrspline->computeBasis(u,v,bas,iel);
+  if (!spline)
+    spline = lrspline.get();
+
+  spline->computeBasis(u,v,bas,iel);
+}
+
+
+void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf& bas, int iel,
+                          const LR::LRSplineSurface* spline) const
+{
+  if (!spline)
+    spline = lrspline.get();
+
+  spline->computeBasis(u,v,bas,iel);
 }
 
 
