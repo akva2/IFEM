@@ -1057,11 +1057,11 @@ bool ASMu2D::integrate (Integrand& integrand,
     for (int j = 0; j < nGauss; j++)
       for (int i = 0; i < nGauss; i++, jp++)
         if (use3rdDer)
-          lrspline->computeBasis(u[i],v[j],spline3[jp],iel);
+          this->computeBasis(u[i],v[j],spline3[jp],iel);
         else if (use2ndDer)
-          lrspline->computeBasis(u[i],v[j],spline2[jp],iel);
+          this->computeBasis(u[i],v[j],spline2[jp],iel);
         else
-          lrspline->computeBasis(u[i],v[j],spline1[jp],iel);
+          this->computeBasis(u[i],v[j],spline1[jp],iel);
 
     if (xr)
     {
@@ -1069,7 +1069,7 @@ bool ASMu2D::integrate (Integrand& integrand,
       this->getGaussPointParameters(v,1,nRed,1+iel,xg);
       for (int j = 0; j < nRed; j++)
         for (int i = 0; i < nRed; i++, rp++)
-          lrspline->computeBasis(u[i],v[j],splineRed[rp],iel);
+          this->computeBasis(u[i],v[j],splineRed[rp],iel);
     }
   }
 
@@ -1347,9 +1347,9 @@ bool ASMu2D::integrate (Integrand& integrand,
       double u = itgPts[iel][ip][0];
       double v = itgPts[iel][ip][1];
       if (integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES)
-        lrspline->computeBasis(u,v,spline2[jp],iel);
+        this->computeBasis(u,v,spline2[jp],iel);
       else
-        lrspline->computeBasis(u,v,spline1[jp],iel);
+        this->computeBasis(u,v,spline1[jp],iel);
     }
 
   ThreadGroups oneGroup;
@@ -1602,7 +1602,7 @@ bool ASMu2D::integrate (Integrand& integrand, int lIndex,
 
       // Evaluate basis function derivatives at current integration points
       Go::BasisDerivsSf spline;
-      lrspline->computeBasis(fe.u, fe.v, spline, iel-1);
+      this->computeBasis(fe.u, fe.v, spline, iel-1);
 
       // Fetch basis function derivatives at current integration point
       SplineUtils::extractBasis(spline,fe.N,dNdu);
@@ -1852,7 +1852,7 @@ bool ASMu2D::evalSolution (Matrix& sField, const Vector& locSol,
       break;
 
     case 2: // Evaluate second derivatives of the solution
-      lrspline->computeBasis(fe.u,fe.v,spline2,iel);
+      this->computeBasis(gpar[0][i],gpar[1][i],spline2,iel);
       SplineUtils::extractBasis(spline2,ptSol,dNdu,d2Ndu2);
       utl::Jacobian(Jac,dNdX,Xnod,dNdu);
       utl::Hessian(Hess,d2NdX2,Jac,Xnod,d2Ndu2,dNdu);
@@ -2014,19 +2014,19 @@ bool ASMu2D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
     if (use3rdDer)
     {
       Go::BasisDerivsSf3 spline;
-      lrspline->computeBasis(gpar[0][i],gpar[1][i],spline,iel);
+      this->computeBasis(gpar[0][i],gpar[1][i],spline,iel);
       SplineUtils::extractBasis(spline,fe.N,dNdu,d2Ndu2,d3Ndu3);
     }
     else if (use2ndDer)
     {
       Go::BasisDerivsSf2 spline;
-      lrspline->computeBasis(fe.u,fe.v,spline,iel);
+      this->computeBasis(gpar[0][i],gpar[1][i],spline,iel);
       SplineUtils::extractBasis(spline,fe.N,dNdu,d2Ndu2);
     }
     else
     {
       Go::BasisDerivsSf spline;
-      lrspline->computeBasis(fe.u,fe.v,spline,iel);
+      this->computeBasis(gpar[0][i],gpar[1][i],spline,iel);
       SplineUtils::extractBasis(spline,fe.N,dNdu);
     }
 
@@ -2515,4 +2515,22 @@ bool ASMu2D::refine (const LR::RefineData& prm,
              <<" elements "<< projBasis->nBasisFunctions() <<" nodes."
              << std::endl;
   return true;
+}
+
+
+void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf& bas, int iel) const
+{
+  lrspline->computeBasis(u,v,bas,iel);
+}
+
+
+void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf2& bas, int iel) const
+{
+  lrspline->computeBasis(u,v,bas,iel);
+}
+
+
+void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf3& bas, int iel) const
+{
+  lrspline->computeBasis(u,v,bas,iel);
 }
