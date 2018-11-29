@@ -1752,9 +1752,11 @@ bool ASMu2D::tesselate (ElementBlock& grid, const int* npe) const
       for (int iu = 0; iu < npe[0]; iu++, inod++) {
         double u = umin + (umax-umin)/(npe[0]-1)*iu;
         double v = vmin + (vmax-vmin)/(npe[1]-1)*iv;
-        Go::Point pt;
-        lrspline->point(pt, u,v, iel, iu!=npe[0]-1, iv!=npe[1]-1);
-        grid.setCoor(inod, SplineUtils::toVec3(pt,nsd));
+        Vec3 pt;
+        double U[2] = {u,v};
+        double param[2];
+        this->evalPoint(U,param,pt);
+        grid.setCoor(inod, pt);
         grid.setParams(inod, u, v);
       }
     ++iel;
