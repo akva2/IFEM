@@ -83,6 +83,11 @@ bool ASMu3D::read (std::istream& is, int)
     lrspline.reset(new LR::LRSplineVolume(tensorspline));
   }
 
+  if (ASMbase::refineGeometry)
+    geo = lrspline;
+  else
+    geo = lrspline->copy();
+
   // Eat white-space characters to see if there is more data to read
   char c;
   while (is.get(c))
@@ -105,7 +110,6 @@ bool ASMu3D::read (std::istream& is, int)
     return false;
   }
 
-  geo = lrspline.get();
   return true;
 }
 
@@ -161,6 +165,7 @@ bool ASMu3D::uniformRefine (int dir, int nInsert)
   }
 
   tensorspline->insertKnot(dir,extraKnots);
+  lrspline.reset(new LR::LRSplineVolume(tensorspline));
   return true;
 }
 
@@ -2354,6 +2359,35 @@ bool ASMu3D::transferCntrlPtVars (const LR::LRSpline* old_basis,
 }
 
 
+/*!
+  Refines all elements for which refC(X0) < refTol,
+  where X0 is the element center.
+*/
+
+bool ASMu3D::refine (const RealFunc& refC, double refTol)
+{
+  Go::Point X0;
+  int iel = 0;
+  std::vector<int> elements;
+  for (const LR::Element* elm : lrspline->getAllElements())
+  {
+    double u0 = 0.5*(elm->umin() + elm->umax());
+    double v0 = 0.5*(elm->vmin() + elm->vmax());
+    double w0 = 0.5*(elm->wmin() + elm->wmax());
+    lrspline->point(X0,u0,v0,w0);
+    if (refC(SplineUtils::toVec3(X0,nsd)) < refTol)
+      elements.push_back(iel);
+    ++iel;
+  }
+
+  Vectors dummySol;
+  LR::RefineData prm(true);
+  prm.options = { 10, 1, 2 };
+  prm.elements = this->getFunctionsForElements(elements,lrspline.get());
+  return this->refine(prm,dummySol);
+}
+
+
 double ASMu3D::getMinimumSize (int nrefinements) const
 {
   if (vMin > 0.0 || lrspline->nElements() <= 0)
@@ -2527,4 +2561,16 @@ void ASMu3D::generateThreadGroupsFromElms (const IntVec& elms)
     projThreadGroups = threadGroups;
 
   threadGroups = threadGroups.filter(myElms);
+}
+
+
+const LR::LRSpline* ASMu3D::getRefinementBasis() const
+{
+  return lrspline.get();
+}
+
+
+LR::LRSpline* ASMu3D::getRefinementBasis()
+{
+  return lrspline.get();
 }

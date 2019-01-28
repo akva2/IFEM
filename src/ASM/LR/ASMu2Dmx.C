@@ -56,6 +56,9 @@ ASMu2Dmx::ASMu2Dmx (const ASMu2Dmx& patch, const CharVec& n_f)
 
 const LR::LRSplineSurface* ASMu2Dmx::getBasis (int basis) const
 {
+  if (basis == -1)
+    return static_cast<const LR::LRSplineSurface*>(this->getRefinementBasis());
+
   if (basis < 1 || basis > (int)m_basis.size())
     return nullptr;
 
@@ -109,7 +112,7 @@ void ASMu2Dmx::clear (bool retainGeometry)
 {
   if (!retainGeometry) {
     // Erase the spline data
-    for (auto& patch : m_basis)
+    for (std::shared_ptr<LR::LRSplineSurface>& patch : m_basis)
       patch.reset();
 
     m_basis.clear();
@@ -157,7 +160,8 @@ char ASMu2Dmx::getNodeType (size_t inod) const
 {
   if (this->isLMn(inod))
     return 'L';
-  size_t nbc=nb.front();
+
+  size_t nbc = nb.front();
   if (inod <= nbc)
     return 'D';
   else for (size_t i = 1; i < nb.size(); i++)
@@ -268,7 +272,7 @@ bool ASMu2Dmx::generateFEMTopology ()
   myMLGE.resize(nel,0);
   myMLGN.resize(nnod);
   myMNPC.resize(nel);
-  for (auto&& it : m_basis)
+  for (std::shared_ptr<LR::LRSplineSurface>& it : m_basis)
     it->generateIDs();
 
   size_t iel = 0;
@@ -337,7 +341,8 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
       if (!ok)
         continue;
       int iel = groups[t][e] + 1;
-      auto el1 = threadBasis->elementBegin()+iel-1;
+      LR::Element* = threadBasis->elementBegin()+iel-1;
+
       std::vector<size_t> els;
       std::vector<size_t> elem_sizes;
       for (size_t i=0; i < m_basis.size(); ++i) {
@@ -345,20 +350,21 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
         elem_sizes.push_back(m_basis[i]->getElement(els.back()-1)->nBasisFunctions());
       }
 
-      int geoEl = els[elmBasis-1];
+      int elmEl = els[elmBasis-1];
 
       MxFiniteElement fe(elem_sizes);
-      fe.iel = MLGE[geoEl-1];
-      std::vector<Matrix> dNxdu(m_basis.size());
-      Matrix   Xnod, Jac;
+      fe.iel = MLGE[elmEl-1];
+      std::vector<Matrix> dNxdu(m_basis.size()+1);
+      Matrix   Xnod, Jac, Xnodg;
       double   param[3] = { 0.0, 0.0, 0.0 };
       Vec4     X(param,time.t);
       std::vector<Matrix3D> d2Nxdu2(m_basis.size());
       Matrix3D Hess;
       double   dXidu[2];
+      Vector   Ng;
 
       // Get element area in the parameter space
-      double dA = this->getParametricArea(geoEl);
+      double dA = this->getParametricArea(elmEl);
       if (dA < 0.0)  // topology error (probably logic error)
       {
         ok = false;
@@ -366,30 +372,39 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
       }
 
       // Set up control point (nodal) coordinates for current element
-      if (!this->getElementCoordinates(Xnod,geoEl))
+      if (!this->getElementCoordinates(Xnod,elmEl))
+      {
+        ok = false;
+        continue;
+      }
+
+      int geoEl = elmEl;
+      if (!this->getGeoElementCoordinates(Xnodg,geoEl))
       {
         ok = false;
         continue;
       }
 
       if (integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS)
-        fe.h = this->getElementCorners(geoEl,fe.XC);
+        fe.h = this->getElementCorners(elmEl,fe.XC);
 
       if (integrand.getIntegrandType() & Integrand::G_MATRIX)
       {
         // Element size in parametric space
-        dXidu[0] = geo->getElement(geoEl-1)->umax()-geo->getElement(geoEl-1)->umin();
-        dXidu[1] = geo->getElement(geoEl-1)->vmax()-geo->getElement(geoEl-1)->vmin();
+        dXidu[0] = m_basis[elmBasis-1]->getElement(elmEl-1)->umax() -
+                   m_basis[elmBasis-1]->getElement(elmEl-1)->umin();
+        dXidu[1] = m_basis[elmBasis-1]->getElement(elmEl-1)->vmax() -
+                   m_basis[elmBasis-1]->getElement(elmEl-1)->vmin();
       }
 
       // Compute parameter values of the Gauss points over this element
       std::array<RealArray,2> gpar;
       for (int d = 0; d < 2; d++)
-        this->getGaussPointParameters(gpar[d],d,nGauss,geoEl,xg);
+        this->getGaussPointParameters(gpar[d],d,nGauss,elmEl,xg);
 
       // Initialize element quantities
       LocalIntegral* A = integrand.getLocalIntegral(elem_sizes,fe.iel,false);
-      if (!integrand.initElement(MNPC[geoEl-1], fe, elem_sizes, nb, *A))
+      if (!integrand.initElement(MNPC[elmEl-1], fe, elem_sizes, nb, *A))
       {
         A->destruct();
         ok = false;
@@ -426,13 +441,16 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
               SplineUtils::extractBasis(spline,fe.basis(b+1),dNxdu[b]);
             }
 
+          Go::BasisDerivsSf splineg;
+          static_cast<const LR::LRSplineSurface*>(geo)->computeBasis(fe.u, fe.v, splineg, geoEl);
+          SplineUtils::extractBasis(splineg,Ng,dNxdu.back());
+
           // Compute Jacobian inverse of coordinate mapping and derivatives
           // basis function derivatives w.r.t. Cartesian coordinates
-          fe.detJxW = utl::Jacobian(Jac,fe.grad(elmBasis),Xnod,dNxdu[elmBasis-1]);
+          fe.detJxW = utl::Jacobian(Jac,fe.grad(elmBasis),Xnodg,dNxdu.back(),false);
           if (fe.detJxW == 0.0) continue; // skip singular points
           for (size_t b = 0; b < m_basis.size(); ++b)
-            if (b != (size_t)elmBasis-1)
-              fe.grad(b+1).multiply(dNxdu[b],Jac);
+            fe.grad(b+1).multiply(dNxdu[b],Jac);
 
           // Compute Hessian of coordinate mapping and 2nd order derivatives
           if (use2ndDer) {
@@ -451,7 +469,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
             utl::getGmat(Jac,dXidu,fe.G);
 
           // Cartesian coordinates of current integration point
-          X.assign(Xnod * fe.basis(elmBasis));
+          X.assign(Xnodg * Ng);
 
           // Evaluate the integrand and accumulate element contributions
           fe.detJxW *= 0.25*dA*wg[i]*wg[j];
@@ -1238,4 +1256,16 @@ void ASMu2Dmx::swapProjectionBasis ()
     std::swap(projBasis, altProjBasis);
     std::swap(projThreadGroups, altProjThreadGroups);
   }
+}
+
+
+LR::LRSpline* ASMu2Dmx::getRefinementBasis()
+{
+  return refBasis.get();
+}
+
+
+const LR::LRSpline* ASMu2Dmx::getRefinementBasis() const
+{
+  return refBasis.get();
 }
