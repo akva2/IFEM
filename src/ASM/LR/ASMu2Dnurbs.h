@@ -67,6 +67,9 @@ protected:
   //! \brief Evaluate basis functions and two derivatives in a point.
   virtual void computeBasis(double u, double v,
                             Go::BasisDerivsSf3& bas, int iel) const;
+
+private:
+  bool isNurbs;
 };
 
 #endif

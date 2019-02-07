@@ -41,12 +41,14 @@
 ASMu2Dnurbs::ASMu2Dnurbs (unsigned char n_s, unsigned char n_f)
   : ASMu2D(n_s, n_f)
 {
+  isNurbs = true;
 }
 
 
 ASMu2Dnurbs::ASMu2Dnurbs (const ASMu2Dnurbs& patch, unsigned char n_f)
   : ASMu2D(patch, n_f)
 {
+  isNurbs = patch.isNurbs;
 }
 
 /*!
@@ -76,7 +78,13 @@ bool ASMu2Dnurbs::read (std::istream& is)
   } else { // probably a SplineSurface, so we'll read that and convert
     tensorspline = new Go::SplineSurface();
     is >> *tensorspline;
-    lrspline.reset(createFromTensor(tensorspline));
+    if (tensorspline->rational())
+      lrspline.reset(createFromTensor(tensorspline));
+    else {
+      lrspline.reset(new LR::LRSplineSurface(tensorspline));
+      std::cout << "LR-nurbs requested but input is a spline" << std::endl;
+      isNurbs = false;
+    }
   }
 
   // Eat white-space characters to see if there is more data to read
@@ -119,6 +127,9 @@ bool ASMu2Dnurbs::uniformRefine (int dir, int nInsert)
   if (!this->ASMu2D::uniformRefine(dir,nInsert))
     return false;
 
+  if (!isNurbs)
+    return true;
+
   lrspline.reset(createFromTensor(tensorspline));
   geo = lrspline.get();
   return true;
@@ -129,6 +140,9 @@ bool ASMu2Dnurbs::refine (int dir, const RealArray& xi, double scale)
 {
   if (!this->ASMu2D::refine(dir,xi,scale))
     return false;
+
+  if (!isNurbs)
+    return true;
 
   lrspline.reset(createFromTensor(tensorspline));
   geo = lrspline.get();
@@ -149,6 +163,9 @@ bool ASMu2Dnurbs::raiseOrder (int ru, int rv)
 
 bool ASMu2Dnurbs::evaluateBasis (FiniteElement& fe, int derivs) const
 {
+  if (!isNurbs)
+    return this->ASMu2D::evaluateBasis(iel,fe,derivs);
+
   const LR::Element* el = lrspline->getElement(fe.iel-1);
   if (!el) return false;
 
@@ -257,6 +274,9 @@ bool ASMu2Dnurbs::evaluateBasis (FiniteElement& fe, int derivs) const
 void ASMu2Dnurbs::computeBasis(double u, double v,
                                Go::BasisDerivsSf& bas, int iel) const
 {
+  if (!isNurbs)
+    return this->ASMu2D::computeBasis(u,v,bas,iel);
+
   Go::BasisDerivsSf tmp;
   lrspline->computeBasis(u,v,tmp,iel);
   size_t wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
@@ -284,6 +304,9 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 void ASMu2Dnurbs::computeBasis(double u, double v,
                                Go::BasisDerivsSf2& bas, int iel) const
 {
+  if (!isNurbs)
+    return this->ASMu2D::computeBasis(u,v,bas,iel);
+
   Go::BasisDerivsSf2 tmp;
   lrspline->computeBasis(u,v,tmp,iel);
   size_t wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
@@ -326,6 +349,9 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 void ASMu2Dnurbs::computeBasis(double u, double v,
                                Go::BasisDerivsSf3& bas, int iel) const
 {
+  if (!isNurbs)
+    return this->ASMu2D::computeBasis(u,v,bas,iel);
+
   std::cerr << "Third order derivatives not implemented for NURBS." << std::endl;
   assert(0);
 }
