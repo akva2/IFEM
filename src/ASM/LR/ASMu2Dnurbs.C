@@ -161,21 +161,22 @@ bool ASMu2Dnurbs::raiseOrder (int ru, int rv)
 }
 
 
-bool ASMu2Dnurbs::evaluateBasis (FiniteElement& fe, int derivs) const
+bool ASMu2Dnurbs::evaluateBasis (int iel, FiniteElement& fe,
+                                 int derivs) const
 {
   if (!isNurbs)
     return this->ASMu2D::evaluateBasis(iel,fe,derivs);
 
-  const LR::Element* el = lrspline->getElement(fe.iel-1);
+  const LR::Element* el = lrspline->getElement(iel);
   if (!el) return false;
 
   fe.xi  = 2.0*(fe.u - el->umin()) / (el->umax() - el->umin()) - 1.0;
   fe.eta = 2.0*(fe.v - el->vmin()) / (el->vmax() - el->vmin()) - 1.0;
   RealArray Nu = bezier_u.computeBasisValues(fe.xi, derivs);
   RealArray Nv = bezier_v.computeBasisValues(fe.eta,derivs);
-  const Matrix& C = bezierExtract[fe.iel-1];
+  const Matrix& C = bezierExtract[iel];
 
-  size_t wi = lrspline->getBasisfunction(MNPC[fe.iel-1][0])->dim()-1;
+  size_t wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
 
   if (derivs < 1) {
     Matrix B;
@@ -184,11 +185,11 @@ bool ASMu2Dnurbs::evaluateBasis (FiniteElement& fe, int derivs) const
 
     double W = 0.0;
     for (size_t i = 1; i <= N.size(); ++i)
-      W += N(i)*lrspline->getBasisfunction(MNPC[fe.iel-1][i-1])->cp(wi);
+      W += N(i)*lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi);
 
     fe.N.resize(N.size(),true);
     for (size_t i = 1; i <= N.size(); ++i)
-      fe.N(i) = N(i)*lrspline->getBasisfunction(MNPC[fe.iel-1][i-1])->cp(wi)/W;
+      fe.N(i) = N(i)*lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi)/W;
 
 #if SP_DEBUG > 2
     if (fabs(fe.N.sum()-1.0) > 1.0e-10)
@@ -226,7 +227,7 @@ bool ASMu2Dnurbs::evaluateBasis (FiniteElement& fe, int derivs) const
     double Wderxi = 0.0;
     double Wdereta = 0.0;
     for (size_t i = 1; i <= N.size(); ++i) {
-      double w = lrspline->getBasisfunction(MNPC[fe.iel-1][i-1])->cp(wi);
+      double w = lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi);
       W += N(i)*w;
       Wderxi += dNxi(i)*w;
       Wdereta += dNeta(i)*w;
@@ -235,14 +236,14 @@ bool ASMu2Dnurbs::evaluateBasis (FiniteElement& fe, int derivs) const
     fe.N.resize(N.size(),true);
     Matrix dNdu(el->nBasisFunctions(),2);
     for (size_t i = 1; i <= N.size(); ++i) {
-      double w = lrspline->getBasisfunction(MNPC[fe.iel-1][i-1])->cp(wi);
+      double w = lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi);
       fe.N(i) = N(i)*w/W;
       dNdu(i,1) = (dNxi(i)*W - N(i)*Wderxi)*w/(W*W);
       dNdu(i,2) = (dNeta(i)*W - N(i)*Wdereta)*w/(W*W);
     }
 
     Matrix Xnod, Jac;
-    this->getElementCoordinates(Xnod,fe.iel);
+    this->getElementCoordinates(Xnod,iel+1);
     fe.detJxW = utl::Jacobian(Jac,fe.dNdX,Xnod,dNdu);
 
 #if SP_DEBUG > 2

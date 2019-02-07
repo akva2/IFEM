@@ -55,7 +55,7 @@ public:
 protected:
   //! \brief Evaluates the basis functions and derivatives of order \a derivs
   //! of an element.
-  virtual bool evaluateBasis(FiniteElement& el, int derivs = 0) const;
+  virtual bool evaluateBasis(int iel, FiniteElement& el, int derivs = 0) const;
 
   //! \brief Evaluate basis functions and first derivatives in a point.
   virtual void computeBasis(double u, double v,
