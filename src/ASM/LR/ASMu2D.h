@@ -559,7 +559,7 @@ protected:
   //! \param[in] iel 0-based element index
   //! \param fe Integration point data for current element
   //! \param[in] derivs Derivative order of the basis functions
-  bool evaluateBasis(int iel, FiniteElement& fe, int derivs = 0) const;
+  virtual bool evaluateBasis(int iel, FiniteElement& fe, int derivs = 0) const;
 
   //! \brief Evaluate basis functions and first derivatives in a point.
   virtual void computeBasis(double u, double v,
