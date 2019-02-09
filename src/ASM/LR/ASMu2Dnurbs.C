@@ -19,23 +19,8 @@
 #include "LRSpline/Basisfunction.h"
 
 #include "ASMu2Dnurbs.h"
-#include "TimeDomain.h"
 #include "FiniteElement.h"
-#include "GlobalIntegral.h"
-#include "LocalIntegral.h"
-#include "IntegrandBase.h"
 #include "CoordinateMapping.h"
-#include "GaussQuadrature.h"
-#include "LagrangeInterpolator.h"
-#include "ElementBlock.h"
-#include "MPC.h"
-#include "SplineUtils.h"
-#include "Utilities.h"
-#include "Profiler.h"
-#include "Function.h"
-#include "Vec3Oper.h"
-#include <array>
-#include <fstream>
 
 
 ASMu2Dnurbs::ASMu2Dnurbs (unsigned char n_s, unsigned char n_f)
@@ -51,9 +36,11 @@ ASMu2Dnurbs::ASMu2Dnurbs (const ASMu2Dnurbs& patch, unsigned char n_f)
   noNurbs = patch.noNurbs;
 }
 
+
 /*!
   \brief Create a dim+1 dimensional LRSplineSurface from a tensor NURBS surface.
 */
+
 static LR::LRSplineSurface* createFromTensor(const Go::SplineSurface* srf)
 {
   return new LR::LRSplineSurface(srf->numCoefs_u(), srf->numCoefs_v(),
@@ -181,20 +168,18 @@ bool ASMu2Dnurbs::evaluateBasis (int iel, FiniteElement& fe,
   RealArray Nv = bezier_v.computeBasisValues(fe.eta,derivs);
   const Matrix& C = bezierExtract[iel];
 
-  size_t wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  int wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  RealArray w(MNPC[iel].size());
+  for (size_t i = 0; i < w.size(); i++)
+    w[i] = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
 
   if (derivs < 1) {
     Matrix B;
     B.outer_product(Nu,Nv);
-    Vector N  = C*static_cast<const Vector&>(B);
-
-    double W = 0.0;
-    for (size_t i = 1; i <= N.size(); ++i)
-      W += N(i)*lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi);
-
-    fe.N.resize(N.size(),true);
-    for (size_t i = 1; i <= N.size(); ++i)
-      fe.N(i) = N(i)*lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi)/W;
+    fe.N = C*static_cast<const Vector&>(B);
+    double W = fe.N.dot(w);
+    for (size_t i = 0; i < fe.N.size(); i++)
+      fe.N[i] *= w[i]/W;
 
 #if SP_DEBUG > 2
     if (fabs(fe.N.sum()-1.0) > 1.0e-10)
@@ -224,27 +209,19 @@ bool ASMu2Dnurbs::evaluateBasis (int iel, FiniteElement& fe,
         Bv[k] = Nu[i  ]*Nv[j+1];
       }
 
-    Vector N = C*B;
-    Vector dNxi = C*Bu;
+    fe.N = C*B;
+    Vector dNxi  = C*Bu;
     Vector dNeta = C*Bv;
 
-    double W = 0.0;
-    double Wderxi = 0.0;
-    double Wdereta = 0.0;
-    for (size_t i = 1; i <= N.size(); ++i) {
-      double w = lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi);
-      W += N(i)*w;
-      Wderxi += dNxi(i)*w;
-      Wdereta += dNeta(i)*w;
-    }
+    double W       = fe.N.dot(w);
+    double Wderxi  = dNxi.dot(w);
+    double Wdereta = dNeta.dot(w);
 
-    fe.N.resize(N.size(),true);
-    Matrix dNdu(el->nBasisFunctions(),2);
-    for (size_t i = 1; i <= N.size(); ++i) {
-      double w = lrspline->getBasisfunction(MNPC[iel][i-1])->cp(wi);
-      fe.N(i) = N(i)*w/W;
-      dNdu(i,1) = (dNxi(i)*W - N(i)*Wderxi)*w/(W*W);
-      dNdu(i,2) = (dNeta(i)*W - N(i)*Wdereta)*w/(W*W);
+    Matrix dNdu(w.size(),2);
+    for (size_t i = 1; i <= fe.N.size(); i++) {
+      fe.N(i)  *= w[i-1]/W;
+      dNdu(i,1) = (dNxi(i)*W  - fe.N(i)*Wderxi )*w[i-1]/(W*W);
+      dNdu(i,2) = (dNeta(i)*W - fe.N(i)*Wdereta)*w[i-1]/(W*W);
     }
 
     Matrix Xnod, Jac;
@@ -289,19 +266,16 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 
   Go::BasisPtsSf tmp;
   spline->computeBasis(u,v,tmp,iel);
-  size_t wi = spline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  int wi = spline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  Vector w(tmp.basisValues.size());
+  for (size_t i = 0; i < w.size(); i++)
+    w[i] = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
 
-  double W = 0.0;
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    W += tmp.basisValues[i]*w;
-  }
+  double W = w.dot(tmp.basisValues);
 
   bas.preparePts(u, v, 0, -1, tmp.basisValues.size());
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    bas.basisValues[i] = tmp.basisValues[i]*w/W;
-  }
+  for (size_t i = 0; i < tmp.basisValues.size(); i++)
+    bas.basisValues[i] = tmp.basisValues[i]*w[i]/W;
 }
 
 
@@ -317,24 +291,21 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 
   Go::BasisDerivsSf tmp;
   spline->computeBasis(u,v,tmp,iel);
-  size_t wi = spline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  int wi = spline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  Vector w(tmp.basisValues.size());
+  for (size_t i = 0; i < w.size(); i++)
+    w[i] = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
 
-  double W = 0.0;
-  double Wderxi = 0.0;
-  double Wdereta = 0.0;
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    W += tmp.basisValues[i]*w;
-    Wderxi += tmp.basisDerivs_u[i]*w;
-    Wdereta += tmp.basisDerivs_v[i]*w;
-  }
+  double W  = w.dot(tmp.basisValues);
+  double Wx = w.dot(tmp.basisDerivs_u);
+  double Wy = w.dot(tmp.basisDerivs_v);
 
   bas.prepareDerivs(u, v, 0, -1, tmp.basisValues.size());
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    bas.basisValues[i] = tmp.basisValues[i]*w/W;
-    bas.basisDerivs_u[i] = (tmp.basisDerivs_u[i]*W-tmp.basisValues[i]*Wderxi)*w/(W*W);
-    bas.basisDerivs_v[i] = (tmp.basisDerivs_v[i]*W-tmp.basisValues[i]*Wdereta)*w/(W*W);
+  for (size_t i = 0; i < tmp.basisValues.size(); i++)
+  {
+    bas.basisValues[i]   =  tmp.basisValues[i]*w[i]/W;
+    bas.basisDerivs_u[i] = (tmp.basisDerivs_u[i]*w[i] - bas.basisValues[i]*Wx)/W;
+    bas.basisDerivs_v[i] = (tmp.basisDerivs_v[i]*w[i] - bas.basisValues[i]*Wy)/W;
   }
 }
 
@@ -347,39 +318,35 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 
   Go::BasisDerivsSf2 tmp;
   lrspline->computeBasis(u,v,tmp,iel);
-  size_t wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  int wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  Vector w(tmp.basisValues.size());
+  for (size_t i = 0; i < w.size(); i++)
+    w[i] = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
 
-  double W = 0.0;
-  double Wderxi = 0.0;
-  double Wdereta = 0.0;
-  double Wder2xi = 0.0;
-  double Wder2eta = 0.0;
-  double Wderxieta = 0.0;
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    W += tmp.basisValues[i]*w;
-    Wderxi += tmp.basisDerivs_u[i]*w;
-    Wdereta += tmp.basisDerivs_v[i]*w;
-    Wder2xi += tmp.basisDerivs_uu[i]*w;
-    Wder2eta += tmp.basisDerivs_vv[i]*w;
-    Wderxieta += tmp.basisDerivs_uv[i]*w;
-  }
+  double W   = w.dot(tmp.basisValues);
+  double Wx  = w.dot(tmp.basisDerivs_u);
+  double Wy  = w.dot(tmp.basisDerivs_v);
+  double Wxx = w.dot(tmp.basisDerivs_uu);
+  double Wyy = w.dot(tmp.basisDerivs_vv);
+  double Wxy = w.dot(tmp.basisDerivs_uv);
 
   bas.prepareDerivs(u, v, 0, -1, tmp.basisValues.size());
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    bas.basisValues[i] = tmp.basisValues[i]*w/W;
-    double H1 = (tmp.basisDerivs_u[i]*W-tmp.basisValues[i]*Wderxi);
-    bas.basisDerivs_u[i] = H1*w/(W*W);
-    double H2 = (tmp.basisDerivs_v[i]*W-tmp.basisValues[i]*Wdereta);
-    bas.basisDerivs_v[i] = H2*w/(W*W);
-    double dH1dx = tmp.basisDerivs_uu[i]*W-tmp.basisValues[i]*Wder2xi;
-    bas.basisDerivs_uu[i] = (dH1dx*W-2*H1*Wderxi)*w/(W*W*W);
-    double dH2dy = tmp.basisDerivs_vv[i]*W-tmp.basisValues[i]*Wder2eta;
-    bas.basisDerivs_vv[i] = (dH2dy*W-2*H2*Wdereta)*w/(W*W*W);
-    double dH1dy = tmp.basisDerivs_uv[i]*W + tmp.basisDerivs_u[i]*Wdereta -
-                   tmp.basisDerivs_v[i]*Wderxi - tmp.basisValues[i]*Wderxieta;
-    bas.basisDerivs_uv[i] = (dH1dy*W-2*H1*Wdereta)*w/(W*W*W);
+  for (size_t i = 0; i < tmp.basisValues.size(); ++i)
+  {
+    bas.basisValues[i] = tmp.basisValues[i]*w[i]/W;
+
+    double H1 = (tmp.basisDerivs_u[i]*W - tmp.basisValues[i]*Wx);
+    double H2 = (tmp.basisDerivs_v[i]*W - tmp.basisValues[i]*Wy);
+    bas.basisDerivs_u[i] = H1*w[i]/(W*W);
+    bas.basisDerivs_v[i] = H2*w[i]/(W*W);
+
+    double H1x = tmp.basisDerivs_uu[i]*W - tmp.basisValues[i]*Wxx;
+    double H2y = tmp.basisDerivs_vv[i]*W - tmp.basisValues[i]*Wyy;
+    double H1y = tmp.basisDerivs_uv[i]*W - tmp.basisValues[i]*Wxy
+               + tmp.basisDerivs_u[i]*Wy - tmp.basisDerivs_v[i]*Wx;
+    bas.basisDerivs_uu[i] = (H1x*W - 2.0*H1*Wx)*w[i]/(W*W*W);
+    bas.basisDerivs_vv[i] = (H2y*W - 2.0*H2*Wy)*w[i]/(W*W*W);
+    bas.basisDerivs_uv[i] = (H1y*W - 2.0*H1*Wy)*w[i]/(W*W*W);
   }
 }
 
@@ -392,68 +359,62 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 
   Go::BasisDerivsSf3 tmp;
   lrspline->computeBasis(u,v,tmp,iel);
-  size_t wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  int wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
+  Vector w(tmp.basisValues.size());
+  for (size_t i = 0; i < w.size(); i++)
+    w[i] = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
 
-  double W = 0.0;
-  double Wderxi = 0.0;
-  double Wdereta = 0.0;
-  double Wder2xi = 0.0;
-  double Wder2eta = 0.0;
-  double Wderxieta = 0.0;
-  double Wder3xi = 0.0;
-  double Wder3eta = 0.0;
-  double Wder2xieta = 0.0;
-  double Wderxi2eta = 0.0;
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    W += tmp.basisValues[i]*w;
-    Wderxi += tmp.basisDerivs_u[i]*w;
-    Wdereta += tmp.basisDerivs_v[i]*w;
-    Wder2xi += tmp.basisDerivs_uu[i]*w;
-    Wder2eta += tmp.basisDerivs_vv[i]*w;
-    Wderxieta += tmp.basisDerivs_uv[i]*w;
-    Wder3xi += tmp.basisDerivs_uuu[i]*w;
-    Wder3eta += tmp.basisDerivs_vvv[i]*w;
-    Wder2xieta = tmp.basisDerivs_uuv[i]*w;
-    Wderxi2eta = tmp.basisDerivs_uvv[i]*w;
-  }
+  double W    = w.dot(tmp.basisValues);
+  double Wx   = w.dot(tmp.basisDerivs_u);
+  double Wy   = w.dot(tmp.basisDerivs_v);
+  double Wxx  = w.dot(tmp.basisDerivs_uu);
+  double Wyy  = w.dot(tmp.basisDerivs_vv);
+  double Wxy  = w.dot(tmp.basisDerivs_uv);
+  double Wxxx = w.dot(tmp.basisDerivs_uuu);
+  double Wyyy = w.dot(tmp.basisDerivs_vvv);
+  double Wxxy = w.dot(tmp.basisDerivs_uuv);
+  double Wxyy = w.dot(tmp.basisDerivs_uvv);
 
   bas.prepareDerivs(u, v, 0, -1, tmp.basisValues.size());
-  for (size_t i = 0; i < tmp.basisValues.size(); ++i) {
-    double w = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
-    bas.basisValues[i] = tmp.basisValues[i]*w/W;
-    double H1 = (tmp.basisDerivs_u[i]*W-tmp.basisValues[i]*Wderxi);
-    bas.basisDerivs_u[i] = H1*w/(W*W);
-    double H2 = (tmp.basisDerivs_v[i]*W-tmp.basisValues[i]*Wdereta);
-    bas.basisDerivs_v[i] = H2*w/(W*W);
-    double dH1dx = tmp.basisDerivs_uu[i]*W-tmp.basisValues[i]*Wder2xi;
-    double dH2dx = tmp.basisDerivs_vv[i]*W-tmp.basisValues[i]*Wder2eta;
-    double G1 = dH1dx*W-2*H1*Wderxi;
-    bas.basisDerivs_uu[i] = G1*w/(W*W*W);
-    double dH2dy = tmp.basisDerivs_vv[i]*W-tmp.basisValues[i]*Wder2eta;
-    double G2 = dH2dy*W-2*H2*Wdereta;
-    bas.basisDerivs_vv[i] = G2*w/(W*W*W);
-    double dH1dy = tmp.basisDerivs_uv[i]*W + tmp.basisDerivs_u[i]*Wdereta -
-                   tmp.basisDerivs_v[i]*Wderxi - tmp.basisValues[i]*Wderxieta;
-    bas.basisDerivs_uv[i] = (dH1dy*W-2*H1*Wdereta)*w/(W*W*W);
-    double d2H1dx2  =   tmp.basisDerivs_uuu[i]*W + tmp.basisDerivs_uu[i]*Wderxi
-                      - tmp.basisDerivs_u[i]*Wder2xi - tmp.basisValues[i]*Wder3xi;
-    double d2H1dxdy =   tmp.basisDerivs_uuv[i]*W + tmp.basisDerivs_uu[i]*Wdereta
-                      - tmp.basisDerivs_v[i]*Wder2xi - tmp.basisValues[i]*Wder2xieta;
-    double d2H2dy2  =   tmp.basisDerivs_vvv[i]*W + tmp.basisDerivs_vv[i]*Wdereta
-                      - tmp.basisDerivs_v[i]*Wder2eta - tmp.basisValues[i]*Wder3eta;
-    double d2H2dxdy =   tmp.basisDerivs_uvv[i]*W + tmp.basisDerivs_vv[i]*Wderxi
-                      - tmp.basisDerivs_u[i]*Wder2eta - tmp.basisValues[i]*Wderxi2eta;
+  for (size_t i = 0; i < tmp.basisValues.size(); i++)
+  {
+    bas.basisValues[i] = tmp.basisValues[i]*w[i]/W;
 
-    double dG1dx = d2H1dx2*W + dH1dx*Wderxi - 2*dH1dx*Wderxi -2*H1*Wder2xi;
-    double dG1dy = d2H1dxdy*W + dH1dx*Wdereta - 2*dH1dy*Wderxi - 2*H1*Wderxieta;
-    double dG2dx = d2H2dxdy*W + dH2dy*Wderxi - 2*dH2dx*Wdereta -2*H2*Wderxieta;
-    double dG2dy = d2H2dy2*W + dH2dy*Wdereta - 2*dH2dy*Wdereta - 2*H2*Wder2eta;
+    double H1 = (tmp.basisDerivs_u[i]*W - tmp.basisValues[i]*Wx);
+    double H2 = (tmp.basisDerivs_v[i]*W - tmp.basisValues[i]*Wy);
+    bas.basisDerivs_u[i] = H1*w[i]/(W*W);
+    bas.basisDerivs_v[i] = H2*w[i]/(W*W);
 
-    bas.basisDerivs_uuu[i] = (dG1dx*W-3*G1*Wderxi)*w/(W*W*W*W);
-    bas.basisDerivs_vvv[i] = (dG2dy*W-3*G2*Wdereta)*w/(W*W*W*W);
-    bas.basisDerivs_uuv[i] = (dG1dy*W-3*G1*Wdereta)*w/(W*W*W*W);
-    bas.basisDerivs_uvv[i] = (dG2dx*W-3*G2*Wderxi)*w/(W*W*W*W);
+    double H1x = tmp.basisDerivs_uu[i]*W - tmp.basisValues[i]*Wxx;
+    double H2y = tmp.basisDerivs_vv[i]*W - tmp.basisValues[i]*Wyy;
+    double H1y = tmp.basisDerivs_uv[i]*W - tmp.basisValues[i]*Wxy
+               + tmp.basisDerivs_u[i]*Wy - tmp.basisDerivs_v[i]*Wx;
+    double H2x = tmp.basisDerivs_uv[i]*W - tmp.basisValues[i]*Wxy
+               + tmp.basisDerivs_v[i]*Wx - tmp.basisDerivs_u[i]*Wy;
+    double G1  = H1x*W - 2.0*H1*Wx;
+    double G2  = H2y*W - 2.0*H2*Wy;
+    bas.basisDerivs_uu[i] = G1*w[i]/(W*W*W);
+    bas.basisDerivs_vv[i] = G2*w[i]/(W*W*W);
+    bas.basisDerivs_uv[i] = (H1y*W - 2.0*H1*Wy)*w[i]/(W*W*W);
+
+    double H1xx = tmp.basisDerivs_uuu[i]*W + tmp.basisDerivs_uu[i]*Wx
+                - tmp.basisDerivs_u[i]*Wxx - tmp.basisValues[i]*Wxxx;
+    double H2yy = tmp.basisDerivs_vvv[i]*W + tmp.basisDerivs_vv[i]*Wy
+                - tmp.basisDerivs_v[i]*Wyy - tmp.basisValues[i]*Wyyy;
+    double H1xy = tmp.basisDerivs_uuv[i]*W + tmp.basisDerivs_uu[i]*Wy
+                - tmp.basisDerivs_v[i]*Wxx - tmp.basisValues[i]*Wxxy;
+    double H2xy = tmp.basisDerivs_uvv[i]*W + tmp.basisDerivs_vv[i]*Wx
+                - tmp.basisDerivs_u[i]*Wyy - tmp.basisValues[i]*Wxyy;
+
+    double G1x = H1xx*W + H1x*Wx - 2.0*H1x*Wx - 2.0*H1*Wxx;
+    double G1y = H1xy*W + H1x*Wy - 2.0*H1y*Wx - 2.0*H1*Wxy;
+    double G2x = H2xy*W + H2y*Wx - 2.0*H2x*Wy - 2.0*H2*Wxy;
+    double G2y = H2yy*W + H2y*Wy - 2.0*H2y*Wy - 2.0*H2*Wyy;
+
+    bas.basisDerivs_uuu[i] = (G1x*W - 3.0*G1*Wx)*w[i]/(W*W*W*W);
+    bas.basisDerivs_vvv[i] = (G2y*W - 3.0*G2*Wy)*w[i]/(W*W*W*W);
+    bas.basisDerivs_uuv[i] = (G1y*W - 3.0*G1*Wy)*w[i]/(W*W*W*W);
+    bas.basisDerivs_uvv[i] = (G2x*W - 3.0*G2*Wx)*w[i]/(W*W*W*W);
   }
 }
 
@@ -476,6 +437,9 @@ LR::LRSplineSurface* ASMu2Dnurbs::createLRfromTensor ()
 
 bool ASMu2Dnurbs::getElementCoordinates (Matrix& X, int iel) const
 {
+  if (noNurbs)
+    return this->ASMu2D::getElementCoordinates(X,iel);
+
 #ifdef INDEX_CHECK
   if (iel < 1 || iel > lrspline->nElements())
   {
@@ -490,9 +454,17 @@ bool ASMu2Dnurbs::getElementCoordinates (Matrix& X, int iel) const
 
   int n = 1;
   for (LR::Basisfunction* b : el->support()) {
-    X.fillColumn(n,&(*b->cp()));
-    for (int j = 1; j < b->dim(); ++j)
-      X(j,n) /= b->cp(b->dim()-1);
+    double weight = b->cp(b->dim()-1);
+#ifdef SP_DEBUG
+    if (weight <= 0.0)
+    {
+      std::cerr <<" *** ASMu2Dnurbs::getElementCoordinates: Zero weight for"
+                <<" node "<< n <<" in element "<< iel << std::endl;
+      return false;
+    }
+#endif
+    for (int j = 1; j <= nsd; j++)
+      X(j,n) = b->cp(j-1) / weight;
     ++n;
   }
 
