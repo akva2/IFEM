@@ -985,15 +985,12 @@ double ASMu2D::getElementCorners (int iel, Vec3Vec& XC) const
   const LR::Element* el = lrspline->getElement(iel-1);
   double u[4] = { el->umin(), el->umax(), el->umin(), el->umax() };
   double v[4] = { el->vmin(), el->vmin(), el->vmax(), el->vmax() };
-  double du = lrspline->endparam(0)-lrspline->startparam(0);
-  double dv = lrspline->endparam(1)-lrspline->startparam(1);
 
   XC.resize(4);
-  double param[2];
   for (int i = 0; i < 4; i++)
   {
-    double xi[2] = {(u[i]-lrspline->startparam(0))/du, (v[i]-lrspline->startparam(1))/dv};
-    this->evalPoint(xi, param, XC[i]);
+    double xi[2] = { u[i], v[i] };
+    this->evalPoint(xi, nullptr, XC[i]);
   }
 
   return getElementSize(XC);
@@ -1135,8 +1132,6 @@ bool ASMu2D::integrate (Integrand& integrand,
         // Compute the element center
         double u[2] = {0.5*(gpar[0].front() + gpar[0].back()),
                        0.5*(gpar[1].front() + gpar[1].back())};
-        double param[2];
-
         this->evalPoint(u, param, X);
       }
 
@@ -1666,19 +1661,33 @@ bool ASMu2D::diracPoint (Integrand& integrand, GlobalIntegral& glInt,
 }
 
 
+/*!
+  If \a param is NULL, then \a xi is taken to be in the parameter domain of
+  the LR-spline object instead of the dimensionless [0,1] domain.
+*/
+
 int ASMu2D::evalPoint (const double* xi, double* param, Vec3& X) const
 {
   if (!lrspline) return -2;
 
-  param[0] = (1.0-xi[0])*lrspline->startparam(0) + xi[0]*lrspline->endparam(0);
-  param[1] = (1.0-xi[1])*lrspline->startparam(1) + xi[1]*lrspline->endparam(1);
+  FiniteElement fe;
+  if (param)
+  {
+    fe.u = (1.0-xi[0])*lrspline->startparam(0) + xi[0]*lrspline->endparam(0);
+    fe.v = (1.0-xi[1])*lrspline->startparam(1) + xi[1]*lrspline->endparam(1);
+    param[0] = fe.u;
+    param[1] = fe.v;
+  }
+  else
+  {
+    fe.u = xi[0];
+    fe.v = xi[1];
+  }
+
   int iel;
 #pragma omp critical
-  iel  = lrspline->getElementContaining(param[0],param[1]);
+  iel = lrspline->getElementContaining(fe.u,fe.v);
 
-  FiniteElement fe;
-  fe.u = param[0];
-  fe.v = param[1];
   if (!this->evaluateBasis(iel,fe))
     return -1;
 
@@ -1740,25 +1749,20 @@ bool ASMu2D::tesselate (ElementBlock& grid, const int* npe) const
                       nElements * nNodesPerElement);
 
   int iel = 0, inod = 0;
-  double du = lrspline->endparam(0)-lrspline->startparam(0);
-  double dv = lrspline->endparam(1)-lrspline->startparam(1);
   for (const LR::Element* el : lrspline->getAllElements())
   {
     // evaluate element at element corner points
     double umin = el->umin();
-    double umax = el->umax();
     double vmin = el->vmin();
-    double vmax = el->vmax();
+    double du = (el->umax() - umin)/(npe[0]-1);
+    double dv = (el->vmax() - vmin)/(npe[0]-1);
     for (int iv = 0; iv < npe[1]; iv++)
       for (int iu = 0; iu < npe[0]; iu++, inod++) {
-        double u = umin + (umax-umin)/(npe[0]-1)*iu;
-        double v = vmin + (vmax-vmin)/(npe[1]-1)*iv;
-        Vec3 pt;
-        double U[2] = {u/du,v/dv};
-        double param[2];
-        this->evalPoint(U,param,pt);
-        grid.setCoor(inod, pt);
-        grid.setParams(inod, u, v);
+        Vec3 Xpt;
+        double U[2] = { umin + du*iu, vmin + dv*iv };
+        this->evalPoint(U, nullptr, Xpt);
+        grid.setCoor(inod, Xpt);
+        grid.setParams(inod, U[0], U[1]);
       }
     ++iel;
   }
