@@ -11,7 +11,6 @@
 //!
 //==============================================================================
 
-#include "GoTools/geometry/ObjectHeader.h"
 #include "GoTools/geometry/SplineSurface.h"
 
 #include "LRSpline/LRSplineSurface.h"
@@ -67,14 +66,16 @@ bool ASMu2D::read (std::istream& is)
 {
   if (shareFE) return true;
 
-  // read inputfile as either an LRSpline file directly
+  // Read the input file as either an LRSpline file directly,
   // or a tensor product B-spline and convert
   char firstline[256];
   is.getline(firstline, 256);
   if (strncmp(firstline, "# LRSPLINE", 10) == 0) {
     lrspline.reset(new LR::LRSplineSurface());
     is >> *lrspline;
-  } else { // probably a SplineSurface, so we'll read that and convert
+  }
+  else {
+    // Probably a SplineSurface, so we'll read that and convert
     tensorspline = new Go::SplineSurface();
     is >> *tensorspline;
     lrspline.reset(new LR::LRSplineSurface(tensorspline));
@@ -88,26 +89,27 @@ bool ASMu2D::read (std::istream& is)
       break;
     }
 
+  int readDim = lrspline->dimension();
   if (!is.good() && !is.eof())
   {
     std::cerr <<" *** ASMu2D::read: Failure reading spline data"<< std::endl;
     lrspline.reset();
     return false;
   }
-  else if (lrspline->dimension() < 2)
+  else if (readDim < 2)
   {
-    std::cerr <<" *** ASMu2D::read: Invalid spline lrsplineace patch, dim="
-              << lrspline->dimension() << std::endl;
+    std::cerr <<" *** ASMu2D::read: Invalid lrspline patch, dim="
+              << readDim << std::endl;
     lrspline.reset();
     return false;
   }
-  else if (lrspline->dimension() < nsd)
+  else if (readDim < nsd)
   {
-    std::cout <<"  ** ASMu2D::read: The dimension of this lrsplineace patch "
-        << lrspline->dimension() <<" is less than nsd="<< nsd
-        <<".\n                   Resetting nsd to "<< lrspline->dimension()
-        <<" for this patch."<< std::endl;
-    nsd = lrspline->dimension();
+    std::cout <<"  ** ASMu2D::read: The dimension of this lrspline patch "
+              << readDim <<" is less than nsd="<< nsd
+              <<".\n                   Resetting nsd to "<< readDim
+              <<" for this patch."<< std::endl;
+    nsd = readDim;
   }
 
   geo = lrspline.get();
@@ -520,7 +522,33 @@ LR::LRSplineSurface* ASMu2D::createLRfromTensor ()
 {
   if (tensorspline)
   {
-    lrspline.reset(new LR::LRSplineSurface(tensorspline));
+    if (tensorspline->rational())
+    {
+      std::cerr <<" *** ASMu2D::createLRfromTensor: Cannot convert from a"
+                <<" rational spline, use LRnurbs instead."<< std::endl;
+      lrspline.reset();
+    }
+    else if (tensorspline->dimension() > nsd)
+    {
+      // Remove superfluous components from the tensor spline coefficients.
+      // We need to do this because getElementCoordinates uses the dimension
+      // of the lrspline object to determine whether it is rational or not.
+      RealArray::iterator it = tensorspline->coefs_begin();
+      RealArray coefs;
+      coefs.reserve(tensorspline->numCoefs_u()*tensorspline->numCoefs_v()*nsd);
+      for (; it != tensorspline->coefs_end(); it += tensorspline->dimension())
+        coefs.insert(coefs.end(),it,it+nsd);
+      lrspline.reset(new LR::LRSplineSurface(tensorspline->numCoefs_u(),
+                                             tensorspline->numCoefs_v(),
+                                             tensorspline->order_u(),
+                                             tensorspline->order_v(),
+                                             tensorspline->basis_u().begin(),
+                                             tensorspline->basis_v().begin(),
+                                             coefs.begin(), nsd));
+    }
+    else
+      lrspline.reset(new LR::LRSplineSurface(tensorspline));
+
     delete tensorspline;
     tensorspline = nullptr;
   }
@@ -886,6 +914,15 @@ double ASMu2D::getParametricLength (int iel, int dir) const
 }
 
 
+/*!
+  In case of NURBS, this is not strictly correct as we then return the rational
+  spline coefficients rather than nodal (control point) coordinates.
+  But since these are used as coefficients, and not coordinates at caller sites,
+  we do this for simplicity.
+
+  Consider introducing ASMbase::getElementCoefficients() to lessen confusion.
+*/
+
 bool ASMu2D::getElementCoordinates (Matrix& X, int iel) const
 {
 #ifdef INDEX_CHECK
@@ -900,9 +937,21 @@ bool ASMu2D::getElementCoordinates (Matrix& X, int iel) const
   const LR::Element* el = lrspline->getElement(iel-1);
   X.resize(nsd,el->nBasisFunctions());
 
-  int n = 1;
+  int n = 0;
   for (LR::Basisfunction* b : el->support())
-    X.fillColumn(n++,&(*b->cp()));
+  {
+    X.fillColumn(++n,&(*b->cp()));
+    double weight = b->dim() == nsd+1 ? b->cp(nsd) : 1.0;
+    if (weight <= 0.0)
+    {
+      std::cerr <<" *** ASMu2D::getElementCoordinates: Zero weight for node "
+                << n <<" in element "<< iel << std::endl;
+      return false;
+    }
+    else if (weight != 1.0)
+      for (int j = 1; j <= nsd; j++)
+        X(j,n) /= weight;
+  }
 
 #if SP_DEBUG > 2
   std::cout <<"\nCoordinates for element "<< iel << X << std::endl;
@@ -2400,7 +2449,7 @@ bool ASMu2D::evaluate (const FunctionBase* func, RealArray& vec,
 }
 
 
-ASMu2D::InterfaceChecker::InterfaceChecker(const ASMu2D& pch) : myPatch(pch)
+ASMu2D::InterfaceChecker::InterfaceChecker (const ASMu2D& pch) : myPatch(pch)
 {
   const LR::LRSplineSurface* lr = myPatch.getBasis(1);
 
@@ -2527,17 +2576,14 @@ bool ASMu2D::refine (const LR::RefineData& prm,
 }
 
 
-void ASMu2D::generateBezierBasis()
+void ASMu2D::generateBezierBasis ()
 {
-  const int p1 = geo->order(0);
-  const int p2 = geo->order(1);
-  bezier_u = this->getBezierBasis(p1);
-  bezier_v = this->getBezierBasis(p2);
-
+  bezier_u = getBezierBasis(geo->order(0));
+  bezier_v = getBezierBasis(geo->order(1));
 }
 
 
-void ASMu2D::generateBezierExtraction()
+void ASMu2D::generateBezierExtraction ()
 {
   const int p1 = geo->order(0);
   const int p2 = geo->order(1);
@@ -2556,33 +2602,35 @@ void ASMu2D::generateBezierExtraction()
 }
 
 
-void ASMu2D::computeBasis(double u, double v, Go::BasisPtsSf& bas, int iel,
-                          const LR::LRSplineSurface* spline) const
+void ASMu2D::computeBasis (double u, double v, Go::BasisPtsSf& bas,
+                           int iel, const LR::LRSplineSurface* spline) const
 {
-  if (!spline)
-    spline = lrspline.get();
-
-  spline->computeBasis(u,v,bas,iel);
+  if (spline)
+    spline->computeBasis(u,v,bas,iel);
+  else
+    lrspline->computeBasis(u,v,bas,iel);
 }
 
 
-void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf& bas, int iel,
-                          const LR::LRSplineSurface* spline) const
+void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf& bas,
+                           int iel, const LR::LRSplineSurface* spline) const
 {
-  if (!spline)
-    spline = lrspline.get();
-
-  spline->computeBasis(u,v,bas,iel);
+  if (spline)
+    spline->computeBasis(u,v,bas,iel);
+  else
+    lrspline->computeBasis(u,v,bas,iel);
 }
 
 
-void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf2& bas, int iel) const
+void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf2& bas,
+                           int iel) const
 {
   lrspline->computeBasis(u,v,bas,iel);
 }
 
 
-void ASMu2D::computeBasis(double u, double v, Go::BasisDerivsSf3& bas, int iel) const
+void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf3& bas,
+                           int iel) const
 {
   lrspline->computeBasis(u,v,bas,iel);
 }

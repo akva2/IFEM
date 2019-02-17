@@ -11,7 +11,6 @@
 //!
 //==============================================================================
 
-#include "GoTools/geometry/ObjectHeader.h"
 #include "GoTools/geometry/SplineSurface.h"
 
 #include "LRSpline/LRSplineSurface.h"
@@ -37,119 +36,13 @@ ASMu2Dnurbs::ASMu2Dnurbs (const ASMu2Dnurbs& patch, unsigned char n_f)
 }
 
 
-/*!
-  \brief Create a dim+1 dimensional LRSplineSurface from a tensor NURBS surface.
-*/
-
-static LR::LRSplineSurface* createFromTensor(const Go::SplineSurface* srf)
-{
-  return new LR::LRSplineSurface(srf->numCoefs_u(), srf->numCoefs_v(),
-                                 srf->order_u(), srf->order_v(),
-                                 srf->basis_u().begin(),
-                                 srf->basis_v().begin(),
-                                 srf->rcoefs_begin(), srf->dimension()+1);
-}
-
-
 bool ASMu2Dnurbs::read (std::istream& is)
 {
-  if (shareFE) return true;
+  bool ok = this->ASMu2D::read(is);
+  if (ok && noNurbs)
+    std::cout <<"  ** LR-nurbs requested but input is a spline."<< std::endl;
 
-  // read inputfile as either an LRSpline file directly
-  // or a tensor product B-spline and convert
-  char firstline[256];
-  is.getline(firstline, 256);
-  if (strncmp(firstline, "# LRSPLINE", 10) == 0) {
-    lrspline.reset(new LR::LRSplineSurface());
-    is >> *lrspline;
-    std::cout << "LR-nurbs requested but input is a spline" << std::endl;
-    noNurbs = true;
-  } else { // probably a SplineSurface, so we'll read that and convert
-    tensorspline = new Go::SplineSurface();
-    is >> *tensorspline;
-    if (tensorspline->rational())
-      lrspline.reset(createFromTensor(tensorspline));
-    else {
-      lrspline.reset(new LR::LRSplineSurface(tensorspline));
-      std::cout << "LR-nurbs requested but input is a spline" << std::endl;
-      noNurbs = true;
-    }
-  }
-
-  // Eat white-space characters to see if there is more data to read
-  char c;
-  while (is.get(c))
-    if (!isspace(c)) {
-      is.putback(c);
-      break;
-    }
-
-  if (!is.good() && !is.eof())
-  {
-    std::cerr <<" *** ASMu2Dnurbs::read: Failure reading spline data"<< std::endl;
-    lrspline.reset();
-    return false;
-  }
-  else if (lrspline->dimension() < 2)
-  {
-    std::cerr <<" *** ASMu2Dnurbs::read: Invalid lrspline patch, dim="
-              << lrspline->dimension() << std::endl;
-    lrspline.reset();
-    return false;
-  }
-  else if (lrspline->dimension() < nsd)
-  {
-    std::cout <<"  ** ASMu2Dnurbs::read: The dimension of this lrspline patch "
-        << lrspline->dimension() <<" is less than nsd="<< nsd
-        <<".\n                   Resetting nsd to "<< lrspline->dimension()
-        <<" for this patch."<< std::endl;
-    nsd = lrspline->dimension();
-  }
-
-  geo = lrspline.get();
-  return true;
-}
-
-
-bool ASMu2Dnurbs::uniformRefine (int dir, int nInsert)
-{
-  if (!this->ASMu2D::uniformRefine(dir,nInsert))
-    return false;
-
-  if (noNurbs)
-    return true;
-
-  lrspline.reset(createFromTensor(tensorspline));
-  geo = lrspline.get();
-  return true;
-}
-
-
-bool ASMu2Dnurbs::refine (int dir, const RealArray& xi, double scale)
-{
-  if (!this->ASMu2D::refine(dir,xi,scale))
-    return false;
-
-  if (noNurbs)
-    return true;
-
-  lrspline.reset(createFromTensor(tensorspline));
-  geo = lrspline.get();
-  return true;
-}
-
-
-bool ASMu2Dnurbs::raiseOrder (int ru, int rv)
-{
-  if (!this->ASMu2D::raiseOrder(ru,rv))
-    return false;
-
-  if (noNurbs)
-    return true;
-
-  lrspline.reset(createFromTensor(tensorspline));
-  geo = lrspline.get();
-  return true;
+  return ok;
 }
 
 
@@ -238,7 +131,7 @@ bool ASMu2Dnurbs::evaluateBasis (int iel, FiniteElement& fe,
     else if (fabs(dNdu.getColumn(1).sum()) > 1.0e-10)
       std::cerr <<"dNdu not sums to zero at integration point #"
                 << fe.iGP << std::endl;
-    else if (fabs(dNdu.getColumn(1).sum()) > 1.0e-10)
+    else if (fabs(dNdu.getColumn(2).sum()) > 1.0e-10)
       std::cerr <<"dNdv not sums to zero at integration point #"
                 << fe.iGP << std::endl;
     else if (fabs(Bu.sum()) > 1.0e-10 || fabs(Bv.sum()) > 1.0e-10)
@@ -254,9 +147,9 @@ bool ASMu2Dnurbs::evaluateBasis (int iel, FiniteElement& fe,
 }
 
 
-void ASMu2Dnurbs::computeBasis(double u, double v,
-                               Go::BasisPtsSf& bas, int iel,
-                               const LR::LRSplineSurface* spline) const
+void ASMu2Dnurbs::computeBasis (double u, double v,
+                                Go::BasisPtsSf& bas, int iel,
+                                const LR::LRSplineSurface* spline) const
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel,spline);
@@ -279,9 +172,9 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 }
 
 
-void ASMu2Dnurbs::computeBasis(double u, double v,
-                               Go::BasisDerivsSf& bas, int iel,
-                               const LR::LRSplineSurface* spline) const
+void ASMu2Dnurbs::computeBasis (double u, double v,
+                                Go::BasisDerivsSf& bas, int iel,
+                                const LR::LRSplineSurface* spline) const
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel,spline);
@@ -310,8 +203,8 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 }
 
 
-void ASMu2Dnurbs::computeBasis(double u, double v,
-                               Go::BasisDerivsSf2& bas, int iel) const
+void ASMu2Dnurbs::computeBasis (double u, double v,
+                                Go::BasisDerivsSf2& bas, int iel) const
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel);
@@ -351,8 +244,8 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 }
 
 
-void ASMu2Dnurbs::computeBasis(double u, double v,
-                               Go::BasisDerivsSf3& bas, int iel) const
+void ASMu2Dnurbs::computeBasis (double u, double v,
+                                Go::BasisDerivsSf3& bas, int iel) const
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel);
@@ -421,59 +314,26 @@ void ASMu2Dnurbs::computeBasis(double u, double v,
 
 LR::LRSplineSurface* ASMu2Dnurbs::createLRfromTensor ()
 {
+  // Creates a dim+1 dimensional LRSplineSurface from a tensor NURBS surface.
+  auto&& createLRnurbs = [](const Go::SplineSurface* srf)
+  {
+    return new LR::LRSplineSurface(srf->numCoefs_u(), srf->numCoefs_v(),
+                                   srf->order_u(), srf->order_v(),
+                                   srf->basis_u().begin(),
+                                   srf->basis_v().begin(),
+                                   srf->rcoefs_begin(),
+                                   srf->dimension()+1);
+  };
+
   if (tensorspline)
   {
-    if (tensorspline->rational())
-      lrspline.reset(createFromTensor(tensorspline));
-    else
+    if ((noNurbs = !tensorspline->rational()))
       lrspline.reset(new LR::LRSplineSurface(tensorspline));
+    else
+      lrspline.reset(createLRnurbs(tensorspline));
     delete tensorspline;
     tensorspline = nullptr;
   }
 
   return lrspline.get();
-}
-
-/* This is not strictly correct as we return rational spline coefficients,
-   rather than coordinates from this method. But since these are used as
-   coefficients, and not coordinates at caller sites, we do this for simplicity.
-   We should consider introducing ASMbase::getElementCoefficients to lessen confusion.
-*/
-bool ASMu2Dnurbs::getElementCoordinates (Matrix& X, int iel) const
-{
-  if (noNurbs)
-    return this->ASMu2D::getElementCoordinates(X,iel);
-
-#ifdef INDEX_CHECK
-  if (iel < 1 || iel > lrspline->nElements())
-  {
-    std::cerr <<" *** ASMu2D::getElementCoordinates: Element index "<< iel
-              <<" out of range [1,"<< lrspline->nElements() <<"]."<< std::endl;
-    return false;
-  }
-#endif
-
-  const LR::Element* el = lrspline->getElement(iel-1);
-  X.resize(nsd,el->nBasisFunctions());
-
-  int n = 1;
-  for (LR::Basisfunction* b : el->support()) {
-    double weight = b->cp(b->dim()-1);
-#ifdef SP_DEBUG
-    if (weight <= 0.0)
-    {
-      std::cerr <<" *** ASMu2Dnurbs::getElementCoordinates: Zero weight for"
-                <<" node "<< n <<" in element "<< iel << std::endl;
-      return false;
-    }
-#endif
-    for (int j = 1; j <= nsd; j++)
-      X(j,n) = b->cp(j-1) / weight;
-    ++n;
-  }
-
-#if SP_DEBUG > 2
-  std::cout <<"\nCoordinates for element "<< iel << X << std::endl;
-#endif
-  return true;
 }
