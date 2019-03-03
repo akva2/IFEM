@@ -20,6 +20,7 @@
 #include "ASMu2Dnurbs.h"
 #include "FiniteElement.h"
 #include "CoordinateMapping.h"
+#include "Profiler.h"
 
 
 ASMu2Dnurbs::ASMu2Dnurbs (unsigned char n_s, unsigned char n_f)
@@ -54,6 +55,8 @@ bool ASMu2Dnurbs::evaluateBasis (int iel, FiniteElement& fe,
 
   const LR::Element* el = lrspline->getElement(iel);
   if (!el) return false;
+
+  PROFILE3("ASMu2Dn::evalBasis");
 
   fe.xi  = 2.0*(fe.u - el->umin()) / (el->umax() - el->umin()) - 1.0;
   fe.eta = 2.0*(fe.v - el->vmin()) / (el->vmax() - el->vmin()) - 1.0;
@@ -158,6 +161,8 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel,spline);
 
+  PROFILE3("ASMu2Dn::compBasis(0)");
+
   if (!spline)
     spline = lrspline.get();
 
@@ -182,6 +187,8 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel,spline);
+
+  PROFILE3("ASMu2Dn::compBasis(1)");
 
   if (!spline)
     spline = lrspline.get();
@@ -212,6 +219,8 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel);
+
+  PROFILE3("ASMu2Dn::compBasis(2)");
 
   Go::BasisDerivsSf2 tmp;
   lrspline->computeBasis(u,v,tmp,iel);
@@ -253,6 +262,8 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
 {
   if (noNurbs)
     return this->ASMu2D::computeBasis(u,v,bas,iel);
+
+  PROFILE3("ASMu2Dn::compBasis(3)");
 
   Go::BasisDerivsSf3 tmp;
   lrspline->computeBasis(u,v,tmp,iel);
