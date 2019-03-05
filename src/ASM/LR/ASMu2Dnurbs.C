@@ -170,8 +170,10 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
   spline->computeBasis(u,v,tmp,iel);
   int wi = spline->getBasisfunction(MNPC[iel][0])->dim()-1;
   Vector w(tmp.basisValues.size());
-  for (size_t i = 0; i < w.size(); i++)
-    w[i] = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
+  const LR::Element* el = lrspline->getElement(iel);
+  size_t i = 0;
+  for (const LR::Basisfunction* func : el->support())
+    w[i++] = func->cp(wi);
 
   double W = w.dot(tmp.basisValues);
 
@@ -197,8 +199,10 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
   spline->computeBasis(u,v,tmp,iel);
   int wi = spline->getBasisfunction(MNPC[iel][0])->dim()-1;
   Vector w(tmp.basisValues.size());
-  for (size_t i = 0; i < w.size(); i++)
-    w[i] = spline->getBasisfunction(MNPC[iel][i])->cp(wi);
+  const LR::Element* el = lrspline->getElement(iel);
+  size_t i = 0;
+  for (const LR::Basisfunction* func : el->support())
+    w[i++] = func->cp(wi);
 
   double W  = w.dot(tmp.basisValues);
   double Wx = w.dot(tmp.basisDerivs_u);
@@ -226,8 +230,10 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
   lrspline->computeBasis(u,v,tmp,iel);
   int wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
   Vector w(tmp.basisValues.size());
-  for (size_t i = 0; i < w.size(); i++)
-    w[i] = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
+  const LR::Element* el = lrspline->getElement(iel);
+  size_t i = 0;
+  for (const LR::Basisfunction* func : el->support())
+    w[i++] = func->cp(wi);
 
   double W   = w.dot(tmp.basisValues);
   double Wx  = w.dot(tmp.basisDerivs_u);
@@ -269,8 +275,10 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
   lrspline->computeBasis(u,v,tmp,iel);
   int wi = lrspline->getBasisfunction(MNPC[iel][0])->dim()-1;
   Vector w(tmp.basisValues.size());
-  for (size_t i = 0; i < w.size(); i++)
-    w[i] = lrspline->getBasisfunction(MNPC[iel][i])->cp(wi);
+  const LR::Element* el = lrspline->getElement(iel);
+  size_t i = 0;
+  for (const LR::Basisfunction* func : el->support())
+    w[i++] = func->cp(wi);
 
   double W    = w.dot(tmp.basisValues);
   double Wx   = w.dot(tmp.basisDerivs_u);
