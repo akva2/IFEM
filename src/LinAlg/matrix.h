@@ -240,21 +240,29 @@ namespace utl //! General utility classes and functions.
   {
   protected:
     //! \brief The constructor is protected to allow sub-class instances only.
-    matrixBase() { n[0] = n[1] = n[2] = n[3] = 0; }
+    matrixBase() : elem(myElem) { n[0] = n[1] = n[2] = n[3] = 0; }
+    //! \brief Constructor using an external vector for matrix element storage.
+    matrixBase(vector<T>& vec) : elem(vec) { n[0] = n[1] = n[2] = n[3] = 0; }
     //! \brief Constructor creating a matrix of dimension
-    //! \f$n_1 \times n_2 \times n_3\f \times n_4$.
+    //! \f$n_1 \times n_2 \times n_3 \times n_4\f$.
     matrixBase(size_t n_1, size_t n_2, size_t n_3 = 1, size_t n_4 = 1)
-      : elem(n_1*n_2*n_3*n_4)
+      : elem(myElem), myElem(n_1*n_2*n_3*n_4)
     {
       n[0] = n_1;
       n[1] = n_2;
       n[2] = n_3;
       n[3] = n_4;
     }
-    //! \brief Copy constructor, only copy the dimension of \a mat.
-    matrixBase(const matrixBase<T>& mat) : elem(mat.size())
+
+    //! \brief Copy constructor.
+    //! \param[in] mat The matrix to copy
+    //! \param[in] copyContent If \e false, only copy the matrix dimension
+    matrixBase(const matrixBase<T>& mat, bool copyContent = true)
+      : elem(myElem), myElem(mat.size())
     {
       memcpy(n,mat.n,sizeof(n));
+      if (copyContent)
+        elem = mat.elem;
     }
 
     //! \brief Resize the matrix to dimension
@@ -344,8 +352,11 @@ namespace utl //! General utility classes and functions.
     T sum(int inc = 1) const { return elem.sum(0,inc); }
 
   protected:
-    size_t    n[4]; //!< Dimension of the matrix
-    vector<T> elem; //!< Actual matrix elements, stored column by column
+    size_t     n[4]; //!< Dimension of the matrix
+    vector<T>& elem; //!< Actual matrix elements, stored column by column
+
+  private:
+    vector<T> myElem; //!< Internal matrix storage
   };
 
 
@@ -361,12 +372,15 @@ namespace utl //! General utility classes and functions.
   public:
     //! \brief Constructor creating an empty matrix.
     matrix() : nrow(this->n[0]), ncol(this->n[1]) {}
+    //! \brief Constructor using an external vector for matrix element storage.
+    explicit matrix(vector<T>& vec)
+      : matrixBase<T>(vec), nrow(this->n[0]), ncol(this->n[1]) {}
     //! \brief Constructor creating a matrix of dimension \f$r \times c\f$.
     matrix(size_t r, size_t c)
       : matrixBase<T>(r,c), nrow(this->n[0]), ncol(this->n[1]) {}
     //! \brief Copy constructor, optionally creates the transpose of \a mat.
     matrix(const matrix<T>& mat, bool transposed = false)
-      : matrixBase<T>(mat), nrow(this->n[0]), ncol(this->n[1])
+      : matrixBase<T>(mat,false), nrow(this->n[0]), ncol(this->n[1])
     {
       nrow = transposed ? mat.ncol : mat.nrow;
       ncol = transposed ? mat.nrow : mat.ncol;
