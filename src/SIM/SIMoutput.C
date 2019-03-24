@@ -442,8 +442,8 @@ bool SIMoutput::writeGlvV (const Vector& vec, const char* fieldName,
 
     if (!myVtf->writeVres(field,++nBlock,++geomID,this->getNoSpaceDim()))
       return false;
-    else
-      vID.push_back(nBlock);
+
+    vID.push_back(nBlock);
   }
 
   return myVtf->writeVblk(vID,fieldName,idBlock,iStep);
@@ -512,7 +512,8 @@ bool SIMoutput::writeGlvS (const Vector& psol, int iStep, int& nBlock,
   if \a pvecName is null. If the primary solution is a scalar field, the field
   value is in that case interpreted as a deformation along the global Z-axis.
   If the primary solution is a vector field and \a pvecName is not null,
-  it is written as a named vector field instead (no deformation plot).
+  it is written as a named vector field instead (no deformation plot),
+  unless \a psolComps is negative.
 
   If the primary solution is a vector field, each vector component is written
   as a scalar field in addition. If \a scalarOnly is \e true, it is only
@@ -533,7 +534,7 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
   size_t nf     = scalarOnly ? 1 : this->getNoFields();
   size_t nVcomp = nf > this->getNoSpaceDim() ? this->getNoSpaceDim() : nf;
   bool haveXsol = false;
-  if (mySol)
+  if (mySol && psolComps >= 0)
   {
     if (nf == 1)
       haveXsol = mySol->getScalarSol() != nullptr;
@@ -574,8 +575,8 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
       // Output as vector field
       if (!myVtf->writeVres(field,++nBlock,geomID,nVcomp))
         return -2;
-      else
-        vID[0].push_back(nBlock);
+
+      vID[0].push_back(nBlock);
     }
 
     if (myProblem) // Compute application-specific primary solution quantities
@@ -600,13 +601,13 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
       if (nf == 1) // Scalar solution
       {
         const RealFunc& pSol = *mySol->getScalarSol();
-        for (size_t j = 1; cit != grid->end_XYZ() && haveXsol; j++, ++cit)
+        for (size_t j = 1; cit != grid->end_XYZ(); j++, ++cit)
           field(1,j) = pSol(Vec4(*cit,time,grid->getParam(j-1)));
       }
       else
       {
         const VecFunc& pSol = *mySol->getVectorSol();
-        for (size_t j = 1; cit != grid->end_XYZ() && haveXsol; j++, ++cit)
+        for (size_t j = 1; cit != grid->end_XYZ(); j++, ++cit)
           field.fillColumn(j,pSol(Vec4(*cit,time)).ptr());
         if (mySol->getScalarSol())
         {
@@ -616,20 +617,19 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
           {
             cit = grid->begin_XYZ();
             const RealFunc& sSol = *psSol;
-            for (size_t j = 1; cit != grid->end_XYZ() && haveXsol; j++, ++cit)
+            for (size_t j = 1; cit != grid->end_XYZ(); j++, ++cit)
               field(r,j) = sSol(Vec4(*cit,time,grid->getParam(j-1)));
           }
         }
       }
 
-      if (haveXsol)
-        if (!this->writeScalarFields(field,geomID,nBlock,xID))
-          return false;
+      if (!this->writeScalarFields(field,geomID,nBlock,xID))
+        return -3;
 
       if (!myVtf->writeVres(field,++nBlock,geomID,nVcomp))
         return -2;
-      else
-        vID[1].push_back(nBlock);
+
+      vID[1].push_back(nBlock);
     }
   }
 
@@ -642,7 +642,7 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
     if (!vID[i].empty())
     {
       std::string vname(i == 1 ? "Exact " + pname : pname);
-      if (pvecName)
+      if (pvecName && psolComps >= 0)
         ok = myVtf->writeVblk(vID[i],vname.c_str(),idBlock+i,iStep);
       else
         ok = myVtf->writeDblk(vID[i],vname.c_str(),idBlock+i,iStep);
@@ -745,8 +745,8 @@ bool SIMoutput::writeGlvS2 (const Vector& psol, int iStep, int& nBlock,
       myModel[i]->filterResults(pdir,myVtf->getBlock(geomID));
       if (!myVtf->writeVres(pdir,++nBlock,geomID,this->getNoSpaceDim()))
         return -2;
-      else
-        vID[j].push_back(nBlock);
+
+      vID[j].push_back(nBlock);
     }
 
     if (nProj > 0)
@@ -998,8 +998,8 @@ bool SIMoutput::writeGlvF (const RealFunc& f, const char* fname,
 
     if (!myVtf->writeNfunc(f,time,++nBlock,++geomID))
       return false;
-    else
-      sID.push_back(nBlock);
+
+    sID.push_back(nBlock);
   }
 
   return myVtf->writeSblk(sID,fname,idBlock,iStep);
@@ -1121,7 +1121,7 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
     if (!norm->hasElementContributions(j,l))
       continue;
 
-    if (!prefix.empty() && j > 1)
+    if (j > 1 && j-2 < prefix.size())
       normName = norm->getName(j,l,prefix[j-2].c_str());
     else
       normName = norm->getName(j,l);
@@ -1677,7 +1677,7 @@ bool SIMoutput::extractNodeVec (const Vector& glbVec, Vector& locVec,
   if (patch->empty())
   {
     emptyPatches = true;
-    if (nodalCmps != 0 && nodalCmps != patch->getNoFields())
+    if (nodalCmps > 0 && nodalCmps != patch->getNoFields())
     {
       std::cerr <<" *** SIMoutput::extractNodeVec: Can't extract "<< nodalCmps
                 <<"-nodal component vectors with empty patches."<< std::endl;
@@ -1687,7 +1687,10 @@ bool SIMoutput::extractNodeVec (const Vector& glbVec, Vector& locVec,
   else if (emptyPatches)
     patch->extractNodalVec(glbVec,locVec,mySam->getMADOF());
   else
+  {
+    if (nodalCmps < 0) nodalCmps = 0;
     patch->extractNodeVec(glbVec,locVec,nodalCmps);
+  }
 
   return true;
 }
