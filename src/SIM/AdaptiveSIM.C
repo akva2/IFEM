@@ -265,6 +265,16 @@ bool AdaptiveSIM::assembleAndSolveSystem ()
 bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
                              std::streamsize precision)
 {
+  // Lambda function to write refined mesh to VTF on failure
+  auto&& failure = [this,iStep]()
+  {
+    if (opt.format >= 0)
+      if (model.writeGlvG(geoBlk,nullptr))
+        model.writeGlvStep(iStep,iStep,1);
+
+    return false;
+  };
+
   model.getProcessAdm().cout <<"\nAdaptive step "<< iStep << std::endl;
   if (iStep > 1)
   {
@@ -275,7 +285,7 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
     // options in order to override simulation options read from the input file,
     // those options will not be overridden here, so please don't do that..
     if (!model.read(inputfile) || !model.preprocess())
-      return false;
+      return failure();
     opt = oldOpt;
   }
   else if (storeMesh)
@@ -284,11 +294,11 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
 
   // Initialize the linear equation system for the current grid
   if (!model.initSystem(opt.solver,1,model.getNoRHS(),0,withRF))
-    return false;
+    return failure();
 
   // Assemble and solve the FE equation system
   if (!this->assembleAndSolveSystem())
-    return false;
+    return failure();
 
   eNorm.clear();
   gNorm.clear();
@@ -300,10 +310,10 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
     if (prj.first <= SIMoptions::NONE)
       projs[idx++].clear(); // No projection for this norm group
     else if (!model.project(projs[idx++],solution.front(),prj.first))
-      return false;
+      return failure();
     else if (idx <= projd.size() && solution.size() > 1)
       if (!model.project(projd[idx-1],solution[1],prj.first))
-        return false;
+        return failure();
 
   if (msgLevel > 1 && !projs.empty())
     model.getProcessAdm().cout << std::endl;
@@ -312,14 +322,17 @@ bool AdaptiveSIM::solveStep (const char* inputfile, int iStep, bool withRF,
   model.setMode(SIM::NORMS);
   model.setQuadratureRule(opt.nGauss[1]);
   if (!model.solutionNorms(solution.front(),projs,eNorm,gNorm))
-    return false;
+    return failure();
   if (!projd.empty() && solution.size() > 1)
     if (!model.solutionNorms(solution[1],projd,fNorm,dNorm))
-      return false;
+      return failure();
 
   model.setMode(SIM::RECOVERY);
-  return model.dumpResults(solution.front(),0.0,
-                           model.getProcessAdm().cout,true,precision);
+  if (!model.dumpResults(solution.front(),0.0,
+                         model.getProcessAdm().cout,true,precision))
+    return failure();
+
+  return true;
 }
 
 
