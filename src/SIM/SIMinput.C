@@ -1302,6 +1302,10 @@ bool SIMinput::refine (const LR::RefineData& prm,
     // fetch all boundary nodes covered (may need to pass this to other patches)
     pch = dynamic_cast<ASMunstruct*>(myModel[i]);
     IntVec bndry_nodes = pch->getBoundaryCovered(refineIndices[i]);
+    std::cout << "For patch " << i+1 <<":" << std::endl << "\tRefine indices: ";
+    for (int idx : refineIndices[i])
+      std::cout << idx << " ";
+    std::cout << std::endl << "\tBoundary nodes:";
 
     // DESIGN NOTE: It is tempting here to use patch connectivity information.
     // However, this does not account (in the general case)
@@ -1319,14 +1323,17 @@ bool SIMinput::refine (const LR::RefineData& prm,
     // for all boundary nodes, check if these appear on other patches
     for (int k : bndry_nodes)
     {
+      std::cout << "\n\t\t " << k+1;
       int globId = myModel[i]->getNodeID(k+1);
       for (size_t j = 0; j < myModel.size(); j++)
         if (j != i && (locId = myModel[j]->getNodeIndex(globId)) > 0)
         {
+          std::cout << " P" << j+1 << "N" << locId;
           conformingIndices[j].insert(locId-1);
           conformingIndices[i].insert(k);
         }
     }
+    std::cout << std::endl;
   }
 
   Vectors lsols;
