@@ -36,9 +36,12 @@ PETScVector::PETScVector(const ProcessAdm& padm, size_t n) :
   StdVector(n), adm(padm)
 {
   VecCreate(*adm.getCommunicator(),&x);
-  if (adm.isParallel())
-    VecSetSizes(x,adm.dd.getMaxEq()-adm.dd.getMinEq()+1,PETSC_DECIDE);
-  else
+  if (adm.isParallel()) {
+    if (adm.dd.isPartitioned())
+      VecSetSizes(x,PETSC_DECIDE,this->StdVector::dim());
+    else
+      VecSetSizes(x,adm.dd.getMaxEq()-adm.dd.getMinEq()+1,PETSC_DECIDE);
+  } else
     VecSetSizes(x,n,PETSC_DECIDE);
   VecSetFromOptions(x);
   LinAlgInit::increfs();
@@ -49,7 +52,10 @@ PETScVector::PETScVector(const ProcessAdm& padm, const Real* values, size_t n) :
   StdVector(values, n), adm(padm)
 {
   VecCreate(*adm.getCommunicator(),&x);
-  VecSetSizes(x,adm.dd.getMaxEq()-adm.dd.getMinEq() + 1,PETSC_DECIDE);
+  if (adm.dd.isPartitioned())
+    VecSetSizes(x,PETSC_DECIDE, n);
+  else
+    VecSetSizes(x,adm.dd.getMaxEq()-adm.dd.getMinEq() + 1,PETSC_DECIDE);
   VecSetFromOptions(x);
   this->restore(values);
   LinAlgInit::increfs();
@@ -83,7 +89,10 @@ void PETScVector::redim(size_t n)
 {
   VecDestroy(&x);
   VecCreate(*adm.getCommunicator(),&x);
-  VecSetSizes(x,adm.dd.getMaxEq()-adm.dd.getMinEq() + 1,PETSC_DECIDE);
+  if (adm.dd.isPartitioned())
+    VecSetSizes(x,PETSC_DECIDE,n);
+  else
+    VecSetSizes(x,adm.dd.getMaxEq()-adm.dd.getMinEq() + 1,PETSC_DECIDE);
   VecSetFromOptions(x);
   StdVector::redim(n);
 }
@@ -178,33 +187,39 @@ PETScMatrix::~PETScMatrix ()
 }
 
 
+#include "IFEM.h"
+
 void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
 {
-  SparseMatrix::initAssembly(sam, delayLocking);
-  SparseMatrix::preAssemble(sam, delayLocking);
+  if (!adm.dd.isPartitioned()) {
+    SparseMatrix::initAssembly(sam, delayLocking);
+    SparseMatrix::preAssemble(sam, delayLocking);
+  } else
+    this->resize(sam.neq,sam.neq);
 
   const SAMpatchPETSc* samp = dynamic_cast<const SAMpatchPETSc*>(&sam);
   if (!samp)
     return;
 
   // Get number of local equations in linear system
-  const PetscInt neq  = adm.dd.getMaxEq()- adm.dd.getMinEq() + 1;
-
-  // Set correct number of rows and columns for matrix.
-  MatSetSizes(pA,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
+  const PetscInt neq  = this->SparseMatrix::dim(1);
+  if (adm.dd.isPartitioned())
+    // Set correct number of rows and columns for matrix.
+    MatSetSizes(pA,PETSC_DECIDE,PETSC_DECIDE,neq,neq);
+  else
+    // Set correct number of rows and columns for matrix.
+    MatSetSizes(pA,neq,neq,PETSC_DETERMINE,PETSC_DETERMINE);
 
   // Allocate sparsity pattern
   std::vector<std::set<int>> dofc;
-  sam.getDofCouplings(dofc);
+  if (!adm.dd.isPartitioned())
+    sam.getDofCouplings(dofc);
 
   if (matvec.empty()) {
-    // Set correct number of rows and columns for matrix.
-    MatSetSizes(pA,neq,neq,PETSC_DECIDE,PETSC_DECIDE);
-
     MatSetFromOptions(pA);
 
     // Allocate sparsity pattern
-    if (adm.isParallel()) {
+    if (adm.isParallel() && !adm.dd.isPartitioned()) {
       int ifirst = adm.dd.getMinEq();
       int ilast  = adm.dd.getMaxEq();
       PetscIntVec d_nnz(neq, 0);
@@ -235,6 +250,39 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
 
       MatMPIAIJSetPreallocation(pA,PETSC_DEFAULT,d_nnz.data(),
                                    PETSC_DEFAULT,o_nnz.data());
+    } else if (adm.dd.isPartitioned()) {
+      // Setup sparsity pattern for global matrix
+      PetscInt nleq = PETSC_DECIDE, last = neq;
+      PetscSplitOwnership(*adm.getCommunicator(), &nleq, &last);
+      PetscInt first = 0;
+      MPI_Exscan(&nleq, &first, 1, MPI_INT, MPI_SUM, *adm.getCommunicator());
+      last = first + nleq;
+      SparseMatrix* lA = new SparseMatrix(neq,neq);
+      for (int elm = 0; elm < sam.getNoElms(); ++elm) {
+        IntVec meen;
+        sam.getElmEqns(meen,elm+1);
+        for (int i : meen)
+          if (i > 0 && i >= first+1 && i <= last)
+            for (int j : meen)
+              if (j > 0)
+                (*lA)(i,j) = 0.0;
+      }
+      IntVec iA, jA;
+      SparseMatrix::calcCSR(iA, jA, first, last, lA->getValues());
+      delete lA;
+      MatMPIAIJSetPreallocationCSR(pA, iA.data(), jA.data(), nullptr);
+
+      // Setup sparsity pattern for local matrix
+      for (int elm : adm.dd.getElms()) {
+        IntVec meen;
+        sam.getElmEqns(meen,elm+1);
+        for (int i : meen)
+          if (i > 0)
+            for (int j : meen)
+              if (j > 0)
+                (*this)(i,j) = 0.0;
+      }
+      this->optimiseSLU();
     } else {
       PetscIntVec Nnz;
       for (const auto& it : dofc)

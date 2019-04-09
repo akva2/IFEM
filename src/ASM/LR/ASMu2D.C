@@ -1569,6 +1569,11 @@ bool ASMu2D::integrate (Integrand& integrand, int lIndex,
   int iel = 0;
   for (const LR::Element* el : lrspline->getAllElements())
   {
+    if (partitioned && !glInt.threadSafe() &&
+        std::find(threadGroups[0][0].begin(),
+          threadGroups[0][0].end(), iel) == threadGroups[0][0].end())
+      continue;
+
     fe.iel = MLGE[iel++];
 #ifdef SP_DEBUG
     if (dbgElm < 0 && iel != -dbgElm)
@@ -2680,4 +2685,19 @@ void ASMu2D::getBoundaryElms (int lIndex, int orient, IntVec& elms) const
                                               });
   for (const LR::Element* elem : elements)
     elms.push_back(this->getElmID(elem->getId()+1)-1);
+}
+
+
+void ASMu2D::generateThreadGroupsFromElms(const std::vector<int>& filter)
+{
+  std::vector<int> onPatch;
+  for (const int& f : filter)
+    if (this->getElmIndex(f+1) > 0)
+      onPatch.push_back(this->getElmIndex(f+1)-1);
+
+  threadGroups.oneGroup(onPatch.size());
+  for (size_t i = 0; i < onPatch.size(); ++i)
+    threadGroups[0][0][i] = onPatch[i];
+
+  partitioned = true;
 }

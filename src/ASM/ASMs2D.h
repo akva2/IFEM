@@ -588,6 +588,9 @@ protected:
   void generateThreadGroups(size_t strip1, size_t strip2,
                             bool silence, bool ignoreGlobalLM);
 
+  //! \brief Generate element groups from an element list.
+  virtual void generateThreadGroupsFromElms(const std::vector<int>& filter);
+
 public:
   //! \brief Auxilliary function for computation of basis function indices.
   static void scatterInd(int n1, int n2, int p1, int p2,

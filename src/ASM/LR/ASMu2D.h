@@ -598,6 +598,9 @@ protected:
   void generateThreadGroups(const Integrand& integrand, bool silence,
                             bool ignoreGlobalLM);
 
+  //! \brief Generate element groups from an element list.
+  virtual void generateThreadGroupsFromElms(const std::vector<int>& filter);
+
   //! \brief Remap element wise errors to basis functions.
   //! \param     errors The remapped errors
   //! \param[in] origErr The element wise errors on the geometry mesh

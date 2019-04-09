@@ -3359,3 +3359,34 @@ void ASMs3D::getBoundaryElms (int lIndex, int, IntVec& elms) const
         elms.push_back(this->getElmID(j + i*N1m + (lIndex-5) * +(N1m*N2m*(N3m-1))+1)-1);
   }
 }
+
+
+void ASMs3D::generateThreadGroupsFromElms(const std::vector<int>& filter)
+{
+  std::vector<int> onPatch;
+  for (const int& f : filter)
+    if (this->getElmIndex(f+1) > 0)
+      onPatch.push_back(this->getElmIndex(f+1)-1);
+
+  auto&& filterGroup = [onPatch](ThreadGroups& group)
+                                {
+                                  ThreadGroups filtered;
+                                  for (size_t i = 0; i < 2; ++i) {
+                                    filtered[i].resize(group[i].size());
+                                    for (size_t j = 0; j < group[i].size(); ++j)
+                                      for (size_t k = 0; k < group[i][j].size(); ++k)
+                                        if (std::find(onPatch.begin(),
+                                              onPatch.end(), group[i][j][k]) != onPatch.end())
+                                          filtered[i][j].push_back(group[i][j][k]);
+                                  }
+                                  group = filtered;
+                                };
+
+
+  filterGroup(threadGroupsVol);
+
+  for (auto& group : threadGroupsFace)
+    filterGroup(group.second);
+
+  partitioned = true;
+}

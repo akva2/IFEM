@@ -2311,6 +2311,11 @@ bool ASMs2D::integrate (Integrand& integrand, int lIndex,
       fe.iel = abs(MLGE[doXelms+iel-1]);
       if (fe.iel < 1) continue; // zero-area element
 
+      if (partitioned &&
+          std::find(threadGroups[0][0].begin(),
+                    threadGroups[0][0].end(), iel-1) == threadGroups[0][0].end())
+        continue;
+
 #ifdef SP_DEBUG
       if (dbgElm < 0 && iel != -dbgElm)
         continue; // Skipping all elements, except for -dbgElm
@@ -3106,4 +3111,19 @@ void ASMs2D::getBoundaryElms (int lIndex, int, IntVec& elms) const
     for (int i = 0; i < N1m; ++i)
       elms.push_back(this->getElmID(i + (lIndex-3)*N1m*(N2m-1)+1) - 1);
   }
+}
+
+
+void ASMs2D::generateThreadGroupsFromElms(const std::vector<int>& filter)
+{
+  std::vector<int> onPatch;
+  for (const int& f : filter)
+    if (this->getElmIndex(f+1) > 0)
+      onPatch.push_back(this->getElmIndex(f+1)-1);
+
+  threadGroups.oneGroup(onPatch.size());
+  for (size_t i = 0; i < onPatch.size(); ++i)
+    threadGroups[0][0][i] = onPatch[i];
+
+  partitioned = true;
 }

@@ -174,6 +174,12 @@ public:
   //! \brief Returns number of matrix blocks.
   size_t getNoBlocks() const { return blocks.size()-1; }
 
+  //! \brief Returns whether a graph based partition is used.
+  bool isPartitioned() const { return partitioned; }
+
+  //! \brief Returns elements in partition.
+  const std::vector<int>& getElms() const { return myElms; }
+
 private:
   //! \brief Calculates a 1D partitioning with a given overlap.
   //! \param[in] nel1 Number of knot-spans in first parameter direction.
@@ -242,6 +248,9 @@ private:
   //!          with matching coordinates have the same global node ID.
   bool sanityCheckCorners(const SIMbase& sim);
 
+  //! \brief Setup domain decomposition based on graph partitioning.
+  bool graphPartition(const ProcessAdm& adm, const SIMbase& sim);
+
   std::map<int,int> patchOwner; //!< Process that owns a particular patch
 
   //! \brief Struct with information per matrix block.
@@ -258,12 +267,14 @@ private:
 
   std::vector<int> MLGN; //!< Process-local-to-global node numbers
   std::vector<BlockInfo> blocks; //!< Equation mappings for all matrix blocks.
+  std::vector<int> myElms; //!< Elements in partition
   int minDof = 0; //!< First DOF we own
   int maxDof = 0; //!< Last DOF we own
   int minNode = 0; //!< First node we own
   int maxNode = 0; //!< Last node we own
 
   const SAMpatch* sam = nullptr; //!< The assembly handler the DD is constructed for.
+  bool partitioned = false; //!< \e true if graph based decomposition
 };
 
 #endif

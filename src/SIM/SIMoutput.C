@@ -286,17 +286,28 @@ bool SIMoutput::writeGlvG (int& nBlock, const char* inpFile, bool doClear)
     // Open a new VTF-file
     char* vtfName = new char[strlen(inpFile)+10];
     strtok(strcpy(vtfName,inpFile),".");
-    if (nProc > 1)
-      sprintf(vtfName+strlen(vtfName),"_p%04d%s",myPid,ext);
-    else
-      strcat(vtfName,ext);
+    if (adm.dd.isPartitioned()) {
+      if (adm.getProcId() == 0) {
+        strcat(vtfName,ext);
+        IFEM::cout <<"\nWriting VTF-file "<< vtfName << std::endl;
+        myVtf = new VTF(vtfName,opt.format);
+      }
+    } else {
+      if (nProc > 1)
+        sprintf(vtfName+strlen(vtfName),"_p%04d%s",myPid,ext);
+      else
+        strcat(vtfName,ext);
 
-    IFEM::cout <<"\nWriting VTF-file "<< vtfName << std::endl;
-    myVtf = new VTF(vtfName,opt.format);
+      IFEM::cout <<"\nWriting VTF-file "<< vtfName << std::endl;
+      myVtf = new VTF(vtfName,opt.format);
+    }
     delete[] vtfName;
   }
   else if (doClear)
     myVtf->clearGeometryBlocks();
+
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
 
   ElementBlock* lvb;
   char pname[32];
@@ -336,6 +347,9 @@ bool SIMoutput::writeGlvG (int& nBlock, const char* inpFile, bool doClear)
 
 bool SIMoutput::writeGlvBC (int& nBlock, int iStep) const
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (!myVtf) return false;
 
   Matrix field;
@@ -402,6 +416,9 @@ bool SIMoutput::writeGlvBC (int& nBlock, int iStep) const
 
 bool SIMoutput::writeGlvT (int iStep, int& geoBlk, int& nBlock) const
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (myProblem->hasTractionValues())
   {
     if (msgLevel > 1)
@@ -416,6 +433,9 @@ bool SIMoutput::writeGlvT (int iStep, int& geoBlk, int& nBlock) const
 bool SIMoutput::writeGlvV (const Vector& vec, const char* fieldName,
                            int iStep, int& nBlock, int idBlock, int ncmp) const
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (vec.empty())
     return true;
   else if (!myVtf)
@@ -458,6 +478,9 @@ bool SIMoutput::writeGlvV (const Vector& vec, const char* fieldName,
 bool SIMoutput::writeGlvS (const Vector& scl, const char* fieldName,
                            int iStep, int& nBlock, int idBlock) const
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (scl.empty())
     return true;
   else if (!myVtf)
@@ -495,6 +518,9 @@ bool SIMoutput::writeGlvS (const Vector& psol, int iStep, int& nBlock,
                            double time, const char* pvecName,
                            int idBlock, int psolComps)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   idBlock = this->writeGlvS1(psol,iStep,nBlock,time,
                              pvecName,idBlock,psolComps);
   if (idBlock < 0)
@@ -525,6 +551,9 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
                            double time, const char* pvecName,
                            int idBlock, int psolComps, bool scalarOnly)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (psol.empty())
     return 0;
   else if (!myVtf)
@@ -679,6 +708,9 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
 bool SIMoutput::writeGlvS2 (const Vector& psol, int iStep, int& nBlock,
                             double time, int idBlock, int psolComps)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (psol.empty())
     return true; // No primary solution
   else if (!myVtf || !myProblem)
@@ -859,6 +891,9 @@ bool SIMoutput::writeGlvP (const Vector& ssol, int iStep, int& nBlock,
                            int idBlock, const char* prefix,
                            std::vector<PointValue>* maxVal)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (ssol.empty())
     return true;
   else if (!myVtf)
@@ -983,6 +1018,9 @@ bool SIMoutput::evalProjSolution (const Vector& ssol,
 bool SIMoutput::writeGlvF (const RealFunc& f, const char* fname,
                            int iStep, int& nBlock, int idBlock, double time)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (!myVtf) return false;
 
   IntVec sID;
@@ -1008,6 +1046,9 @@ bool SIMoutput::writeGlvF (const RealFunc& f, const char* fname,
 
 bool SIMoutput::writeGlvStep (int iStep, double value, int itype)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   myVtf->writeGeometryBlocks(iStep);
 
   if (itype == 0)
@@ -1019,6 +1060,9 @@ bool SIMoutput::writeGlvStep (int iStep, double value, int itype)
 
 bool SIMoutput::writeGlvM (const Mode& mode, bool freq, int& nBlock)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (mode.eigVec.empty())
     return true;
   else if (!myVtf)
@@ -1066,6 +1110,9 @@ bool SIMoutput::writeGlvM (const Mode& mode, bool freq, int& nBlock)
 bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
                            const std::vector<std::string>& prefix, int idBlock)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (norms.empty())
     return true;
   else if (!myVtf)
@@ -1138,6 +1185,9 @@ bool SIMoutput::writeGlvN (const Matrix& norms, int iStep, int& nBlock,
 bool SIMoutput::writeGlvE (const Vector& vec, int iStep, int& nBlock,
                            const char* name)
 {
+  if (adm.dd.isPartitioned() && adm.getProcId() != 0)
+    return true;
+
   if (!myVtf)
     return false;
 
