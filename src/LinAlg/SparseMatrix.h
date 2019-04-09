@@ -206,6 +206,15 @@ public:
   //! \param[out] rc Reciprocal condition number of the LHS-matrix (optional)
   virtual bool solve(SystemVector& B, bool newLHS = true, Real* rc = nullptr);
 
+  //! \brief Calculate compressed-sparse-row arrays from element map.
+  //! \param[out] IA Start index of each row in JA
+  //! \param[out] JA Column indices
+  //! \param[in] first First equation in array
+  //! \param[in] last Last equation in array
+  //! \param[in] elem Matrix element indices
+  static void calcCSR(IntVec& IA, IntVec& JA,
+                      size_t first, size_t last, const ValueMap& elem);
+
 protected:
   //! \brief Converts the matrix to an optimized row-oriented format.
   //! \details The optimized format is suitable for the SAMG equation solver.
