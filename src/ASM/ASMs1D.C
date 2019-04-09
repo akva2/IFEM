@@ -1876,3 +1876,12 @@ void ASMs1D::getElmConnectivities (IntMat& neigh) const
       neigh[idx][1] = MLGE[i+1]-1;
   }
 }
+
+
+void ASMs1D::getBoundaryElms (int lIndex, int, IntVec& elms) const
+{
+  if (lIndex == 1)
+   elms = {0};
+  else
+   elms = {int(nel)-1};
+}
