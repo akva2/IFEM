@@ -18,6 +18,7 @@
 #include "ASMunstruct.h"
 #include "LinSolParams.h"
 #include "ProcessAdm.h"
+#include "Profiler.h"
 #include "SAMpatch.h"
 #include "SIMbase.h"
 #include "Utilities.h"
@@ -25,6 +26,10 @@
 #include "IFEM.h"
 #include <functional>
 #include <numeric>
+
+#ifdef HAS_ZOLTAN
+#include <zoltan.h>
+#endif
 
 
 DomainDecomposition::
@@ -168,6 +173,95 @@ OrientIterator::OrientIterator(const ASMbase* pch, int orient, int lIdx)
       std::iota(nodes.rbegin(), nodes.rend(), 0);
   }
 }
+
+
+#ifdef HAS_ZOLTAN
+static int getNumElements(void* mesh, int* err)
+{
+  *err = ZOLTAN_OK;
+  IntMat& neigh = *static_cast<IntMat*>(mesh);
+  return neigh.size();
+}
+
+
+static void getElementList(void* mesh, int numGlobalEntries,
+                           int, ZOLTAN_ID_PTR gids,
+                           ZOLTAN_ID_PTR lids, int,
+                           float*, int* err)
+{
+  IntMat& neigh = *static_cast<IntMat*>(mesh);
+  std::iota(gids, gids+neigh.size(), 0);
+  std::iota(lids, lids+neigh.size(), 0);
+  *err = ZOLTAN_OK;
+}
+
+
+static void getNumEdges(void* mesh, int sizeGID, int sizeLID,
+                        int numCells, ZOLTAN_ID_PTR globalID,
+                        ZOLTAN_ID_PTR localID, int* numEdges, int* err)
+{
+  IntMat& neigh = *static_cast<IntMat*>(mesh);
+  int* ne = numEdges;
+  for (const std::vector<int>& n : neigh)
+    *ne++ = std::accumulate(n.begin(), n.end(), 0,
+                            [](const int& a, const int& b)
+                            {
+                              return b != -1 ? a + 1 : a;
+                            });
+
+  *err = ZOLTAN_OK;
+}
+
+
+static void getEdges(void* mesh, int sizeGID, int sizeLID, int numCells,
+                     ZOLTAN_ID_PTR globalID, ZOLTAN_ID_PTR localID,
+                     int* numEdges, ZOLTAN_ID_PTR nborGID, int* nborProc,
+                     int wgtDim, float* egts, int* err)
+{
+  IntMat& neigh = *static_cast<IntMat*>(mesh);
+
+  memset(nborProc, 0, numCells*sizeof(int));
+  for (const std::vector<int>& elm : neigh)
+    for (int n : elm)
+      if (n != -1)
+        *nborGID++ = n;
+
+  *err = ZOLTAN_OK;
+}
+
+
+static int getNullElements(void*, int* err)
+{
+  *err = ZOLTAN_OK;
+  return 0;
+}
+
+
+static void getNullList(void*, int,
+                        int, ZOLTAN_ID_PTR,
+                        ZOLTAN_ID_PTR, int,
+                        float*, int* err)
+{
+  *err = ZOLTAN_OK;
+}
+
+
+static void getNumNullEdges(void*, int, int, int,
+                            ZOLTAN_ID_PTR, ZOLTAN_ID_PTR,
+                            int*, int* err)
+{
+  *err = ZOLTAN_OK;
+}
+
+
+static void getNullEdges(void*, int, int, int,
+                         ZOLTAN_ID_PTR, ZOLTAN_ID_PTR,
+                         int*, ZOLTAN_ID_PTR, int*,
+                         int, float*, int* err)
+{
+  *err = ZOLTAN_OK;
+}
+#endif
 
 
 std::vector<std::set<int>> DomainDecomposition::getSubdomains(int nx, int ny, int nz,
@@ -813,6 +907,9 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 
 int DomainDecomposition::getGlobalEq(int lEq, size_t idx) const
 {
+  if (partitioned)
+    return lEq;
+
   if (lEq < 1 || idx >= blocks.size())
     return 0;
 
@@ -932,6 +1029,9 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
   }
 #endif
 #endif
+
+  if (ghostConnections.empty() && adm.getNoProcs() > 1)
+    return this->graphPartition(adm, sim);
 
   sam = dynamic_cast<const SAMpatch*>(sim.getSAM());
 
@@ -1071,4 +1171,91 @@ int DomainDecomposition::getPatchOwner(size_t p) const
     return -1;
 
   return it->second;
+}
+
+
+bool DomainDecomposition::graphPartition(const ProcessAdm& adm, const SIMbase& sim)
+{
+  PROFILE("Mesh partition");
+#ifdef HAS_ZOLTAN
+  static bool inited = false;
+  if (!inited)
+  {
+    float ver;
+    Zoltan_Initialize(0, nullptr, &ver);
+    inited = true;
+  }
+  struct Zoltan_Struct* zz = Zoltan_Create(MPI_COMM_WORLD);
+  IntMat neigh;
+  if (adm.getProcId() == 0) {
+    neigh = sim.getElmConnectivities();
+    Zoltan_Set_Num_Obj_Fn(zz, getNumElements, &neigh);
+    Zoltan_Set_Obj_List_Fn(zz, getElementList, &neigh);
+    Zoltan_Set_Num_Edges_Multi_Fn(zz, getNumEdges, &neigh);
+    Zoltan_Set_Edge_List_Multi_Fn(zz, getEdges, &neigh);
+  } else {
+    Zoltan_Set_Num_Obj_Fn(zz, getNullElements, nullptr);
+    Zoltan_Set_Obj_List_Fn(zz, getNullList, nullptr);
+    Zoltan_Set_Num_Edges_Multi_Fn(zz, getNumNullEdges, nullptr);
+    Zoltan_Set_Edge_List_Multi_Fn(zz, getNullEdges, nullptr);
+  }
+
+  Zoltan_Set_Param(zz, "DEBUG_LEVEL", "0");
+  Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
+  Zoltan_Set_Param(zz, "GRAPH_PACKAGE", "Scotch");
+  Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
+  Zoltan_Set_Param(zz, "NUM_GID_ENTRIES", "1");
+  Zoltan_Set_Param(zz, "NUM_LID_ENTRIES", "1");
+  Zoltan_Set_Param(zz, "RETURN_LISTS", "ALL");
+  Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
+  Zoltan_Set_Param(zz,"EDGE_WEIGHT_DIM","0");
+  Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
+  Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
+  int changes, numGidEntries, numLidEntries, numImport, numExport;
+  ZOLTAN_ID_PTR importGlobalGids, importLocalGids, exportGlobalGids, exportLocalGids;
+  int* importProcs, *importToPart, *exportProcs, *exportToPart;
+  Zoltan_LB_Partition(zz, /* input (all remaining fields are output) */
+                           &changes,        /* 1 if partitioning was changed, 0 otherwise */
+                           &numGidEntries,  /* Number of integers used for a global ID */
+                           &numLidEntries,  /* Number of integers used for a local ID */
+                           &numImport,      /* Number of vertices to be sent to me */
+                           &importGlobalGids,  /* Global IDs of vertices to be sent to me */
+                           &importLocalGids,   /* Local IDs of vertices to be sent to me */
+                           &importProcs,    /* Process rank for source of each incoming vertex */
+                           &importToPart,   /* New partition for each incoming vertex */
+                           &numExport,      /* Number of vertices I must send to other processes*/
+                           &exportGlobalGids,  /* Global IDs of the vertices I must send */
+                           &exportLocalGids,   /* Local IDs of the vertices I must send */
+                           &exportProcs,    /* Process to which I send each of the vertices */
+                           &exportToPart);  /* Partition to which each vertex will belong */
+
+  if (sim.getProcessAdm().getProcId() == 0) {
+    std::vector<std::vector<int>> toExp(adm.getNoProcs());
+    std::vector<bool> offProc(sim.getNoElms(), false);
+    for (int i = 0; i < numExport; ++i) {
+      int gid = exportGlobalGids[i];
+      offProc[gid] = true;
+    }
+    myElms.reserve(numExport);
+    for (size_t i = 0; i < sim.getNoElms(); ++i)
+      if (!offProc[i])
+        myElms.push_back(i);
+  }
+  else {
+    myElms.resize(numImport);
+    std::copy(importGlobalGids, importGlobalGids+numImport, myElms.begin());
+  }
+  Zoltan_LB_Free_Part(&importGlobalGids, &importLocalGids, &importProcs, &importToPart);
+  Zoltan_LB_Free_Part(&exportGlobalGids, &exportLocalGids, &exportProcs, &exportToPart);
+  Zoltan_Destroy(&zz);
+#else
+  std::cerr << "*** DomainDecompositon::graphPartition: Compiled without Zoltan support. No partitioning available." << std::endl;
+  return false;
+#endif
+
+  if (!myElms.empty())
+    IFEM::cout << "Graph partitioning: " << myElms.size() << " elements in partition." << std::endl;
+
+  partitioned = !myElms.empty();
+  return partitioned;
 }

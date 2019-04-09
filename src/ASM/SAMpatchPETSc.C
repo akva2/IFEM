@@ -54,6 +54,9 @@ Real SAMpatchPETSc::dot (const Vector& x, const Vector& y, char dofType) const
 {
 #ifdef HAVE_MPI
   if (adm.isParallel()) {
+    if (adm.dd.isPartitioned())
+      return this->SAMpatch::dot(x,y,dofType);
+
     DofIS& dis = this->getIS(dofType);
 
     Vec lx, ly;
@@ -94,7 +97,7 @@ Real SAMpatchPETSc::dot (const Vector& x, const Vector& y, char dofType) const
 Real SAMpatchPETSc::normL2 (const Vector& x, char dofType) const
 {
 #ifdef HAVE_MPI
-  if (adm.isParallel()) {
+  if (adm.isParallel() && !adm.dd.isPartitioned()) {
     DofIS& dis = this->getIS(dofType);
 
     Vec lx;
@@ -130,7 +133,7 @@ Real SAMpatchPETSc::normInf (const Vector& x, size_t& comp, char dofType) const
 {
   Real max = this->SAM::normInf(x,comp,dofType);
 #ifdef HAVE_MPI
-  if (adm.isParallel())
+  if (adm.isParallel() && !adm.dd.isPartitioned())
     max = adm.allReduce(max, MPI_MAX);
   // TODO: comp (node index of the max value) is not necessarily correct here
 #endif
@@ -187,17 +190,20 @@ bool SAMpatchPETSc::expandSolution(const SystemVector& solVec,
 
 #ifdef HAVE_MPI
   if (adm.isParallel()) {
-    if (!glob2LocEq) {
+    if (!glob2LocEq && !adm.dd.isPartitioned()) {
       IntVec mlgeq(adm.dd.getMLGEQ());
       for (int& ieq : mlgeq) --ieq;
       ISCreateGeneral(*adm.getCommunicator(),adm.dd.getMLGEQ().size(),
                       mlgeq.data(), PETSC_COPY_VALUES, &glob2LocEq);
     }
 
-    Vec solution;
-    VecCreateSeq(PETSC_COMM_SELF, Bptr->dim(), &solution);
-    VecScatter ctx;
-    VecScatterCreate(Bptr->getVector(), glob2LocEq, solution, nullptr, &ctx);
+   VecScatter ctx;
+   Vec solution;
+   if (adm.dd.isPartitioned())
+      VecScatterCreateToAll(Bptr->getVector(), &ctx, &solution);
+    else
+      VecScatterCreate(Bptr->getVector(), glob2LocEq, solution, nullptr, &ctx);
+
     VecScatterBegin(ctx, Bptr->getVector(), solution, INSERT_VALUES, SCATTER_FORWARD);
     VecScatterEnd(ctx, Bptr->getVector(),solution,INSERT_VALUES,SCATTER_FORWARD);
     VecScatterDestroy(&ctx);

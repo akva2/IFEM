@@ -425,6 +425,8 @@ public:
   virtual void generateThreadGroups(const Integrand&, bool, bool) {}
   //! \brief Generates element groups for multi-threading of boundary integrals.
   virtual void generateThreadGroups(char, bool, bool) {}
+  //! \brief Generate element-groups for multi-threading based on a partition.
+  virtual void generateThreadGroupsFromElms(const std::vector<int>&) {}
 
 
   // Methods for integration of finite element quantities.
@@ -822,6 +824,7 @@ protected:
   unsigned char nLag;   //!< Number of Lagrange multipliers per node
   size_t        nel;    //!< Number of regular elements in this patch
   size_t        nnod;   //!< Number of regular nodes in this patch
+  bool          partitioned = false; //!< If true model is partitioned
 
   const IntVec& MLGE; //!< Matrix of Local to Global Element numbers
   const IntVec& MLGN; //!< Matrix of Local to Global Node numbers
