@@ -243,6 +243,18 @@ if(IFEM_USE_CEREAL)
   endif()
 endif()
 
+# Zoltan
+if(IFEM_USE_ZOLTAN)
+  find_package(ZOLTAN)
+  if(ZOLTAN_FOUND)
+    list(APPEND IFEM_DEPLIBS ${ZOLTAN_LIBRARIES})
+    list(APPEND IFEM_DEPINCLUDES ${ZOLTAN_INCLUDE_DIRS})
+    list(APPEND IFEM_DEFINITIONS -DHAS_ZOLTAN=1)
+    message(STATUS "Zoltan support enabled")
+    set(CEREAL_FOUND 1)
+  endif()
+endif()
+
 # Portability issues
 include(CheckFunctionExists)
 set(CMAKE_REQUIRED_DEFINITIONS)
