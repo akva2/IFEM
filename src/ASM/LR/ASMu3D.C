@@ -2268,3 +2268,30 @@ void ASMu3D::extendRefinementDomain (IntSet& refineIndices,
         }
   }
 }
+
+
+void ASMu3D::getElmConnectivities (IntMat& neigh) const
+{
+  const LR::LRSplineVolume* lr = this->getBasis(1);
+  for (const LR::Element* m : lr->getAllElements()) {
+    double epsilon = 1e-6;
+    double umid = (m->umin() + m->umax()) / 2.0;
+    double vmid = (m->vmin() + m->vmax()) / 2.0;
+    double wmid = (m->wmin() + m->wmax()) / 2.0;
+    std::vector<RealArray> ua = {{m->umin() - epsilon, vmid, wmid},
+                                 {m->umax() + epsilon, vmid, wmid},
+                                 {umid, m->vmin() - epsilon, wmid},
+                                 {umid, m->vmax() + epsilon, wmid},
+                                 {umid, vmid, m->wmin() - epsilon},
+                                 {umid, vmid, m->wmax() + epsilon}};
+    size_t idx = 0;
+    int gEl = MLGE[m->getId()]-1;
+    neigh[gEl].resize(6, -1);
+    for (const RealArray& u : ua) {
+      int el = lr->getElementContaining(u);
+      if (el > -1)
+        neigh[gEl][idx] = MLGE[el]-1;
+      ++idx;
+    }
+  }
+}

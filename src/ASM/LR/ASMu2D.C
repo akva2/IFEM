@@ -2635,3 +2635,27 @@ void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf3& bas,
 
   lrspline->computeBasis(u,v,bas,iel);
 }
+
+
+void ASMu2D::getElmConnectivities (IntMat& neigh) const
+{
+  const LR::LRSplineSurface* lr = this->getBasis(1);
+  for (const LR::Element* m : lr->getAllElements()) {
+    double epsilon = 1e-6;
+    double umid = (m->umin() + m->umax()) / 2.0;
+    double vmid = (m->vmin() + m->vmax()) / 2.0;
+    std::vector<RealArray> ua = {{m->umin() - epsilon, vmid},
+                                 {m->umax() + epsilon, vmid},
+                                 {umid, m->vmin() - epsilon},
+                                 {umid, m->vmax() + epsilon}};
+    size_t idx = 0;
+    int gEl = MLGE[m->getId()]-1;
+    neigh[gEl].resize(4, -1);
+    for (const RealArray& u : ua) {
+      int el = lr->getElementContaining(u);
+      if (el > -1)
+        neigh[gEl][idx] = MLGE[el]-1;
+      ++idx;
+    }
+  }
+}

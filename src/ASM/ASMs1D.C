@@ -1863,3 +1863,16 @@ Fields* ASMs1D::getProjectedFields (const Vector& coefs, size_t) const
             << std::endl;
   return nullptr;
 }
+
+
+void ASMs1D::getElmConnectivities (IntMat& neigh) const
+{
+  for (size_t i = 0; i < nel; ++i) {
+    size_t idx = MLGE[i]-1;
+    neigh[idx].resize(2, -1);
+    if (i > 0)
+      neigh[idx][0] = MLGE[i-1]-1;
+    if (i+1 < nel)
+      neigh[idx][1] = MLGE[i+1]-1;
+  }
+}
