@@ -3090,3 +3090,20 @@ void ASMs2D::getElmConnectivities (NeighArray& neigh) const
       neigh[idx][3] = idx+N1;
   }
 }
+
+
+void ASMs2D::getBoundaryElms (int lIndex, int, IntVec& elms) const
+{
+  int N1m, N2m, dummy;
+  this->getNoStructElms(N1m,N2m,dummy);
+  elms.clear();
+  if (lIndex == 1 || lIndex == 2) {
+    elms.reserve(N2m);
+    for (int i = 0; i < N2m; ++i)
+      elms.push_back(this->getElmID(i*N1m + (lIndex-1)*(N1m-1)+1)-1);
+  } else {
+    elms.reserve(N2m);
+    for (int i = 0; i < N1m; ++i)
+      elms.push_back(this->getElmID(i + (lIndex-3)*N1m*(N2m-1)+1) - 1);
+  }
+}

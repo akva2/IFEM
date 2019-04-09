@@ -2633,9 +2633,8 @@ void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf3& bas,
 }
 
 
-void ASMu2D::getElmConnectivities (NeighArray& neighs) const
+void ASMu2D::getElmConnectivities (NeighArray& neigh) const
 {
-  std::vector<std::set<int>> neigh(this->getNoElms(true));
   const LR::LRSplineSurface* lr = this->getBasis(1);
   for (const LR::Element* m : lr->getAllElements()) {
     double epsilon = 1e-6;
@@ -2645,16 +2644,40 @@ void ASMu2D::getElmConnectivities (NeighArray& neighs) const
                                  {m->umax() + epsilon, vmid},
                                  {umid, m->vmin() - epsilon},
                                  {umid, m->vmax() + epsilon}};
+    size_t idx = 0;
+    int gEl = this->getElmID(m->getId()+1)-1;
+    neigh[gEl].resize(4,-1);
     for (const RealArray& u : ua) {
-      int el1 = lr->getElementContaining(u);
-      if (el1 > -1)
-        neigh[m->getId()].insert(el1);
+      int el = lr->getElementContaining(u);
+      if (el > -1)
+        neigh[gEl][idx] = this->getElmID(el+1)-1;
+      ++idx;
     }
   }
+}
 
-  for (size_t i = 0; i < neigh.size(); ++i) {
-    int idx = this->getElmID(i);
-    neighs[idx].resize(neigh[i].size());
-    std::copy(neigh[i].begin(), neigh[i].end(), neighs[idx].begin());
+
+void ASMu2D::getBoundaryElms (int lIndex, int orient, IntVec& elms) const
+{
+  LR::parameterEdge edge;
+  switch(lIndex)
+  {
+  case 1: edge = LR::WEST;  break;
+  case 2: edge = LR::EAST;  break;
+  case 3: edge = LR::SOUTH; break;
+  case 4: edge = LR::NORTH; break;
+  default:edge = LR::NONE;
   }
+
+  std::vector<LR::Element*> elements;
+  this->getBasis(1)->getEdgeElements(elements, edge);
+  int idx = lIndex < 3 ? 1 : 0;
+  std::sort(elements.begin(), elements.end(), [orient,idx](const LR::Element* a, const LR::Element* b)
+                                              {
+                                                double am = a->midpoint()[idx];
+                                                double bm = b->midpoint()[idx];
+                                                return orient == 1 ? bm < am : am < bm;
+                                              });
+  for (const LR::Element* elem : elements)
+    elms.push_back(this->getElmID(elem->getId()+1)-1);
 }

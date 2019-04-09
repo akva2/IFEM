@@ -1874,3 +1874,12 @@ void ASMs1D::getElmConnectivities (NeighArray& neigh) const
       neigh[i].push_back(i+1);
   }
 }
+
+
+void ASMs1D::getBoundaryElms (int lIndex, int, IntVec& elms) const
+{
+  if (lIndex == 1)
+   elms = {0};
+  else
+   elms = {int(nel)-1};
+}
