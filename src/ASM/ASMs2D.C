@@ -3075,16 +3075,16 @@ size_t ASMs2D::getNoProjectionNodes () const
 }
 
 
-void ASMs2D::getElmConnectivities (NeighArray& neigh) const
+void ASMs2D::getElmConnectivities (IntMat& neigh) const
 {
   int N1, N2, dummy;
   this->getNoStructElms(N1, N2, dummy);
   for (int i = 0; i < static_cast<int>(this->getNoElms(true)); ++i) {
-    int idx = this->getElmID(i+1)-1;
+    int idx = MLGE[i+1]-1;
     if (idx == -1)
       continue;
 
-    neigh[idx].resize(4,-1);
+    neigh[idx].resize(4, -1);
     if (i % N1 > 0)
       neigh[idx][0] = idx-1;
     if (i % N1 != N1-1)
