@@ -1546,6 +1546,8 @@ std::ostream& operator<< (std::ostream& os, const Go::BasisDerivsSf& bder)
 #endif
 
 
+#include "IFEM.h"
+
 bool ASMs2D::integrate (Integrand& integrand,
 			GlobalIntegral& glInt,
 			const TimeDomain& time)
@@ -1640,6 +1642,7 @@ bool ASMs2D::integrate (Integrand& integrand,
       for (size_t i = 0; i < groups[g][t].size() && ok; i++)
       {
         int iel = groups[g][t][i];
+//IFEM::cout << "integrating " << iel << std::endl;
         fe.iel = MLGE[iel];
         if (fe.iel < 1) continue; // zero-area element
 
@@ -2316,7 +2319,7 @@ bool ASMs2D::integrate (Integrand& integrand, int lIndex,
       fe.iel = abs(MLGE[doXelms+iel-1]);
       if (fe.iel < 1) continue; // zero-area element
 
-      if (partitioned &&
+      if (partitioned && !glInt.threadSafe() &&
           std::find(threadGroups[0][0].begin(),
                     threadGroups[0][0].end(), iel-1) == threadGroups[0][0].end())
         continue;

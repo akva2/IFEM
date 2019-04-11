@@ -2272,9 +2272,19 @@ void ASMu3D::extendRefinementDomain (IntSet& refineIndices,
 
 void ASMu3D::getElmConnectivities (IntMat& neigh) const
 {
-  const LR::LRSplineVolume* lr = this->getBasis(1);
-  for (const LR::Element* m : lr->getAllElements()) {
-    double epsilon = 1e-6;
+  LR::LRSplineVolume* lr = const_cast<LR::LRSplineVolume*>(this->getBasis(1));
+  for (const LR::Element* m : lr->getAllElements())
+    for (auto edge : {LR::WEST, LR::EAST, LR::SOUTH, LR::NORTH, LR::BOTTOM, LR::TOP}) {
+      std::set<int> elms = lr->getElementNeighbours(m->getId(), edge);
+std::cout << "sahaiz ist " << elms.size() << " " << m->getId() << " " << edge << std::endl;
+      int gEl = MLGE[m->getId()]-1;
+      for (int elm : elms) {
+        neigh[gEl].push_back(MLGE[elm]-1);
+std::cout << gEl << " <- " << MLGE[elm]-1 << std::endl;
+}
+    }
+
+/*    double epsilon = 1e-6;
     double umid = (m->umin() + m->umax()) / 2.0;
     double vmid = (m->vmin() + m->vmax()) / 2.0;
     double wmid = (m->wmin() + m->wmax()) / 2.0;
@@ -2293,7 +2303,7 @@ void ASMu3D::getElmConnectivities (IntMat& neigh) const
         neigh[gEl][idx] = MLGE[el]-1;
       ++idx;
     }
-  }
+  }*/
 }
 
 

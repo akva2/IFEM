@@ -1376,11 +1376,6 @@ void SparseMatrix::calcCSR(IntVec& IA, IntVec& JA,
   IA[0] = 0;
   size_t cur_row = 1, ix = 0;
   for (auto it = elem.begin(); it != elem.end(); ++it, ix++) {
-    if (it->first.first >= static_cast<size_t>(last)) {
-      ix--;
-      continue;
-    }
-
     JA[ix] = it->first.second-1;
     while (it->first.first-first > cur_row)
       IA[cur_row++] = ix;

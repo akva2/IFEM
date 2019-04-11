@@ -201,8 +201,10 @@ bool SAMpatchPETSc::expandSolution(const SystemVector& solVec,
    Vec solution;
    if (adm.dd.isPartitioned())
       VecScatterCreateToAll(Bptr->getVector(), &ctx, &solution);
-    else
+    else {
+      VecCreateSeq(PETSC_COMM_SELF, Bptr->dim(), &solution);
       VecScatterCreate(Bptr->getVector(), glob2LocEq, solution, nullptr, &ctx);
+   }
 
     VecScatterBegin(ctx, Bptr->getVector(), solution, INSERT_VALUES, SCATTER_FORWARD);
     VecScatterEnd(ctx, Bptr->getVector(),solution,INSERT_VALUES,SCATTER_FORWARD);

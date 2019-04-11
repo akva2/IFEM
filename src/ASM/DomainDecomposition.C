@@ -220,11 +220,14 @@ static void getEdges(void* mesh, int sizeGID, int sizeLID, int numCells,
 {
   IntMat& neigh = *static_cast<IntMat*>(mesh);
 
-  memset(nborProc, 0, numCells*sizeof(int));
-  for (const std::vector<int>& elm : neigh)
+  for (const std::vector<int>& elm : neigh) {
     for (int n : elm)
-      if (n != -1)
+      if (n != -1) {
+IFEM::cout << "elm " << n << std::endl;
         *nborGID++ = n;
+        *nborProc++ = 0;
+      }
+  }
 
   *err = ZOLTAN_OK;
 }
@@ -1236,6 +1239,7 @@ bool DomainDecomposition::graphPartition(const ProcessAdm& adm, const SIMbase& s
       int gid = exportGlobalGids[i];
       offProc[gid] = true;
     }
+    myElms.clear();
     myElms.reserve(numExport);
     for (size_t i = 0; i < sim.getNoElms(); ++i)
       if (!offProc[i])
@@ -1255,6 +1259,9 @@ bool DomainDecomposition::graphPartition(const ProcessAdm& adm, const SIMbase& s
 
   if (!myElms.empty())
     IFEM::cout << "Graph partitioning: " << myElms.size() << " elements in partition." << std::endl;
+  for (int elm : myElms)
+    IFEM::cout << elm << " ";
+  IFEM::cout << std::endl;
 
   partitioned = !myElms.empty();
   return partitioned;

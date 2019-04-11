@@ -1488,7 +1488,10 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   }
 
   // Add problem-dependent external norm contributions
+  IFEM::cout << "nnorms " << gNorm.size() << std::endl;
+  IFEM::cout << gNorm[0][1] << std::endl;
   norm->addBoundaryTerms(gNorm,this->externalEnergy(psol,time));
+  IFEM::cout << gNorm[0][1] << std::endl;
 
   delete norm;
 
