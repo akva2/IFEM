@@ -24,6 +24,7 @@
 #include "Utilities.h"
 #include "Vec3.h"
 #include "IFEM.h"
+#include <fstream>
 #include <functional>
 #include <numeric>
 
@@ -223,7 +224,6 @@ static void getEdges(void* mesh, int sizeGID, int sizeLID, int numCells,
   for (const std::vector<int>& elm : neigh) {
     for (int n : elm)
       if (n != -1) {
-IFEM::cout << "elm " << n << std::endl;
         *nborGID++ = n;
         *nborProc++ = 0;
       }
@@ -1249,6 +1249,18 @@ bool DomainDecomposition::graphPartition(const ProcessAdm& adm, const SIMbase& s
     myElms.resize(numImport);
     std::copy(importGlobalGids, importGlobalGids+numImport, myElms.begin());
   }
+
+  if (!savePart.empty()) {
+    MPI_File f;
+    MPI_File_open(*adm.getCommunicator(),savePart.c_str(),
+                  MPI_MODE_WRONLY|MPI_MODE_CREATE,MPI_INFO_NULL,&f);
+    MPI_File_seek_shared(f, adm.getNoProcs()*sizeof(int), MPI_SEEK_SET);
+    MPI_File_write_ordered(f, myElms.data(), myElms.size(), MPI_INT, MPI_STATUS_IGNORE);
+    MPI_File_seek_shared(f, 0, MPI_SEEK_SET);
+    int size = myElms.size();
+    MPI_File_write_ordered(f, &size, 1, MPI_INT, MPI_STATUS_IGNORE);
+    MPI_File_close(&f);
+  }
   Zoltan_LB_Free_Part(&importGlobalGids, &importLocalGids, &importProcs, &importToPart);
   Zoltan_LB_Free_Part(&exportGlobalGids, &exportLocalGids, &exportProcs, &exportToPart);
   Zoltan_Destroy(&zz);
@@ -1259,9 +1271,6 @@ bool DomainDecomposition::graphPartition(const ProcessAdm& adm, const SIMbase& s
 
   if (!myElms.empty())
     IFEM::cout << "Graph partitioning: " << myElms.size() << " elements in partition." << std::endl;
-  for (int elm : myElms)
-    IFEM::cout << elm << " ";
-  IFEM::cout << std::endl;
 
   partitioned = !myElms.empty();
   return partitioned;

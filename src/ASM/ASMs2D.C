@@ -3129,8 +3129,21 @@ void ASMs2D::generateThreadGroupsFromElms(const std::vector<int>& elms)
     if (this->getElmIndex(elm+1) > 0)
       onPatch.push_back(this->getElmIndex(elm+1) - 1);
 
-  threadGroups.oneGroup(onPatch.size());
-  threadGroups.applyMap(onPatch);
+  auto&& filterGroup = [onPatch](ThreadGroups& group)
+                                {
+                                  ThreadGroups filtered;
+                                  for (size_t i = 0; i < 2; ++i) {
+                                    filtered[i].resize(group[i].size());
+                                    for (size_t j = 0; j < group[i].size(); ++j)
+                                      for (size_t k = 0; k < group[i][j].size(); ++k)
+                                        if (std::find(onPatch.begin(),
+                                              onPatch.end(), group[i][j][k]) != onPatch.end())
+                                          filtered[i][j].push_back(group[i][j][k]);
+                                  }
+                                  group = filtered;
+                                };
+
+  filterGroup(threadGroups);
 
   partitioned = true;
 }

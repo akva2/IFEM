@@ -78,6 +78,7 @@ bool ASMu2D::read (std::istream& is)
     // Probably a SplineSurface, so we'll read that and convert
     tensorspline = new Go::SplineSurface();
     is >> *tensorspline;
+std::cout << *tensorspline << std::endl;
     lrspline.reset(new LR::LRSplineSurface(tensorspline));
   }
 

@@ -1209,7 +1209,11 @@ bool ASMu3D::integrate (Integrand& integrand, int lIndex,
     if (dbgElm < 0 && iEl+1 != -dbgElm)
       continue; // Skipping all elements, except for -dbgElm
 #endif
-
+    if (partitioned && !glInt.threadSafe() &&
+        std::find(threadGroups[0][0].begin(),
+                  threadGroups[0][0].end(), iEl) == threadGroups[0][0].end())
+     continue;
+ 
     FiniteElement fe;
     fe.iel = MLGE[iEl];
     fe.p   = lrspline->order(0) - 1;
@@ -2272,38 +2276,15 @@ void ASMu3D::extendRefinementDomain (IntSet& refineIndices,
 
 void ASMu3D::getElmConnectivities (IntMat& neigh) const
 {
-  LR::LRSplineVolume* lr = const_cast<LR::LRSplineVolume*>(this->getBasis(1));
-  for (const LR::Element* m : lr->getAllElements())
+  const LR::LRSplineVolume* lr = this->getBasis(1);
+  for (const LR::Element* m : lr->getAllElements()) {
+    int gEl = MLGE[m->getId()]-1;
     for (auto edge : {LR::WEST, LR::EAST, LR::SOUTH, LR::NORTH, LR::BOTTOM, LR::TOP}) {
       std::set<int> elms = lr->getElementNeighbours(m->getId(), edge);
-std::cout << "sahaiz ist " << elms.size() << " " << m->getId() << " " << edge << std::endl;
-      int gEl = MLGE[m->getId()]-1;
-      for (int elm : elms) {
+      for (int elm : elms)
         neigh[gEl].push_back(MLGE[elm]-1);
-std::cout << gEl << " <- " << MLGE[elm]-1 << std::endl;
-}
     }
-
-/*    double epsilon = 1e-6;
-    double umid = (m->umin() + m->umax()) / 2.0;
-    double vmid = (m->vmin() + m->vmax()) / 2.0;
-    double wmid = (m->wmin() + m->wmax()) / 2.0;
-    std::vector<RealArray> ua = {{m->umin() - epsilon, vmid, wmid},
-                                 {m->umax() + epsilon, vmid, wmid},
-                                 {umid, m->vmin() - epsilon, wmid},
-                                 {umid, m->vmax() + epsilon, wmid},
-                                 {umid, vmid, m->wmin() - epsilon},
-                                 {umid, vmid, m->wmax() + epsilon}};
-    size_t idx = 0;
-    int gEl = MLGE[m->getId()]-1;
-    neigh[gEl].resize(6, -1);
-    for (const RealArray& u : ua) {
-      int el = lr->getElementContaining(u);
-      if (el > -1)
-        neigh[gEl][idx] = MLGE[el]-1;
-      ++idx;
-    }
-  }*/
+  }
 }
 
 
@@ -2347,4 +2328,33 @@ void ASMu3D::getBoundaryElms (int lIndex, int orient, IntVec& elms) const
 
   for (const LR::Element* elem : elements)
     elms.push_back(MLGE[elem->getId()]-1);
+}
+
+
+void ASMu3D::generateThreadGroupsFromElms(const std::vector<int>& elms)
+{
+  std::vector<int> onPatch;
+  onPatch.reserve(elms.size());
+  for (int elm : elms)
+    if (this->getElmIndex(elm+1) > 0)
+      onPatch.push_back(this->getElmIndex(elm+1)-1);
+
+  auto&& filterGroup = [onPatch](ThreadGroups& group)
+                                {
+                                  ThreadGroups filtered;
+                                  for (size_t i = 0; i < 2; ++i) {
+                                    filtered[i].resize(group[i].size());
+                                    for (size_t j = 0; j < group[i].size(); ++j)
+                                      for (size_t k = 0; k < group[i][j].size(); ++k)
+                                        if (std::find(onPatch.begin(),
+                                              onPatch.end(), group[i][j][k]) != onPatch.end())
+                                          filtered[i][j].push_back(group[i][j][k]);
+                                  }
+                                  group = filtered;
+                                };
+
+
+  filterGroup(threadGroups);
+
+  partitioned = true;
 }

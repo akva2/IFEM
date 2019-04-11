@@ -32,6 +32,9 @@ void PETScSolParams::setupPC(PC& pc,
 {
   // Set preconditioner
   std::string prec = params.getBlock(block).getStringValue("pc");
+  if (prec == "default")
+    prec = adm.getNoProcs() > 1 ? "asm" : "ilu";
+
   if (prec == "compositedir") {
     Mat mat;
     Mat Pmat;
