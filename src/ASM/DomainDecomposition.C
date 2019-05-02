@@ -939,11 +939,54 @@ bool DomainDecomposition::calcGlobalEqNumbersPart(const ProcessAdm& adm,
     adm.send(blocks[0].maxEq, adm.getProcId()+1);
   }
 
-  MPI_Bcast(&blocks[0].MLGEQ[0], blocks[0].MLGEQ.size(), MPI_INT,
+  MPI_Bcast(blocks[0].MLGEQ.data(), blocks[0].MLGEQ.size(), MPI_INT,
             adm.getNoProcs()-1, *adm.getCommunicator());
 
   for (size_t i = 0; i < blocks[0].MLGEQ.size(); ++i)
     blocks[0].G2LEQ[blocks[0].MLGEQ[i]] = i+1;
+
+  // loop over block equations and remove eqs we do not own.
+  for (size_t blk = 1; blk < blocks.size(); ++blk) {
+    std::set<int> realLocEqs;
+    blocks[blk].nGlbEqs = blocks[blk].localEqs.size();
+    IFEM::cout << "Equations in block " << blk << ": ";
+    for (int eq : blocks[blk].localEqs)
+     IFEM::cout << eq << " ";
+    IFEM::cout << std::endl;
+    for (int eq : blocks[blk].localEqs) {
+      IFEM::cout << "leq " << eq << " " << blocks[0].MLGEQ[eq-1] << std::endl;
+      int gEq = blocks[0].MLGEQ[eq-1];
+      if (gEq >= blocks[0].minEq && gEq <= blocks[0].maxEq)
+        realLocEqs.insert(gEq);
+    }
+    blocks[blk].localEqs = realLocEqs;
+
+    int size = realLocEqs.size();
+    MPI_Exscan(&size, &blocks[blk].minEq, 1, MPI_INT,
+               MPI_SUM, *adm.getCommunicator());
+    blocks[blk].MLGEQ.resize(size);
+    ++blocks[blk].minEq;
+    for (int i = 0; i < size; ++i)
+      blocks[blk].MLGEQ[i] = blocks[blk].minEq+i;
+    blocks[blk].nGlbEqs = blocks[blk].maxEq = blocks[blk].minEq+size-1;
+
+IFEM::cout << "nGlbEq is " << blocks[blk].nGlbEqs << std::endl;
+    MPI_Bcast(&blocks[blk].nGlbEqs, 1, MPI_INT,
+              adm.getNoProcs()-1, *adm.getCommunicator());
+
+    IFEM::cout << "Equations in block " << blk << ": ";
+    for (int eq : blocks[blk].localEqs)
+     IFEM::cout << eq << " ";
+    IFEM::cout << std::endl;
+
+    size_t idx = 1;
+    for (auto& it : blocks[blk].localEqs)
+      blocks[blk].G2LEQ[it] = idx++;
+
+    for (size_t i = 0; i < blocks[blk].MLGEQ.size(); ++i)
+      IFEM::cout << i+1 << " -> " << blocks[blk].MLGEQ[i] << std::endl;
+  }
+
 #endif
 
   return true;
@@ -1156,6 +1199,16 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
     }
   }
 
+/*  IFEM::cout << "Block 1: ";
+  for (int eq : blocks[1].localEqs)
+    IFEM::cout << eq << " ";
+  IFEM::cout << std::endl;
+  IFEM::cout << "Block 2: ";
+  for (int eq : blocks[2].localEqs)
+    IFEM::cout << eq << " ";
+  IFEM::cout << std::endl;
+*/
+
   // Establish global equation numbers for all blocks.
   if (!myElms.empty()) {
     if (!calcGlobalEqNumbersPart(adm, sim))
@@ -1185,8 +1238,10 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
   IFEM::cout << "\n >>> Domain decomposition summary <<<"
              << "\nNumber of domains     " << adm.getNoProcs();
   IFEM::cout << "\nNumber of equations   " << nEqs[0] << " (" << getMaxEq()-getMinEq()+1 << " on process)";
-  for (size_t i = 1; i < blocks.size(); ++i)
+  for (size_t i = 1; i < blocks.size(); ++i) {
+IFEM::cout << getMaxEq(i) << " " << getMinEq(i) << std::endl;
     IFEM::cout << "\n  Block " << i << "             " << nEqs[i]  << " (" << getMaxEq(i)-getMinEq(i)+1 << " on process)";
+}
   IFEM::cout << std::endl;
 
   // sanity check the established domain decomposition

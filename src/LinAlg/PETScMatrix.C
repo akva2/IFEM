@@ -178,6 +178,8 @@ PETScMatrix::~PETScMatrix ()
 }
 
 
+#include "IFEM.h"
+
 void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
 {
   if (!adm.dd.isPartitioned()) {
@@ -296,78 +298,8 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
     const DomainDecomposition& dd = adm.dd;
     size_t blocks = solParams.getNoBlocks();
 
-    // map from sparse matrix indices to block matrix indices
-    glb2Blk.resize(A.size());
-    std::vector<std::array<int,2>> eq2b(sam.getNoEquations(), {{-1, 0}}); // cache
-    for (size_t j = 0; j < cols(); ++j) {
-      for (int i = IA[j]; i < IA[j+1]; ++i) {
-        int iblk = -1;
-        int jblk = -1;
-        if (eq2b[JA[i]][0] != -1) {
-          iblk = eq2b[JA[i]][0];
-          glb2Blk[i][1] = eq2b[JA[i]][1];
-        } if (eq2b[j][0] != -1) {
-          jblk = eq2b[j][0];
-          glb2Blk[i][2] = eq2b[j][1];
-        }
-
-        for (size_t b = 0; b < blocks && (iblk == -1 || jblk == -1); ++b) {
-          std::map<int,int>::const_iterator it;
-          if (iblk == -1 && (it = dd.getG2LEQ(b+1).find(JA[i]+1)) != dd.getG2LEQ(b+1).end()) {
-            iblk = b;
-            eq2b[JA[i]][0] = b;
-            eq2b[JA[i]][1] = glb2Blk[i][1] = it->second-1;
-          }
-
-          if (jblk == -1 && (it = dd.getG2LEQ(b+1).find(j+1)) != dd.getG2LEQ(b+1).end()) {
-            jblk = b;
-            eq2b[j][0] = b;
-            eq2b[j][1] = glb2Blk[i][2] = it->second-1;
-          }
-        }
-        if (iblk == -1 || jblk == -1) {
-          std::cerr << "Failed to map (" << JA[i]+1 << ", " << j+1 << ") " << std::endl;
-          std::cerr << "iblk: " << iblk << ", jblk: " << jblk << std::endl;
-          assert(0);
-        }
-        glb2Blk[i][0] = iblk*solParams.getNoBlocks() + jblk;
-      }
-    }
-
-    if (adm.isParallel()) {
-      std::vector<PetscIntVec> d_nnz(blocks*blocks);
-      std::vector<IntVec> o_nnz_g(blocks*blocks);
+    if (adm.dd.isPartitioned()) {
       size_t k = 0;
-      for (size_t i = 0; i < blocks; ++i)
-        for (size_t j = 0; j < blocks; ++j, ++k) {
-          d_nnz[k].resize(dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1);
-          o_nnz_g[k].resize(dd.getNoGlbEqs(i+1));
-        }
-
-      for (int i = 0; i < sam.getNoEquations(); ++i) {
-        int blk = eq2b[i][0]+1;
-        int row = eq2b[i][1]+1;
-        int grow = dd.getGlobalEq(row, blk);
-
-        if (grow >= dd.getMinEq(blk) && grow <= dd.getMaxEq(blk)) {
-          for (const auto& it : dofc[i]) {
-            int cblk = eq2b[it-1][0]+1;
-            int col = eq2b[it-1][1]+1;
-            int gcol = dd.getGlobalEq(col, cblk);
-            if (gcol >= dd.getMinEq(cblk) && gcol <= dd.getMaxEq(cblk))
-              ++d_nnz[(blk-1)*blocks + cblk-1][grow-dd.getMinEq(blk)];
-            else
-              ++o_nnz_g[(blk-1)*blocks + cblk-1][grow-1];
-          }
-        } else {
-          for (const auto& it : dofc[i]) {
-            int cblk = eq2b[it-1][0]+1;
-            ++o_nnz_g[(blk-1)*blocks+cblk-1][grow-1];
-          }
-        }
-      }
-
-      k = 0;
       for (size_t i = 0; i < blocks; ++i) {
         for (size_t j = 0; j < blocks; ++j, ++k) {
           int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
@@ -375,34 +307,200 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
           MatSetSizes(matvec[k], nrows, ncols,
                       PETSC_DETERMINE, PETSC_DETERMINE);
           MatSetFromOptions(matvec[k]);
-          adm.allReduceAsSum(o_nnz_g[k]);
-          PetscIntVec o_nnz(o_nnz_g[k].begin()+dd.getMinEq(i+1)-1, o_nnz_g[k].begin()+dd.getMaxEq(i+1));
+          SparseMatrix* lA = new SparseMatrix(nrows, dd.getNoGlbEqs(j+1));
+          for (int elm : adm.dd.getElms()) {
+            IntVec meen;
+            sam.getElmEqns(meen,elm+1);
+            for (int n : meen) {
+              const auto& eqs = adm.dd.getBlockEqs(i);
+              auto nit = eqs.find(n);
+              if (n > 0 && nit != eqs.end()) {
+                int grow = adm.dd.getGlobalEq(std::distance(eqs.begin(), nit), i+1);
+                if (grow >= adm.dd.getMinEq(i+1) && grow <= adm.dd.getMaxEq(i+1))
+                  for (int m : meen) {
+                    const auto& eqs = adm.dd.getBlockEqs(j);
+                    auto mit = eqs.find(m);
+                    if (m > 0 && mit != eqs.end()) {
+                      int gcol = adm.dd.getGlobalEq(std::distance(eqs.begin(), mit)+1, j+1);
+                      (*lA)(grow-adm.dd.getMinEq(i+1)+1,gcol) = 0.0;
+                    }
+                  }
+              }
+            }
+          }
 
-          // TODO: multiplier cause big overallocation due to no multiplicity handling
-          for (auto& it : o_nnz)
-            it = std::min(it, dd.getNoGlbEqs(j+1));
-
-          MatMPIAIJSetPreallocation(matvec[k],PETSC_DEFAULT,d_nnz[k].data(),
-                                              PETSC_DEFAULT,o_nnz.data());
+          IntVec iA, jA;
+          SparseMatrix::calcCSR(iA, jA, neq, lA->getValues());
+          delete lA;
+          MatMPIAIJSetPreallocationCSR(matvec[k], iA.data(), jA.data(), nullptr);
           MatSetUp(matvec[k]);
+        }
+
+        // Setup sparsity pattern for local matrix
+        for (int elm : adm.dd.getElms()) {
+          IntVec meen;
+          sam.getElmEqns(meen,elm+1);
+          for (int i : meen)
+            if (i > 0)
+              for (int j : meen)
+                if (j > 0)
+                  (*this)(i,j) = 0.0;
+        }
+        this->optimiseSLU();
+
+        glb2Blk.resize(A.size());
+        std::vector<std::array<int,2>> eq2b(glb2Blk.size(), {{-1, 0}}); // cache
+        for (size_t j = 0; j < this->cols(); ++j) {
+          for (int i = IA[j]; i < IA[j+1]; ++i) {
+            int iblk = -1;
+            int jblk = -1;
+            if (eq2b[JA[i]][0] != -1) {
+              iblk = eq2b[JA[i]][0];
+              glb2Blk[i][1] = eq2b[JA[i]][1];
+            }
+            if (eq2b[j][0] != -1) {
+              jblk = eq2b[j][0];
+              glb2Blk[i][2] = eq2b[j][1];
+            }
+
+            for (size_t b = 0; b < blocks && (iblk == -1 || jblk == -1); ++b) {
+              std::map<int,int>::const_iterator it;
+              if (iblk == -1 && (it = dd.getG2LEQ(b+1).find(JA[i]+1)) != dd.getG2LEQ(b+1).end()) {
+                iblk = b;
+                eq2b[JA[i]][0] = b;
+                eq2b[JA[i]][1] = glb2Blk[i][1] = it->second-1;
+                IFEM::cout << "map " << JA[i] << " to " << b << std::endl;
+              }
+
+              if (jblk == -1 && (it = dd.getG2LEQ(b+1).find(j+1)) != dd.getG2LEQ(b+1).end()) {
+                jblk = b;
+                eq2b[j][0] = b;
+                eq2b[j][1] = glb2Blk[i][2] = it->second-1;
+                IFEM::cout << "map " << j << " to " << b << std::endl;
+              }
+            }
+            if (iblk == -1 || jblk == -1) {
+              std::cerr << "Failed to map (" << JA[i]+1 << ", " << j+1 << ") " << std::endl;
+              std::cerr << "iblk: " << iblk << ", jblk: " << jblk << std::endl;
+              assert(0);
+            }
+            glb2Blk[i][0] = iblk*solParams.getNoBlocks() + jblk;
+          }
         }
       }
     } else {
-      auto it = matvec.begin();
-      for (size_t i = 0; i < blocks; ++i) {
-        for (size_t j = 0; j < blocks; ++j, ++it) {
-          std::vector<PetscInt> nnz;
-          nnz.reserve(dd.getBlockEqs(i).size());
-          for (const auto& it2 : dd.getBlockEqs(i))
-            nnz.push_back(std::min(dofc[it2-1].size(), dd.getBlockEqs(j).size()));
+      // map from sparse matrix indices to block matrix indices
+      glb2Blk.resize(A.size());
+      std::vector<std::array<int,2>> eq2b(sam.getNoEquations(), {{-1, 0}}); // cache
+      for (size_t j = 0; j < this->cols(); ++j) {
+        for (int i = IA[j]; i < IA[j+1]; ++i) {
+          int iblk = -1;
+          int jblk = -1;
+          if (eq2b[JA[i]][0] != -1) {
+            iblk = eq2b[JA[i]][0];
+            glb2Blk[i][1] = eq2b[JA[i]][1];
+          } if (eq2b[j][0] != -1) {
+            jblk = eq2b[j][0];
+            glb2Blk[i][2] = eq2b[j][1];
+          }
 
-          int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
-          int ncols = dd.getMaxEq(j+1)-dd.getMinEq(j+1)+1;
-          MatSetSizes(*it, nrows, ncols,
-                      PETSC_DETERMINE, PETSC_DETERMINE);
+          for (size_t b = 0; b < blocks && (iblk == -1 || jblk == -1); ++b) {
+            std::map<int,int>::const_iterator it;
+            if (iblk == -1 && (it = dd.getG2LEQ(b+1).find(JA[i]+1)) != dd.getG2LEQ(b+1).end()) {
+              iblk = b;
+              eq2b[JA[i]][0] = b;
+              eq2b[JA[i]][1] = glb2Blk[i][1] = it->second-1;
+              IFEM::cout << "map " << JA[i] << " to " << b << std::endl;
+            }
 
-          MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz.data());
-          MatSetUp(*it);
+            if (jblk == -1 && (it = dd.getG2LEQ(b+1).find(j+1)) != dd.getG2LEQ(b+1).end()) {
+              jblk = b;
+              eq2b[j][0] = b;
+              eq2b[j][1] = glb2Blk[i][2] = it->second-1;
+              IFEM::cout << "map " << j << " to " << b << std::endl;
+            }
+          }
+          if (iblk == -1 || jblk == -1) {
+            std::cerr << "Failed to map (" << JA[i]+1 << ", " << j+1 << ") " << std::endl;
+            std::cerr << "iblk: " << iblk << ", jblk: " << jblk << std::endl;
+            assert(0);
+          }
+          glb2Blk[i][0] = iblk*solParams.getNoBlocks() + jblk;
+        }
+      }
+
+      if (adm.isParallel()) {
+        std::vector<PetscIntVec> d_nnz(blocks*blocks);
+        std::vector<IntVec> o_nnz_g(blocks*blocks);
+        size_t k = 0;
+        for (size_t i = 0; i < blocks; ++i)
+          for (size_t j = 0; j < blocks; ++j, ++k) {
+            d_nnz[k].resize(dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1);
+            o_nnz_g[k].resize(dd.getNoGlbEqs(i+1));
+          }
+
+        for (int i = 0; i < sam.getNoEquations(); ++i) {
+          int blk = eq2b[i][0]+1;
+          int row = eq2b[i][1]+1;
+          int grow = dd.getGlobalEq(row, blk);
+
+          if (grow >= dd.getMinEq(blk) && grow <= dd.getMaxEq(blk)) {
+            for (const auto& it : dofc[i]) {
+              int cblk = eq2b[it-1][0]+1;
+              int col = eq2b[it-1][1]+1;
+              int gcol = dd.getGlobalEq(col, cblk);
+              if (gcol >= dd.getMinEq(cblk) && gcol <= dd.getMaxEq(cblk))
+                ++d_nnz[(blk-1)*blocks + cblk-1][grow-dd.getMinEq(blk)];
+              else
+                ++o_nnz_g[(blk-1)*blocks + cblk-1][grow-1];
+            }
+          } else {
+            for (const auto& it : dofc[i]) {
+              int cblk = eq2b[it-1][0]+1;
+              ++o_nnz_g[(blk-1)*blocks+cblk-1][grow-1];
+            }
+          }
+        }
+
+        k = 0;
+        for (size_t i = 0; i < blocks; ++i) {
+          for (size_t j = 0; j < blocks; ++j, ++k) {
+  IFEM::cout << dd.getMaxEq(i+1) << " " << dd.getMinEq(i+1) << std::endl;
+            int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
+            int ncols = dd.getMaxEq(j+1)-dd.getMinEq(j+1)+1;
+            MatSetSizes(matvec[k], nrows, ncols,
+                PETSC_DETERMINE, PETSC_DETERMINE);
+            MatSetFromOptions(matvec[k]);
+            if (!adm.dd.isPartitioned())
+              adm.allReduceAsSum(o_nnz_g[k]);
+            PetscIntVec o_nnz(o_nnz_g[k].begin()+dd.getMinEq(i+1)-1, o_nnz_g[k].begin()+dd.getMaxEq(i+1));
+
+            // TODO: multiplier cause big overallocation due to no multiplicity handling
+            for (auto& it : o_nnz)
+              it = std::min(it, dd.getNoGlbEqs(j+1));
+
+            MatMPIAIJSetPreallocation(matvec[k],PETSC_DEFAULT,d_nnz[k].data(),
+                PETSC_DEFAULT,o_nnz.data());
+            MatSetUp(matvec[k]);
+          }
+        }
+      } else {
+        auto it = matvec.begin();
+        for (size_t i = 0; i < blocks; ++i) {
+          for (size_t j = 0; j < blocks; ++j, ++it) {
+            std::vector<PetscInt> nnz;
+            nnz.reserve(dd.getBlockEqs(i).size());
+            for (const auto& it2 : dd.getBlockEqs(i))
+              nnz.push_back(std::min(dofc[it2-1].size(), dd.getBlockEqs(j).size()));
+
+            int nrows = dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1;
+            int ncols = dd.getMaxEq(j+1)-dd.getMinEq(j+1)+1;
+            MatSetSizes(*it, nrows, ncols,
+                PETSC_DETERMINE, PETSC_DETERMINE);
+
+            MatSeqAIJSetPreallocation(*it, PETSC_DEFAULT, nnz.data());
+            MatSetUp(*it);
+          }
         }
       }
     }
@@ -413,10 +511,17 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
       std::vector<int> blockEq;
       blockEq.reserve(dd.getMaxEq(i+1)-dd.getMinEq(i+1)+1);
       for (auto& it : dd.getBlockEqs(i)) {
-        int eq = dd.getGlobalEq(it);
-        if (eq >= dd.getMinEq())
-          blockEq.push_back(eq-1);
+        int geq = dd.getGlobalEq(it);
+        if (geq >= dd.getMinEq() && geq <= dd.getMaxEq()) {
+  IFEM::cout << it << " -> " << geq << std::endl;
+          blockEq.push_back(geq);
+        }
       }
+      std::sort(blockEq.begin(), blockEq.end());
+IFEM::cout << "size " << blockEq.size() << std::endl;
+for (auto& it : blockEq)
+IFEM::cout << it << " ";
+IFEM::cout << std::endl;
 
       ISCreateGeneral(*adm.getCommunicator(),blockEq.size(),
                       blockEq.data(),PETSC_COPY_VALUES,&isvec[i]);
