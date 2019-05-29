@@ -26,10 +26,10 @@ class FiniteElement;
 namespace Go {
   class SplineCurve;
   class SplineSurface;
-  class BasisPtsSf;
-  class BasisDerivsSf;
-  class BasisDerivsSf2;
-  class BasisDerivsSf3;
+  struct BasisPtsSf;
+  struct BasisDerivsSf;
+  struct BasisDerivsSf2;
+  struct BasisDerivsSf3;
 }
 
 namespace LR {
