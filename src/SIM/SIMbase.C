@@ -49,6 +49,7 @@ SIMbase::SIMbase (IntegrandBase* itg) : g2l(&myGlb2Loc)
   myEqSys = nullptr;
   mySam = nullptr;
   mySolParams = nullptr;
+  myGl2Params = nullptr;
   dualField = nullptr;
   isRefined = lagMTOK = false;
   nGlPatches = 0;
@@ -74,6 +75,7 @@ SIMbase::~SIMbase ()
   if (myEqSys)     delete myEqSys;
   if (mySam)       delete mySam;
   if (mySolParams) delete mySolParams;
+  if (myGl2Params) delete myGl2Params;
 
   for (ASMbase* patch : myModel)
     delete patch;
@@ -451,7 +453,7 @@ bool SIMbase::initSystem (int mType, size_t nMats, size_t nVec, size_t nScl,
 #endif
 
   if (myEqSys) delete myEqSys;
-  myEqSys = new AlgEqSystem(*mySam,adm);
+  myEqSys = new AlgEqSystem(*mySam,&adm);
 
   // Workaround SuperLU bug for tiny systems
   if (mType == SystemMatrix::SPARSE && this->getNoElms(true) < 3)
@@ -461,9 +463,8 @@ bool SIMbase::initSystem (int mType, size_t nMats, size_t nVec, size_t nScl,
     mType = SystemMatrix::DENSE;
   }
 
-  return myEqSys->init(static_cast<SystemMatrix::Type>(mType),
-                       mySolParams, nMats, nVec, nScl, withRF,
-                       myProblem->getLinearSystemType(), opt.num_threads_SLU);
+  return myEqSys->init(static_cast<SystemMatrix::Type>(mType), mySolParams,
+                       nMats, nVec, nScl, withRF, opt.num_threads_SLU);
 }
 
 
