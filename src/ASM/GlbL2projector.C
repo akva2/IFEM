@@ -27,8 +27,8 @@
 #endif
 
 
-SystemMatrix::Type GlbL2::MatrixType = SystemMatrix::SPARSE;
-LinSolParams* GlbL2::SolverParams = nullptr;
+LinAlg::MatrixType GlbL2::MatrixType   = LinAlg::SPARSE;
+LinSolParams*      GlbL2::SolverParams = nullptr;
 
 
 /*!
@@ -341,7 +341,7 @@ bool ASMbase::globalL2projection (Matrix& sField,
   SparseMatrix* A;
   StdVector* B;
 #ifdef HAS_PETSC
-  if (GlbL2::MatrixType == SystemMatrix::PETSC && GlbL2::SolverParams)
+  if (GlbL2::MatrixType == LinAlg::MatrixType::PETSC && GlbL2::SolverParams)
   {
     A = new PETScMatrix(ProcessAdm(), *GlbL2::SolverParams);
     B = new PETScVector(ProcessAdm(), nnod*ncomp);
