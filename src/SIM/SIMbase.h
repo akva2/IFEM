@@ -28,6 +28,7 @@ class AnaSol;
 class SAM;
 class AlgEqSystem;
 class LinSolParams;
+class SystemMatrix;
 class SystemVector;
 class FunctionBase;
 class RealFunc;
@@ -48,8 +49,11 @@ struct Mode
   double eigVal; //!< Eigenvalue associated with this mode
   Vector eigVec; //!< Eigenvector associated with this mode
   Vector eqnVec; //!< Eigenvector associated with this mode in equation order
-  // \brief Default constructor.
+
+  //! \brief Default constructor.
   Mode() : eigNo(0), eigVal(0.0) {}
+  //! \brief Orthonormalize the eigenvector w.r.t. the given matrix.
+  bool orthonormalize(const SystemMatrix& mat);
 };
 
 
@@ -641,7 +645,9 @@ public:
   //! \brief Returns the end of the property array.
   PropertyVec::const_iterator end_prop() const { return myProps.end(); }
 
-  //! \brief Returns current system light-hand-side vector.
+  //! \brief Returns current system left-hand-side matrix.
+  SystemMatrix* getLHSmatrix(size_t idx = 0, bool copy = false) const;
+  //! \brief Returns current system right-hand-side vector.
   SystemVector* getRHSvector(size_t idx = 0, bool copy = false) const;
   //! \brief Adds a system vector to the given right-hand-side vector.
   void addToRHSvector(size_t idx, const SystemVector& vec, double scale = 1.0);
@@ -728,6 +734,7 @@ protected:
     std::set<int> step;   //!< Dump step identifiers
     int           count;  //!< Internal step counter, dump only when step==count
     double        eps;    //!< Zero tolerance for printing small values
+
     //! \brief Default constructor.
     DumpData() : format('P'), count(0), eps(1.0e-6) { step.insert(1); }
     //! \brief Checks if the matrix or vector should be dumped now.
