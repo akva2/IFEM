@@ -71,6 +71,7 @@ public:
     char RX;  //!< Boundary condition code for X-rotation
     char RY;  //!< Boundary condition code for Y-rotation
     char RZ;  //!< Boundary condition code for Z-rotation
+
     //! \brief Constructor initializing a BC instance.
     explicit BC(int n) : node(n), CX(1), CY(1), CZ(1), RX(1), RY(1), RZ(1) {}
   };
