@@ -279,6 +279,9 @@ public:
   //! \brief Truncates all small matrix elements to zero.
   virtual bool truncate(Real = Real(1.0e-16)) { return false; }
 
+  //! \brief Multiplication with a scalar.
+  virtual void mult(Real) {}
+
   //! \brief Adds a matrix with similar structure to the current matrix.
   virtual bool add(const SystemMatrix&, Real = Real(1)) { return false; }
 

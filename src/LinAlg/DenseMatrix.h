@@ -109,6 +109,9 @@ public:
   //! \param[in] c0 Column offset for the augmented matrix
   virtual bool augment(const SystemMatrix& B, size_t r0, size_t c0);
 
+  //! \brief Multiplication with a scalar.
+  virtual void mult(Real alpha) { myMat.multiply(alpha); }
+
   //! \brief Adds a matrix with similar dimension to the current matrix.
   //! \param[in] B     The matrix to be added
   //! \param[in] alpha Scale factor for matrix \b B
