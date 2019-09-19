@@ -1620,6 +1620,70 @@ bool SIMoutput::dumpResults (const Vector& psol, double time,
 }
 
 
+bool SIMoutput::evalResults (const Vector& psol, double time,
+                             Matrix& sol1, Matrix& sol2) const
+{
+  size_t i, k;
+
+  for (i = 0; i < myModel.size(); i++)
+  {
+    if (myModel[i]->empty()) continue; // skip empty patches
+
+    std::array<RealArray,3> params;
+    IntVec  points;
+    Vec3Vec Xp;
+
+    // Find all evaluation points within this patch, if any
+    int jPoint = 1;
+    for (const ResultPoint& pt : myPoints.front().second)
+    {
+      if (this->getLocalPatchIndex(pt.patch) == (int)(i+1))
+      {
+        if (opt.discretization >= ASM::Spline)
+        {
+          points.push_back(pt.inod > 0 ? pt.inod : -jPoint);
+          for (k = 0; k < myModel[i]->getNoParamDim(); k++)
+            params[k].push_back(pt.u[k]);
+          if (mySol) Xp.push_back(pt.X);
+        }
+        else if (pt.inod > 0)
+        {
+          points.push_back(pt.inod);
+          if (mySol) Xp.push_back(pt.X);
+        }
+      }
+      ++jPoint;
+    }
+    if (points.empty()) continue; // no points in this patch
+
+    myModel[i]->extractNodeVec(psol,myProblem->getSolution());
+    if (opt.discretization >= ASM::Spline)
+    {
+      // Evaluate the primary solution variables
+      if (!myModel[i]->evalSolution(sol1,myProblem->getSolution(),
+            params.data(),false))
+        return false;
+
+      // Evaluate the secondary solution variables
+      LocalSystem::patch = i;
+      if (myProblem->getNoFields(2) > 0)
+      {
+        this->extractPatchDependencies(myProblem,myModel,i);
+        const_cast<SIMoutput*>(this)->setPatchMaterial(i+1);
+        if (!myModel[i]->evalSolution(sol2,*myProblem,params.data(),false))
+          return false;
+      }
+    }
+    else
+      // Extract nodal primary solution variables
+      if (!myModel[i]->getSolution(sol1,myProblem->getSolution(),points))
+        return false;
+  }
+
+  return true;
+}
+
+
 bool SIMoutput::dumpVector (const Vector& vsol, const char* fname,
                             utl::LogStream& os, std::streamsize precision) const
 {

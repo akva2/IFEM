@@ -254,6 +254,12 @@ public:
   //! \param[in] precision Number of digits after the decimal point
   bool dumpResults(const Vector& psol, double time, utl::LogStream& os,
                    bool formatted = false, std::streamsize precision = 3) const;
+  //! \brief Evaluate solution results at specified points.
+  //! \param[in] psol Primary solution vector to derive other quantities from
+  //! \param[in] time Load/time step parameter
+  //! \param[out] sol1 Matrix of primary solution values
+  //! \param[out] sol2 Matrix of secondary solution values
+  bool evalResults(const Vector& psol, double time, Matrix& sol1, Matrix& sol2) const;
   //! \brief Dumps vector solution at specified points in ASCII format.
   //! \param[in] vsol Solution vector
   //! \param[in] fname Name of vector field
