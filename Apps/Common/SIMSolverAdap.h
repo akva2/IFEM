@@ -44,6 +44,11 @@ protected:
     return true;
   }
 
+  bool savePoints(double time, int iStep) const override
+  {
+    return model.savePoints(time, iStep);
+  }
+
   T1& model; //!< Reference to the actual sim
 };
 

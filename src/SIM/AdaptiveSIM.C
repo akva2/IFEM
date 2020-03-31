@@ -212,6 +212,7 @@ bool AdaptiveSIM::adaptMesh (int iStep, std::streamsize outPrec)
 
 bool AdaptiveSIM::writeGlv (const char* infile, int iStep)
 {
+  this->savePoints(0.0, iStep);
   if (opt.format < 0)
     return true;
 
@@ -255,4 +256,10 @@ bool AdaptiveSIM::writeGlv (const char* infile, int iStep)
 
   // Write state information
   return model.writeGlvStep(iStep,iStep,1);
+}
+
+
+bool AdaptiveSIM::savePoints(double time, int iStep) const
+{
+  return model.savePoints(solution.front(), time, iStep);
 }
