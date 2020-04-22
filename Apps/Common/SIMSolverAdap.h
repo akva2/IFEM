@@ -119,4 +119,64 @@ protected:
 template<class T1>
 using SIMSolverAdap = SIMSolverAdapImpl<T1,AdaptiveSIM>;
 
+
+/*!
+  \brief Template class for stationary adaptive, staggered simulator drivers.
+*/
+
+template<class T1>
+class SIMSolverStaggeredAdap : public SIMSolverStat<T1>
+{
+public:
+  //! \brief The constructor forwards to the parent class constructor.
+  explicit SIMSolverStaggeredAdap(T1& s1) : SIMSolverStat<T1>(s1)
+  {
+  }
+
+  //! \brief Empty destructor.
+  virtual ~SIMSolverStaggeredAdap() {}
+
+  //! \brief Solves the problem on a sequence of adaptively refined meshes.
+  virtual int solveProblem(char* infile, const char* = nullptr, bool = false)
+  {
+    // Save FE model to VTF and HDF5 for visualization
+    // Optionally save the initial configuration also
+    int geoBlk = 0, nBlock = 0;
+    if (!this->saveState(geoBlk,nBlock,true,infile,false))
+      return 2;
+
+    for (int iStep = 1; this->S1.adaptMesh(iStep); iStep++)
+      if (!this->S1.solveStep(infile,iStep))
+        return 1;
+      else if (!this->saveState(geoBlk,nBlock))
+        return 2;
+
+    return 0;
+  }
+
+protected:
+  //! \brief Saves geometry and results to VTF and HDF5 for current time step.
+  bool saveState(int& geoBlk, int& nBlock, bool newMesh = false,
+                 char* infile = nullptr, bool saveRes = true)
+  {
+    return true;
+//    if (newMesh && !this->S1.saveModel(infile,geoBlk,nBlock))
+//      return false;
+
+//    if (saveRes && !this->S1.saveStep(tp,nBlock))
+//      return false;
+
+//    if (saveRes && SIMSolverStat<T1>::exporter) {
+//      HDF5Restart::SerializeData data;
+//      if (restartAdm && restartAdm->dumpStep(tp) && this->serialize(data))
+//        if (!restartAdm->writeData(tp,data))
+//          return false;
+
+//      return SIMSolverStat<T1>::exporter->dumpTimeLevel(&tp,newMesh);
+//    }
+
+//    return true;
+  }
+};
+
 #endif

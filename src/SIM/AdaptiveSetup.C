@@ -38,9 +38,9 @@ AdaptiveSetup::AdaptiveSetup (SIMoutput& sim, bool sa) : model(sim), alone(sa)
   scheme     = FULLSPAN;
   knot_mult  = 1;
   threshold  = NONE;
-  adaptor    = 0;
-  adNorm     = 0;
-  eRow       = 0;
+  adaptor    = 1;
+  adNorm     = 2;
+  eRow       = 2;
   maxTjoints = -1;
   maxAspect  = -1.0;
   closeGaps  = false;
