@@ -92,6 +92,11 @@ public:
   //! \param[in] tp The current time stepping info
   virtual bool writeTimeInfo(int level, int interval, const TimeStep& tp);
 
+  //! \brief Write a log to output file.
+  //! \param data Text to write
+  //! \param name Name of log
+  virtual bool writeLog(const std::string& data, const std::string& name);
+
 protected:
   //! \brief Internal helper function writing a data array to file.
   //! \param[in] group The HDF5 group to write data into
@@ -109,8 +114,10 @@ protected:
   //! \param[in] basis 1/2 Write primary or secondary basis from SIM
   //! \param[in] level The time level to write the basis at
   //! \param[in] redundant Whether or not basis is redundant across processes
+  //! \param[in] l2g True to write local-to-global node numbers
   void writeBasis(const SIMbase* SIM, const std::string& name,
-                  int basis, int level, bool redundant = false);
+                  int basis, int level, bool redundant = false,
+                  bool l2g = false);
 
 private:
 #ifdef HAS_HDF5

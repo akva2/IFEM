@@ -222,7 +222,9 @@ void HDF5Writer::writeBasis (int level, const DataEntry& entry,
   const SIMbase* sim = static_cast<const SIMbase*>(entry.second.data);
 
   this->writeBasis(sim, prefix+sim->getName()+"-1", 1, level,
-                   entry.second.results & DataExporter::REDUNDANT);
+                   entry.second.results & DataExporter::REDUNDANT,
+                   entry.second.results & DataExporter::L2G_NODE);
+
 }
 
 
@@ -246,7 +248,7 @@ void HDF5Writer::writeSIM (int level, const DataEntry& entry,
   if (prefix.empty() &&
       (level == 0 || geometryUpdated || (results & DataExporter::GRID)) &&
       entry.second.results > -1) {
-    this->writeBasis(sim,sim->getName()+"-1",1,level);
+    this->writeBasis(sim,sim->getName()+"-1",1,level,results & DataExporter::REDUNDANT,results & DataExporter::L2G_NODE);
     if (sim->mixedProblem())
       for (size_t b=2; b <= sim->getNoBasis(); ++b) {
         std::stringstream str;
@@ -531,7 +533,7 @@ void HDF5Writer::writeKnotspan (int level, const DataEntry& entry,
 
 
 void HDF5Writer::writeBasis (const SIMbase* sim, const std::string& name,
-                             int basis, int level, bool redundant)
+                             int basis, int level, bool redundant, bool l2g)
 {
 #ifdef HAS_HDF5
   std::stringstream str;
@@ -558,6 +560,11 @@ void HDF5Writer::writeBasis (const SIMbase* sim, const std::string& name,
     if (redundant && rank != 0) {
       char dummy=0;
       writeArray(group, "basis", i, 0, &dummy, H5T_NATIVE_CHAR);
+    }
+
+    if (l2g) {
+      writeArray(group, "l2g-node", i, sim->getPatch(loc)->getMyNodeNums().size(),
+                 sim->getPatch(loc)->getMyNodeNums().data(), H5T_NATIVE_INT);
     }
   }
   H5Gclose(group);
@@ -632,5 +639,27 @@ void HDF5Writer::writeNodalForces(int level, const DataEntry& entry)
   H5Gclose(group2);
 #else
   std::cout << "HDF5Writer: compiled without HDF5 support, no data written" << std::endl;
+#endif
+}
+
+
+bool HDF5Writer::writeLog (const std::string& data, const std::string& name)
+{
+#ifdef HAS_HDF5
+  hid_t group;
+  if (checkGroupExistence(m_file,"/log"))
+    group = H5Gopen2(m_file,"/log",H5P_DEFAULT);
+  else
+    group = H5Gcreate2(m_file,"/log",0,H5P_DEFAULT,H5P_DEFAULT);
+
+  int rank = 0;
+#ifdef HAVE_MPI
+  MPI_Comm_rank(*m_adm.getCommunicator(), &rank);
+#endif
+
+  writeArray(group, name.c_str(), rank, data.size(), data.data(), H5T_NATIVE_CHAR);
+  H5Gclose(group);
+
+  return true;
 #endif
 }

@@ -16,12 +16,16 @@
 
 #include "ControlFIFO.h"
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 class DataWriter;
 class ProcessAdm;
 class TimeStep;
+namespace utl {
+class LogStream;
+}
 
 
 /*!
@@ -46,14 +50,15 @@ public:
 
   //! \brief An enum used to describe the results to write from a SIM
   enum Results {
-    PRIMARY      = 1,   //!< Storage of primary solutions
-    DISPLACEMENT = 2,   //!< Storage of vector fields as displacements
-    SECONDARY    = 4,   //!< Storage of secondary field
-    NORMS        = 8,   //!< Storage of norms
-    EIGENMODES   = 16,  //!< Storage of eigenmodes
-    ONCE         = 32,  //!< Only write field once
+    PRIMARY      = 1, //!< Storage of primary solutions
+    DISPLACEMENT = 2, //!< Storage of vector fields as displacements
+    SECONDARY    = 4, //!< Storage of secondary field
+    NORMS        = 8, //!< Storage of norms
+    EIGENMODES   = 16, //!< Storage of eigenmodes
+    ONCE         = 32, //!< Only write field once
     GRID         = 128, //!< Always store an updated grid
-    REDUNDANT    = 256  //!< Field is redundantly calculated on all processes
+    REDUNDANT    = 256, //!< Field is redundantly calculated on all processes
+    L2G_NODE     = 512 //!< Store local-to-global node mapping
   };
 
   //! \brief A structure holding information about registered fields
@@ -225,6 +230,10 @@ public:
   //! \param[in] tp The current time stepping info
   virtual bool writeTimeInfo(int level, int interval,
                              const TimeStep& tp) = 0;
+
+  //! \brief Write a log to output file.
+  //! \param name Name of log
+  virtual bool writeLog(const std::string& data, const std::string& name) = 0;
 
   //! \brief Sets the prefices used for norm output.
   void setNormPrefixes(const std::vector<std::string>& prefix) { m_prefix = prefix; }

@@ -58,6 +58,11 @@ public:
       S1.registerFields(*exporter);
       IFEM::registerCallback(*exporter);
     }
+
+    if (exporter && !this->S1.opt.saveLog) {
+      IFEM::cout.removeExtraLog(IFEM::memoryLog);
+      IFEM::memoryLog.reset();
+    }
   }
 
 protected:
