@@ -1082,7 +1082,15 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
         p1 = threadBasis->order(0);
       }
 
-  LR::generateThreadGroups(threadGroups,threadBasis);
+  LR::LRSpline* secConstraint = nullptr;
+  if (ASMmxBase::Type == ASMmxBase::SUBGRID ||
+      ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1)
+    secConstraint = this->getBasis(2);
+  if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2)
+    secConstraint = this->getBasis(1);
+
+  LR::generateThreadGroups(threadGroups,threadBasis,secConstraint);
+
   if (silence || threadGroups[0].size() < 2) return;
 
   std::cout <<"\nMultiple threads are utilized during element assembly.";
