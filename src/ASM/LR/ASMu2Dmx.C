@@ -1082,7 +1082,8 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
         p1 = threadBasis->order(0);
       }
 
-  LR::generateThreadGroups(threadGroups,threadBasis);
+  LR::generateThreadGroups(threadGroups,threadBasis,
+                           ASMmxBase::Type == ASMmxBase::SUBGRID ? this->getBasis(2) : nullptr);
   if (silence || threadGroups[0].size() < 2) return;
 
   std::cout <<"\nMultiple threads are utilized during element assembly.";
