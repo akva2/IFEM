@@ -1094,9 +1094,24 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
   if (silence || threadGroups[0].size() < 2) return;
 
   std::cout <<"\nMultiple threads are utilized during element assembly.";
+#ifdef SP_DEBUG
   for (size_t i = 0; i < threadGroups[0].size(); i++)
     std::cout <<"\n Color "<< i+1 <<": "
               << threadGroups[0][i].size() <<" elements";
+#else
+  size_t min = std::numeric_limits<size_t>::max() - 1;
+  size_t max = 0;
+  double avg = 0;
+  for (const auto& group : threadGroups[0]) {
+    min = std::min(group.size(), min);
+    max = std::max(group.size(), max);
+    avg += group.size();
+  }
+  avg /= threadGroups[0].size();
+  std::cout << "\n Elements are divided in " << threadGroups[0].size()
+            << " colors (min = " << min << ", max = "
+            << max << ", avg = " << avg <<").\n";
+#endif
 }
 
 
