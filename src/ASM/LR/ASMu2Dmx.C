@@ -1072,13 +1072,15 @@ Vec3 ASMu2Dmx::getCoord (size_t inod) const
 void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
                                      bool ignoreGlobalLM)
 {
-  // TODO: Support for div-compatible
   int p1 = 0;
-  for (size_t i = 1; i <= m_basis.size(); ++i)
-    if (this->getBasis(i)->order(0) > p1) {
-      threadBasis = this->getBasis(i);
-      p1 = threadBasis->order(0);
-    }
+  if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+    threadBasis = projBasis.get();
+  else
+    for (size_t i = 1; i <= m_basis.size(); ++i)
+      if (this->getBasis(i)->order(0) > p1) {
+        threadBasis = this->getBasis(i);
+        p1 = threadBasis->order(0);
+      }
 
   LR::generateThreadGroups(threadGroups,threadBasis);
   if (silence || threadGroups[0].size() < 2) return;
