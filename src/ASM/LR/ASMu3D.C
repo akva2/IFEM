@@ -279,6 +279,8 @@ bool ASMu3D::generateFEMTopology ()
 
   myBezierExtract.resize(nel);
   lrspline->generateIDs();
+  // force cache creation
+  lrspline->getElementContaining(lrspline->getElement(0)->midpoint());
 
   size_t iel = 0;
   RealArray extrMat;

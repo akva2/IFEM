@@ -1090,6 +1090,7 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
     secConstraint = this->getBasis(1);
 
   LR::generateThreadGroups(threadGroups,threadBasis,secConstraint);
+  LR::generateThreadGroups(projThreadGroups,projBasis.get());
 
   std::vector<const LR::LRSpline*> bases;
   for (const std::shared_ptr<LR::LRSplineSurface>& basis : m_basis)
