@@ -1074,7 +1074,7 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
 {
   int p1 = 0;
   if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
-    threadBasis = projBasis.get();
+    threadBasis = this->getBasis(3);
   else
     for (size_t i = 1; i <= m_basis.size(); ++i)
       if (this->getBasis(i)->order(0) > p1) {
@@ -1082,12 +1082,14 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
         p1 = threadBasis->order(0);
       }
 
-  LR::LRSpline* secConstraint = nullptr;
+  std::vector<LR::LRSpline*> secConstraint;
   if (ASMmxBase::Type == ASMmxBase::SUBGRID ||
       ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1)
-    secConstraint = this->getBasis(2);
+    secConstraint = {this->getBasis(2)};
   if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2)
-    secConstraint = this->getBasis(1);
+    secConstraint = {this->getBasis(1)};
+  if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+    secConstraint = {this->getBasis(1), this->getBasis(2)};
 
   LR::generateThreadGroups(threadGroups,threadBasis,secConstraint);
   LR::generateThreadGroups(projThreadGroups,projBasis.get());
@@ -1096,9 +1098,9 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
   for (const std::shared_ptr<LR::LRSplineSurface>& basis : m_basis)
     bases.push_back(basis.get());
 
-  this->checkThreadGroups(threadGroups[0], bases, threadBasis);
-
   if (silence || threadGroups[0].size() < 2) return;
+
+  this->checkThreadGroups(threadGroups[0], bases, threadBasis);
 
   std::cout <<"\nMultiple threads are utilized during element assembly.";
 #ifdef SP_DEBUG

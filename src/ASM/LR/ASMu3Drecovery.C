@@ -124,9 +124,10 @@ bool ASMu3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   if (!xg || !yg || !zg) return false;
   if (continuous && !wg) return false;
 
+  bool singleBasis = (this->getNoBasis() == 1 && projBasis == lrspline);
   IntMat lmnpc;
-  const IntMat& gmnpc = projBasis == lrspline ? MNPC : lmnpc;
-  if (projBasis != lrspline) {
+  const IntMat& gmnpc = singleBasis ? MNPC : lmnpc;
+  if (!singleBasis) {
     lmnpc.resize(projBasis->nElements());
     for (const LR::Element* elm : projBasis->getAllElements()) {
       lmnpc[elm->getId()].reserve(elm->nBasisFunctions());
@@ -180,8 +181,7 @@ bool ASMu3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
       // Set up basis function size (for extractBasis subroutine)
       size_t nbf = elm->nBasisFunctions();
-
-      const IntVec& mnpc = projBasis == lrspline ? gmnpc[iel-1] : gmnpc[ielp];
+      const IntVec& mnpc = singleBasis ? gmnpc[iel-1] : gmnpc[ielp];
 
       // --- Integration loop over all Gauss points in each direction ------------
 

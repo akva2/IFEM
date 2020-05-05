@@ -117,9 +117,10 @@ bool ASMu2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   if (!xg || !yg) return false;
   if (continuous && !wg) return false;
 
+  bool singleBasis = (this->getNoBasis() == 1 && projBasis == lrspline);
   IntMat lmnpc;
-  const IntMat& gmnpc = projBasis == lrspline ? MNPC : lmnpc;
-  if (projBasis != lrspline) {
+  const IntMat& gmnpc = singleBasis ? MNPC : lmnpc;
+  if (!singleBasis) {
     lmnpc.resize(projBasis->nElements());
     for (const LR::Element* elm : projBasis->getAllElements()) {
       lmnpc[elm->getId()].reserve(elm->nBasisFunctions());
@@ -131,7 +132,7 @@ bool ASMu2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
   // === Assembly loop over all elements in the patch ==========================
   bool ok = true;
-  const IntMat& group = projBasis == lrspline ? threadGroups[0] : projThreadGroups[0];
+  const IntMat& group = singleBasis ? threadGroups[0] : projThreadGroups[0];
   for (size_t t = 0; t < group.size() && ok; t++)
 #pragma omp parallel for schedule(static)
     for (size_t e = 0; e < group[t].size(); e++)
@@ -173,7 +174,7 @@ bool ASMu2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
       // Set up basis function size (for extractBasis subroutine)
       size_t nbf = elm->nBasisFunctions();
 
-      const IntVec& mnpc = projBasis == lrspline ? gmnpc[iel-1] : gmnpc[ielp];
+      const IntVec& mnpc = singleBasis ? gmnpc[iel-1] : gmnpc[ielp];
       // --- Integration loop over all Gauss points in each direction ------------
 
       Matrix eA(nbf, nbf);
