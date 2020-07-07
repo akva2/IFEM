@@ -1838,6 +1838,10 @@ bool SIMbase::project (Matrix& ssol, const Vector& psol,
 
     LocalSystem::patch = i; // Hack: Used for patch-wise max-value calculation
 
+    // Only CGL2_INT works for lagrange elements.
+    if (pMethod == SIMoptions::CGL2 && opt.discretization < ASM::Spline)
+      pMethod = SIMoptions::CGL2_INT;
+
     // Project the secondary solution and retrieve control point values
     bool ok = false;
     switch (pMethod) {
