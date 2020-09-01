@@ -913,6 +913,9 @@ bool SIMbase::assembleSystem (const TimeDomain& time, const Vectors& prevSol,
           }
           else
             ok = false;
+        } else if (it->first == p->pindx && p->pcode == Property::OTHER) {
+          ok = assembleInterior(it->second,sysQ,myModel[p->patch-1], p->patch);
+          break;
         }
 
       if (lp == 0 && it->first == 0)
