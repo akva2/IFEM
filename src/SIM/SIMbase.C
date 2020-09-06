@@ -926,7 +926,7 @@ bool SIMbase::assembleSystem (const TimeDomain& time, const Vectors& prevSol,
     // and other boundary integrals (Robin properties, contact, etc.)
     if (it->second->hasBoundaryTerms() && myEqSys && myEqSys->getVector())
       for (p = myProps.begin(); p != myProps.end() && ok; ++p)
-        if ((p->pcode == Property::NEUMANN && it->first == 0) ||
+        if ((p->pcode == Property::NEUMANN && it->first == p->pindx) ||
             ((p->pcode == Property::NEUMANN_GENERIC ||
               p->pcode == Property::ROBIN) && it->first == p->pindx))
         {
@@ -949,7 +949,9 @@ bool SIMbase::assembleSystem (const TimeDomain& time, const Vectors& prevSol,
 
           if (abs(p->ldim)+1 == pch->getNoParamDim())
           {
-            if (p->pcode == Property::NEUMANN_GENERIC ||
+            if (!this->initTopology(p->patch, p->lindx))
+              ok = false;
+            else if (p->pcode == Property::NEUMANN_GENERIC ||
                 this->initNeumann(p->pindx))
             {
               if (msgLevel > 1)
@@ -965,7 +967,9 @@ bool SIMbase::assembleSystem (const TimeDomain& time, const Vectors& prevSol,
           }
           else if (abs(p->ldim) == 1 && pch->getNoParamDim() == 3)
           {
-            if (p->pcode == Property::NEUMANN_GENERIC ||
+            if (!this->initTopology(p->patch, p->lindx))
+              ok = false;
+            else if (p->pcode == Property::NEUMANN_GENERIC ||
                 this->initNeumann(p->pindx))
             {
               if (msgLevel > 1)

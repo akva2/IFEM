@@ -675,6 +675,8 @@ protected:
   virtual bool initBodyLoad(size_t) { return true; }
   //! \brief Initializes for integration of Neumann terms for a given property.
   virtual bool initNeumann(size_t) { return true; }
+  //! \brief Initializes for integration with topology information.
+  virtual bool initTopology(size_t, size_t) { return true; }
 
   //! \brief Assembles problem-dependent discrete terms, if any.
   virtual bool assembleDiscreteTerms(const IntegrandBase*,
