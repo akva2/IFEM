@@ -529,7 +529,6 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
 
     if (!myElms.empty() && !glInt.threadSafe() &&
         std::find(myElms.begin(), myElms.end(), iel-1) == myElms.end()) {
-        ++iel;
       continue;
     }
 

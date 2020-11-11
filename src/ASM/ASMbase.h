@@ -873,6 +873,8 @@ protected:
   static int gEl;  //!< Global element counter
   static int gNod; //!< Global node counter
 
+  mutable SparseMatrix* glbL2_A = nullptr; //!< Global L2-projection (mass) matrix
+
 private:
   std::pair<size_t,size_t> myLMs; //!< Nodal range of the Lagrange multipliers
   std::vector<char>    myLMTypes; //!< Type of Lagrange multiplier ('L' or 'G')
