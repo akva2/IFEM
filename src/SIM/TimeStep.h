@@ -86,6 +86,9 @@ private:
   double dtMax;  //!< Maximun time increment size
   double f1;     //!< Scale factor for increased time step size
   double f2;     //!< Scale factor for reduced time step size
+  int iterMin; //!< Minimum accepted iterations
+  int iterMax; //!< Maximum accepted iterations
+  int iterTarget; //!< Target for number of iterations
 
   typedef std::pair<std::vector<double>,double> Step; //!< Time step definition
   typedef std::vector<Step> TimeSteps;                //!< Time step container

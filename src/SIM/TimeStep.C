@@ -27,6 +27,7 @@ TimeStep::TimeStep () : step(0), iter(time.it), lstep(0)
   starTime = time.t = 0.0;
   stopTime = time.dt = 1.0;
   dtMin = dtMax = 1.0;
+  iterMax = iterMin = iterTarget = 0;
   nInitStep = 0;
   maxCFL = 0.0;
   f1 = 1.5;
@@ -44,6 +45,9 @@ TimeStep& TimeStep::operator= (const TimeStep& ts)
   stopTime = ts.stopTime;
   dtMin = ts.dtMin;
   dtMax = ts.dtMax;
+  iterMin = ts.iterMin;
+  iterMax = ts.iterMax;
+  iterTarget = ts.iterTarget;
   maxCFL = ts.maxCFL;
   nInitStep = ts.nInitStep;
   f1 = ts.f1;
@@ -108,6 +112,9 @@ bool TimeStep::parse (const TiXmlElement* elem)
   utl::getAttribute(elem,"end",stopTime);
   utl::getAttribute(elem,"dtMin",dtMin);
   utl::getAttribute(elem,"dtMax",dtMax);
+  utl::getAttribute(elem,"iterMin",iterMin);
+  utl::getAttribute(elem,"iterMax",iterMax);
+  utl::getAttribute(elem,"iterTarget",iterTarget);
   utl::getAttribute(elem,"maxCFL",maxCFL);
   utl::getAttribute(elem,"nInitStep",nInitStep);
   utl::getAttribute(elem,"maxStep",maxStep);
@@ -251,6 +258,18 @@ bool TimeStep::increment ()
       time.dt = dtMin;
     else if (time.dt > dtMax)
       time.dt = dtMax;
+  }
+
+  if (iterMin < iterMax && maxCFL <= 0 && step > 1)
+  {
+    // Adjust the time step size based on the number of iterations in last step
+    if (iter < iterMin) {
+      std::cout << "scale1 by " << static_cast<double>(iterTarget) / iter << " " << iterTarget << " " << iter << std::endl;
+      time.dt *= static_cast<double>(iterTarget) / iter;
+    } else if (iter > iterMax) {
+      std::cout << "scale2 by " << static_cast<double>(iter) / iterTarget << iterTarget << " " << iter << std::endl;
+      time.dt *= static_cast<double>(iter) / iterTarget;
+    }
   }
 
   if (this->hasReached(stopTime))
