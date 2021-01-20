@@ -1497,10 +1497,10 @@ bool SIMoutput::dumpResults (const Vector& psol, double time,
   STensorFunc*  ssolStr = mySol ? mySol->getStressSol() : nullptr;
 
   size_t nxsol = 0;
-  if (psolScl)
-    nxsol = 1;
-  else if (psolVec)
-    nxsol = this->getNoSpaceDim();
+//  if (psolScl)
+//    nxsol = 1;
+//  else if (psolVec)
+//    nxsol = this->getNoSpaceDim();
 
   for (const ASMbase* pch : myModel)
   {
@@ -1531,15 +1531,17 @@ bool SIMoutput::dumpResults (const Vector& psol, double time,
       for (size_t i = 1; i <= sol1.rows(); i++)
         os << std::setw(flWidth) << utl::trunc(sol1(i,j+1));
 
-      Vec3 sol4;
-      if (psolScl)
-        sol4.x = (*psolScl)(Vec4(Xp[j],time));
-      else if (psolVec)
-        sol4 = (*psolVec)(Vec4(Xp[j],time));
-      if (nxsol > 0)
-        os <<"\n\t\texact1";
-      for (size_t k = 0; k < nxsol; k++)
-        os << std::setw(flWidth) << utl::trunc(sol4[k]);
+      if (false) {
+        Vec3 sol4;
+        if (psolScl)
+          sol4.x = (*psolScl)(Vec4(Xp[j],time));
+        else if (psolVec)
+          sol4 = (*psolVec)(Vec4(Xp[j],time));
+        if (nxsol > 0)
+          os <<"\n\t\texact1";
+        for (size_t k = 0; k < nxsol; k++)
+          os << std::setw(flWidth) << utl::trunc(sol4[k]);
+      }
 
       if (opt.discretization >= ASM::Spline)
       {
@@ -1551,16 +1553,18 @@ bool SIMoutput::dumpResults (const Vector& psol, double time,
           os << std::setw(flWidth) << utl::trunc(sol2(i,j+1));
         }
 
-        Vector sol3;
-        if (ssolScl || ssolVec || ssolStr)
-          os <<"\n\t\texact2";
-        if (ssolScl)
-          sol3 = (*ssolScl)(Vec4(Xp[j],time)).vec(this->getNoSpaceDim());
-        else if (ssolVec)
-          sol3 = (*ssolVec)(Vec4(Xp[j],time));
-        else if (ssolStr)
-          sol3 = (*ssolStr)(Vec4(Xp[j],time));
-        for (double s : sol3) os << std::setw(flWidth) << utl::trunc(s);
+        if (false) {
+          Vector sol3;
+          if (ssolScl || ssolVec || ssolStr)
+            os <<"\n\t\texact2";
+          if (ssolScl)
+            sol3 = (*ssolScl)(Vec4(Xp[j],time)).vec(this->getNoSpaceDim());
+          else if (ssolVec)
+            sol3 = (*ssolVec)(Vec4(Xp[j],time));
+          else if (ssolStr)
+            sol3 = (*ssolStr)(Vec4(Xp[j],time));
+          for (double s : sol3) os << std::setw(flWidth) << utl::trunc(s);
+        }
       }
 
       if (reactionForces && points[j] > 0)
