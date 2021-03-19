@@ -81,6 +81,10 @@ protected:
   //! \param[in] Xnod Coordinates of the node
   void setCoord(size_t inod, const Vec3& Xnod);
 
+  //! \brief Find element for parameter, and optionally calculate local coordinates.
+  int findElement(double u, double v,
+                  double* xi = nullptr, double* eta = nullptr) const;
+
 public:
   //! \brief Updates the nodal coordinates for this patch.
   //! \param[in] displ Incremental displacements to update the coordinates with
@@ -153,6 +157,14 @@ public:
   //! \param[in] integrand Object with problem-specific data and methods
   virtual bool evalSolution(Matrix& sField, const IntegrandBase& integrand,
                             const RealArray*, bool = false) const;
+
+  //! \brief Evaluates and interpolates a field over a given geometry.
+  //! \param[in] basis The basis of the field to evaluate
+  //! \param[in] locVec The coefficients of the field to evaluate
+  //! \param[out] vec The obtained coefficients after interpolation
+  //! \param[in] basisNum The basis to evaluate for (mixed)
+  virtual bool evaluate (const ASMbase* basis, const Vector& locVec,
+                         RealArray& vec, int basisNum) const;
 
   using ASMs2D::getSize;
   //! \brief Returns the number of nodal points in each parameter direction.
