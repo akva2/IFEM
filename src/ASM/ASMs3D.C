@@ -1706,7 +1706,7 @@ void ASMs3D::getBoundaryNodes (int lIndex, IntVec& nodes,
 {
   if (basis < 1) basis = 1;
 
-  if (!this->getBasis(basis)) return; // silently ignore empty patches
+//  if (!this->getBasis(basis)) return; // silently ignore empty patches
 
 #if SP_DEBUG > 1
   size_t last = nodes.size();
