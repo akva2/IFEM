@@ -19,6 +19,7 @@
 #include "TimeStep.h"
 #include "HDF5Restart.h"
 #include "HDF5Writer.h"
+#include "HDF5WriterSVV.h"
 #include "tinyxml.h"
 
 
@@ -58,6 +59,8 @@ public:
     {
       exporter = new DataExporter(true,saveInterval);
       exporter->registerWriter(new HDF5Writer(hdf5file,modelAdm));
+      if (this->S1.opt.saveSVV)
+        exporter->registerWriter(new HDF5WriterSVV(hdf5file,modelAdm));
       S1.registerFields(*exporter);
       IFEM::registerCallback(*exporter);
     }
