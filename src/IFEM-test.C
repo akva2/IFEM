@@ -11,7 +11,8 @@
 //==============================================================================
 
 //#include "gtest/gtest.h"
-#include <catch22/catch.hpp>
+#define CATCH_CONFIG_RUNNER
+#include <catch2/catch.hpp>
 
 #include "IFEM.h"
 #include "Profiler.h"
@@ -25,7 +26,7 @@ int main (int argc, char** argv)
 {
   //testing::InitGoogleTest(&argc, argv);
   IFEM::Init(argc, argv);
-  Profiler prof(argv[0]);
+  Profiler prof(argv[0], false);
 
   return Catch::Session().run(argc, argv);
 }
