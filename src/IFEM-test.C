@@ -10,7 +10,8 @@
 //!
 //==============================================================================
 
-#include "gtest/gtest.h"
+//#include "gtest/gtest.h"
+#include <catch22/catch.hpp>
 
 #include "IFEM.h"
 #include "Profiler.h"
@@ -22,9 +23,9 @@
 
 int main (int argc, char** argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  //testing::InitGoogleTest(&argc, argv);
   IFEM::Init(argc, argv);
   Profiler prof(argv[0]);
 
-  return RUN_ALL_TESTS();
+  return Catch::Session().run(argc, argv);
 }
