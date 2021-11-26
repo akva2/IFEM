@@ -142,6 +142,7 @@ SparseMatrix::SparseMatrix (SparseSolver eqSolver, int nt)
   numThreads = nt;
 #ifdef HAS_UMFPACK
   umfSymbolic = nullptr;
+  umfNumeric = nullptr;
 #endif
   slu = 0;
 }
@@ -158,6 +159,7 @@ SparseMatrix::SparseMatrix (size_t m, size_t n)
   slu = 0;
 #ifdef HAS_UMFPACK
   umfSymbolic = nullptr;
+  umfNumeric = nullptr;
 #endif
 }
 
@@ -174,6 +176,7 @@ SparseMatrix::SparseMatrix (const SparseMatrix& B) :
   slu = 0; // The SuperLU data (if any) is not copied
 #ifdef HAS_UMFPACK
   umfSymbolic = nullptr;
+  umfNumeric = nullptr;
 #endif
 }
 
@@ -184,6 +187,8 @@ SparseMatrix::~SparseMatrix ()
 #ifdef HAS_UMFPACK
   if (umfSymbolic)
     umfpack_di_free_symbolic(&umfSymbolic);
+  if (umfNumeric)
+    umfpack_di_free_numeric(&umfNumeric);
 #endif
 }
 
@@ -1298,11 +1303,13 @@ bool SparseMatrix::solveUMF (Vector& B, Real* rcond)
       return false;
   }
 
-  void* numeric;
-  umfpack_di_numeric(IA.data(), JA.data(), A.data(), umfSymbolic,
-                     &numeric, nullptr, info);
-  if (rcond)
-    *rcond = info[UMFPACK_RCOND];
+  if (!umfNumeric) {
+    umfpack_di_numeric(IA.data(), JA.data(), A.data(), umfSymbolic,
+                       &umfNumeric, nullptr, info);
+    if (rcond)
+      *rcond = info[UMFPACK_RCOND];
+  } else
+    info[UMFPACK_STATUS] = UMFPACK_OK;
 
   Vector X(B.size());
   size_t nrhs = B.size() / nrow;
@@ -1310,12 +1317,11 @@ bool SparseMatrix::solveUMF (Vector& B, Real* rcond)
   for (size_t i = 0; i < nrhs && okAll; ++i) {
     umfpack_di_solve(UMFPACK_A,
                      IA.data(), JA.data(), A.data(),
-                     &X[i*nrow], &B[i*nrow], numeric, nullptr, info);
+                     &X[i*nrow], &B[i*nrow], umfNumeric, nullptr, info);
     okAll = info[UMFPACK_STATUS] == UMFPACK_OK;
   }
   if (okAll)
     B = X;
-  umfpack_di_free_numeric(&numeric);
   return okAll;
 #else
   std::cerr <<"SparseMatrix::solve: UMFPACK solver not available"<< std::endl;

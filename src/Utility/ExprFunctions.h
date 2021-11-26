@@ -163,7 +163,7 @@ protected:
   \details The function is implemented as an array of EvalFunction objects.
 */
 
-template <class ParentFunc, class Ret>
+template <class ParentFunc, class Input, class Ret>
 class EvalMultiFunction : public ParentFunc, public EvalFunctions
 {
   size_t nsd; //!< Number of spatial dimensions
@@ -190,9 +190,9 @@ public:
   virtual unsigned char getType() const { return 2; }
 
   //! \brief Returns first-derivative of the function.
-  virtual Ret deriv(const Vec3& X, int dir) const;
+  virtual Ret deriv(const Input& X, int dir) const;
   //! \brief Returns second-derivative of the function.
-  virtual Ret dderiv(const Vec3& X, int dir1, int dir2) const;
+  virtual Ret dderiv(const Input& X, int dir1, int dir2) const;
 
   //! \brief Set an additional parameter in the function.
   void setParam(const std::string& name, double value)
@@ -206,15 +206,20 @@ protected:
   void setNoDims() { ParentFunc::ncmp = nsd = p.size(); }
 
   //! \brief Evaluates the function expressions.
-  virtual Ret evaluate(const Vec3& X) const;
+  virtual Ret evaluate(const Input& X) const;
 };
 
+//! \brief Vector-valued scalar-input expression
+using ScalVecFuncExpr = EvalMultiFunction<utl::Function<double,Vec3>,double,Vec3>;
 //! Vector-valued function expression
-typedef EvalMultiFunction<VecFunc,Vec3>           VecFuncExpr;
+typedef EvalMultiFunction<VecFunc,Vec3,Vec3>           VecFuncExpr;
 //! Tensor-valued function expression
-typedef EvalMultiFunction<TensorFunc,Tensor>      TensorFuncExpr;
+typedef EvalMultiFunction<TensorFunc,Vec3,Tensor>      TensorFuncExpr;
 //! Symmetric tensor-valued function expression
-typedef EvalMultiFunction<STensorFunc,SymmTensor> STensorFuncExpr;
+typedef EvalMultiFunction<STensorFunc,Vec3,SymmTensor> STensorFuncExpr;
+
+//! \brief Specialization for vector functions.
+template<> Vec3 ScalVecFuncExpr::evaluate(const double& X) const;
 
 //! \brief Specialization for vector functions.
 template<> Vec3 VecFuncExpr::evaluate(const Vec3& X) const;

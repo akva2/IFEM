@@ -530,6 +530,9 @@ LR::LRSplineSurface* ASMu2D::createLRfromTensor ()
 
 bool ASMu2D::generateFEMTopology ()
 {
+  if (!myMLGN.empty())
+    return true;
+
   geo = this->createLRfromTensor();
 
   if (tensorPrjBas)
@@ -1167,6 +1170,33 @@ bool ASMu2D::integrate (Integrand& integrand,
           this->getGaussPointParameters(redpar[d],d,nRed,iel,xr);
       }
 
+      const LR::Element* el = lrspline->getElement(iel-1);
+      if (integrand.getIntegrandType() & Integrand::AVERAGE)
+      {
+        // --- Compute average value of basis functions over the element -----
+
+        fe.Navg.resize(el->support().size(), true);
+        double area = 0.0;
+        int ip = (iel-1)*nGP*nGP;
+        for (int j = 0; j < nGP; j++)
+          for (int i = 0; i < nGP; i++, ip++)
+          {
+            SplineUtils::extractBasis(spline1[ip],fe.N,dNdu);
+
+            // Compute Jacobian determinant of coordinate mapping
+            // and multiply by weight of current integration point
+            double detJac = utl::Jacobian(Jac,fe.dNdX,Xnod,dNdu,false);
+            double weight = dA*wg[i]*wg[j];
+
+            // Numerical quadrature
+            fe.Navg.add(fe.N,detJac*weight);
+            area += detJac*weight;
+          }
+
+        // Divide by element area
+        fe.Navg /= area;
+      }
+
       if (integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS)
         fe.h = this->getElementCorners(iel,fe.XC);
 
@@ -1182,13 +1212,12 @@ bool ASMu2D::integrate (Integrand& integrand,
       if (integrand.getIntegrandType() & Integrand::G_MATRIX)
       {
         // Element size in parametric space
-        const LR::Element* el = lrspline->getElement(iel-1);
         dXidu[0] = el->umax() - el->umin();
         dXidu[1] = el->vmax() - el->vmin();
       }
 
       // Initialize element quantities
-      LocalIntegral* A = integrand.getLocalIntegral(MNPC[iel-1].size(),fe.iel);
+      LocalIntegral* A = integrand.getLocalIntegral(el->support().size(),fe.iel);
       if (!integrand.initElement(MNPC[iel-1],fe,X,nRed*nRed,*A))
       {
         A->destruct();
@@ -1441,7 +1470,7 @@ bool ASMu2D::integrate (Integrand& integrand,
       }
 
       // Initialize element quantities
-      LocalIntegral* A = integrand.getLocalIntegral(MNPC[iel-1].size(),fe.iel);
+      LocalIntegral* A = integrand.getLocalIntegral(fe.N.size(),fe.iel);
       if (!integrand.initElement(MNPC[iel-1],fe,X,0,*A))
       {
         A->destruct();
@@ -2396,9 +2425,12 @@ bool ASMu2D::updateDirichlet (const std::map<int,RealFunc*>& func,
 }
 
 
-size_t ASMu2D::getNoNodes (int) const
+size_t ASMu2D::getNoNodes (int basis) const
 {
-  return lrspline->nBasisFunctions();
+  if (basis == 0)
+    return this->ASMbase::getNoNodes(basis);
+  else
+    return lrspline->nBasisFunctions();
 }
 
 

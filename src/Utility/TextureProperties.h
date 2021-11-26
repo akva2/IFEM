@@ -83,7 +83,7 @@ public:
 
   //! \brief Evaluate function in a point.
   //! \param X Position to evaluate in
-  Value evaluate(const Vec3& X) const override
+  Value evaluate(const Real& X) const override
   {
     Value val;
     m_props.getProperty(m_prop, X, val);
@@ -97,6 +97,6 @@ protected:
 
 
 using PropertyFunc = PropertyFuncType<RealFunc,Real>; //!< Convenience type alias for scalars
-using PropertyVecFunc = PropertyFuncType<VecFunc,Vec3>; //!< Convenience type alias for vector
+using PropertyVecFunc = PropertyFuncType<utl::Function<Real,Vec3>,Vec3>; //!< Convenience type alias for vector
 
 #endif

@@ -285,6 +285,7 @@ private:
 
 #ifdef HAS_UMFPACK
   void* umfSymbolic; //!< Symbolically factored matrix for UMFPACK
+  void* umfNumeric; //!< Numericall factored matrix for UMPACK
 #endif
 
 protected:
