@@ -202,7 +202,7 @@ bool SIMoptions::parseOutputTag (const TiXmlElement* elem)
   }
 
   else if (!strcasecmp(elem->Value(),"residual"))
-    project[NONE] = "Pure residuals";
+    project.push_back(std::make_pair(NONE,"Pure residuals"));
 
   return true;
 }
@@ -362,21 +362,21 @@ bool SIMoptions::parseOldOptions (int argc, char** argv, int& i)
 bool SIMoptions::parseProjectionMethod (const char* ptype, int version)
 {
   if (!strcasecmp(ptype,"global") || !strcasecmp(ptype,"grvl"))
-    project[GLOBAL] = "Greville point projection";
+    project.push_back(std::make_pair(GLOBAL,"Greville point projection"));
   else if (!strcasecmp(ptype,"dgl2"))
-    project[DGL2] = "Discrete global L2-projection";
+    project.push_back(std::make_pair(DGL2,"Discrete global L2-projection"));
   else if (!strcasecmp(ptype,"cgl2"))
-    project[version == 1 ? CGL2 : CGL2_INT] = "Continuous global L2-projection";
+    project.push_back(std::make_pair(version == 1 ? CGL2 : CGL2_INT,"Continuous global L2-projection"));
   else if (!strcasecmp(ptype,"scr"))
-    project[SCR] = "Superconvergent recovery";
+    project.push_back(std::make_pair(SCR,"Superconvergent recovery"));
   else if (!strcasecmp(ptype,"vdsa"))
-    project[VDSA] = "VDSA projected";
+    project.push_back(std::make_pair(VDSA,"VDSA projected"));
   else if (!strcasecmp(ptype,"quasi"))
-    project[QUASI] = "Quasi-interpolated";
+    project.push_back(std::make_pair(QUASI,"Quasi-interpolated"));
   else if (!strcasecmp(ptype,"lsq"))
-    project[LEASTSQ] = "Least-square projected";
+    project.push_back(std::make_pair(LEASTSQ,"Least-square projected"));
   else if (!strncasecmp(ptype,"residual",8))
-    project[NONE] = "Pure residuals";
+    project.push_back(std::make_pair(NONE,"Pure residuals"));
   else
     return false;
 

@@ -17,7 +17,7 @@
 #include "ASMenums.h"
 #include "LinAlgenums.h"
 #include <string>
-#include <map>
+#include <vector>
 
 namespace utl {
   class LogStream;
@@ -108,7 +108,7 @@ public:
   enum ProjectionMethod { NONE, GLOBAL, VDSA, QUASI, LEASTSQ,
                           DGL2, CGL2, CGL2_INT, SCR };
   //! \brief Projection method name mapping.
-  typedef std::map<ProjectionMethod,std::string> ProjectionMap;
+  using ProjectionMap = std::vector<std::pair<ProjectionMethod,std::string>>;
 
   ProjectionMap project; //!< The projection methods to use
 };
