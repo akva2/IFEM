@@ -1550,7 +1550,7 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
       }
     }
 
-    if (pidx != 0)
+    if (pidx != 1)
       extractProjections(pch,norm);
 
     if (mySol)

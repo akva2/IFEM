@@ -812,9 +812,15 @@ bool SIMoutput::writeGlvS2 (const Vector& psol, int iStep, int& nBlock,
       haveAsol = mySol->hasVectorSol() > 1;
   }
 
+  auto&& comp = [](const std::pair<SIMoptions::ProjectionMethod,std::string>& a)
+  {
+    return a.first == SIMoptions::GLOBAL;
+  };
+
   size_t nProj = (opt.discretization == ASM::Spline ||
                   opt.discretization == ASM::SplineC1) &&
-    opt.project.find(SIMoptions::GLOBAL) != opt.project.end() ? nf : 0;
+                  std::find_if(opt.project.begin(), opt.project.end(), comp) !=
+                  opt.project.end() ? nf : 0;
 
   std::array<IntVec,2> vID;
   std::vector<IntVec> sID;
