@@ -1477,10 +1477,37 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
 
   size_t nCmp = 0;
 
+  auto&& extractProjections = [this,&nCmp,ssol](ASMbase* pch, NormBase* norm)
+  {
+    size_t nfld = myProblem->getNoFields(2);
+    size_t nval = pch->getNoProjectionNodes()*nfld;
+    for (size_t k = 0; k < ssol.size(); k++)
+      if (ssol[k].empty())
+        norm->getProjection(k).clear();
+      else if (this->fieldProjections())
+      {
+        Vector c(nval);
+        std::copy(ssol[k].begin()+nCmp,ssol[k].begin()+nCmp+nval,c.begin());
+        norm->setProjectedFields(pch->getProjectedFields(c,nfld),k);
+        nCmp += nval;
+      }
+      else if (nCmp != pch->getNoFields(1) && pch->getNoFields(2) > 0)
+      {
+        // Mixed problem using first basis for projection,
+        // need a separate MADOF array with nCmp dofs per node
+        const IntVec& madof = this->getMADOF(1,nCmp);
+        pch->extractNodalVec(ssol[k],norm->getProjection(k),
+                             madof.data(),madof.size());
+      }
+      else
+        pch->extractNodeVec(ssol[k],norm->getProjection(k),nCmp,1);
+  };
+
   // Lambda function for assembling the interior norm terms for a given patch
-  auto&& assembleNorms = [this,time,psol,ssol,&nCmp](NormBase* norm,
-                                                     GlbNorm& integral,
-                                                     ASMbase* pch, int pidx)
+  auto&& assembleNorms = [this,extractProjections,
+                          time,psol,ssol,&nCmp](NormBase* norm,
+                                                GlbNorm& integral,
+                                                ASMbase* pch, int pidx)
   {
     if (!integral.haveContributions(pidx,myProps))
       return true;
@@ -1523,28 +1550,8 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
       }
     }
 
-    size_t nfld = myProblem->getNoFields(2);
-    size_t nval = pch->getNoProjectionNodes()*nfld;
-    for (size_t k = 0; k < ssol.size(); k++)
-      if (ssol[k].empty())
-        norm->getProjection(k).clear();
-      else if (this->fieldProjections())
-      {
-        Vector c(nval);
-        std::copy(ssol[k].begin()+nCmp,ssol[k].begin()+nCmp+nval,c.begin());
-        norm->setProjectedFields(pch->getProjectedFields(c,nfld),k);
-        nCmp += nval;
-      }
-      else if (nCmp != pch->getNoFields(1) && pch->getNoFields(2) > 0)
-      {
-        // Mixed problem using first basis for projection,
-        // need a separate MADOF array with nCmp dofs per node
-        const IntVec& madof = this->getMADOF(1,nCmp);
-        pch->extractNodalVec(ssol[k],norm->getProjection(k),
-                             madof.data(),madof.size());
-      }
-      else
-        pch->extractNodeVec(ssol[k],norm->getProjection(k),nCmp,1);
+    if (pidx != 0)
+      extractProjections(pch,norm);
 
     if (mySol)
       mySol->initPatch(pch->idx);
@@ -1593,6 +1600,9 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
   Matrix dummy;
   if (!eNorm) eNorm = &dummy;
 #endif
+
+  ASMbase* pch1 = this->getPatch(1);
+  extractProjections(pch1,norm);
 
   // Initialize norm integral classes
   if (!extrFunc.empty())
