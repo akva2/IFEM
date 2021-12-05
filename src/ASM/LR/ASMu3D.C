@@ -1089,8 +1089,40 @@ bool ASMu3D::integrate (Integrand& integrand,
         dXidu[2] = el->getParmin(2);
       }
 
+      if (integrand.getIntegrandType() & Integrand::AVERAGE)
+      {
+        // --- Compute average value of basis functions over the element -----
+
+        int ip = (iel-1)*nGP*nGP*nGP + firstIp;
+        fe.Navg.resize(el->support().size(),true);
+        double vol = 0.0;
+        int ig = 1;
+        for (int k = 0; k < nGP; k++)
+          for (int j = 0; j < nGP; j++)
+            for (int i = 0; i < nGP; i++, ++ip, ++ig)
+            {
+              B.fillColumn(1, BN.getColumn(ig));
+              B.fillColumn(2, BdNdu.getColumn(ig)*2.0/du);
+              B.fillColumn(3, BdNdv.getColumn(ig)*2.0/dv);
+              B.fillColumn(4, BdNdw.getColumn(ig)*2.0/dw);
+              this->evaluateBasis(fe, dNdu, C, B);
+
+              // Compute Jacobian determinant of coordinate mapping
+              // and multiply by weight of current integration point
+              double detJac = utl::Jacobian(Jac,fe.dNdX,Xnod,dNdu,false);
+              double weight = dV*wg[i]*wg[j]*wg[k];
+
+              // Numerical quadrature
+              fe.Navg.add(fe.N,detJac*weight);
+              vol += detJac*weight;
+            }
+
+        // Divide by element volume
+        fe.Navg /= vol;
+      }
+
       // Initialize element quantities
-      LocalIntegral* A = integrand.getLocalIntegral(MNPC[iel-1].size(),fe.iel);
+      LocalIntegral* A = integrand.getLocalIntegral(el->support().size(),fe.iel);
       if (!integrand.initElement(MNPC[iel-1],fe,X,nRed*nRed*nRed,*A))
       {
         A->destruct();
@@ -2067,9 +2099,12 @@ bool ASMu3D::updateDirichlet (const std::map<int,RealFunc*>& func,
 }
 
 
-size_t ASMu3D::getNoNodes (int) const
+size_t ASMu3D::getNoNodes (int basis) const
 {
-  return lrspline->nBasisFunctions();
+  if (basis == 0)
+    return this->ASMbase::getNoNodes(0);
+  else
+    return lrspline->nBasisFunctions();
 }
 
 
