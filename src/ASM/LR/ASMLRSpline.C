@@ -229,6 +229,12 @@ bool ASMLRSpline::refine (const LR::RefineData& prm, Vectors& sol)
   nnod = geo->nBasisFunctions();
   nel  = geo->nElements();
   IFEM::cout <<"Refined mesh: "<< nel <<" elements "<< nnod <<" nodes."<< std::endl;
+  std::vector<double> area(nel);
+  for (size_t i = 0; i < nel; ++i)
+    area[i] = geo->getElement(i)->area();
+  IFEM::cout << "  Minimum element size: " << *std::min_element(area.begin(), area.end())
+             << "\n  Maximum element size: " << *std::max_element(area.begin(), area.end()) << std::endl;
+
 
   for (int i = sol.size()-1; i >= 0; i--)
     if (nf[i] > 0) {
