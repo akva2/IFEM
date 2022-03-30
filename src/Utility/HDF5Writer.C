@@ -349,6 +349,9 @@ void HDF5Writer::writeSIM (int level, const DataEntry& entry,
   {
     Vector pchVec;
     size_t ncmp = sim->getProblem()->getNoFields(2);
+    if (ncmp == 0)
+      return;
+
     if (sim->fieldProjections())
     {
       pchVec.resize(ncmp * pch->getNoProjectionNodes());
