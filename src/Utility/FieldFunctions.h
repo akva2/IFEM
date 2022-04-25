@@ -155,6 +155,10 @@ public:
                 const std::string& basisName,
                 const std::string& fieldName,
                 int level = 0);
+  //! \brief Wrap an existings field.
+  //! \param field Field to evaluate
+  //! \details Takes ownership of given fields.
+  FieldFunction(const std::vector<Field*>& fields);
   //! \brief Empty destructor.
   virtual ~FieldFunction() {}
 
