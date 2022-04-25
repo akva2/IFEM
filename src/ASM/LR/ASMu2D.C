@@ -26,6 +26,7 @@
 #include "CoordinateMapping.h"
 #include "GaussQuadrature.h"
 #include "LagrangeInterpolator.h"
+#include "LRSplineField2D.h"
 #include "LRSplineFields2D.h"
 #include "ElementBlock.h"
 #include "MPC.h"
@@ -2443,6 +2444,20 @@ bool ASMu2D::separateProjectionBasis () const
   return projBasis.get() != this->getBasis(1);
 }
 
+
+Field* ASMu2D::getProjectedField (const Vector& coefs) const
+{
+//  if (projBasis.get() == this->getBasis(1))
+//    return nullptr;
+
+  if (coefs.size() == this->getNoProjectionNodes())
+    return new LRSplineField2D(projBasis.get(),coefs);
+
+  std::cerr <<" *** ASMu2D::getProjectedFields: Non-matching coefficent array,"
+            <<" size="<< coefs.size() <<" nnod="<< this->getNoProjectionNodes()
+            << std::endl;
+  return nullptr;
+}
 
 Fields* ASMu2D::getProjectedFields (const Vector& coefs, size_t) const
 {
