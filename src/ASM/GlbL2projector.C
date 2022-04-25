@@ -128,8 +128,8 @@ bool L2FuncIntegrand::evaluate (Matrix& sField, const RealArray* gpar) const
   Real2DMat u;
   m_patch.getParameterDomain(u);
   for (size_t i = 0; i < gpar[0].size(); ++i) {
-    Vec3 X;
     std::vector<double> xi(3), param(3);
+    Vec4 X(xi.data());
     xi[0] = u[0][0] + gpar[0][i] / (u[0][1] - u[0][0]);
     if (m_patch.getNoSpaceDim() > 1)
       xi[1] = u[1][0] + gpar[1][i] / (u[1][1] - u[1][0]);
