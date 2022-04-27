@@ -227,6 +227,7 @@ bool ASMu2Dmx::generateFEMTopology ()
         refBasis.reset(new LR::LRSplineSurface(otherBasis));
         if (!projBasis)
           projBasis = ASMmxBase::subgridH ? refBasis : m_basis.front();
+        altProjBasis = refBasis;
       }
       else {
         if (!projBasis)
@@ -1097,6 +1098,8 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
 
   LR::generateThreadGroups(threadGroups,threadBasis,secConstraint);
   LR::generateThreadGroups(projThreadGroups,projBasis.get());
+  if (altProjBasis)
+    LR::generateThreadGroups(altProjThreadGroups,altProjBasis.get());
 
   std::vector<const LR::LRSpline*> bases;
   for (const std::shared_ptr<LR::LRSplineSurface>& basis : m_basis)
@@ -1219,5 +1222,15 @@ void ASMu2Dmx::copyRefinement (LR::LRSplineSurface* basis,
     else
       basis->insert_const_u_edge(line->const_par_,
                                  line->start_, line->stop_, mult);
+  }
+}
+
+
+void ASMu2Dmx::swapProjectionBasis ()
+{
+  if (altProjBasis) {
+    ASMmxBase::geoBasis = ASMmxBase::geoBasis == 1 ? 2 : 1;
+    std::swap(projBasis, altProjBasis);
+    std::swap(projThreadGroups, altProjThreadGroups);
   }
 }
