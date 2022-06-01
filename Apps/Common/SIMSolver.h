@@ -149,8 +149,10 @@ public:
     // Save FE model to VTF and HDF5 for visualization.
     // Save the initial configuration also if multi-step simulation.
     int geoBlk = 0, nBlock = 0;
+    IFEM::reportMemoryUsage();
     if (!this->saveState(geoBlk,nBlock,true,infile,tp.multiSteps()))
       return 2;
+    IFEM::reportMemoryUsage();
 
     this->printHeading(heading);
 

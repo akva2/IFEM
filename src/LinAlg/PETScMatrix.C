@@ -186,11 +186,6 @@ void PETScMatrix::initAssembly (const SAM& sam, bool delayLocking)
   // Set correct number of rows and columns for matrix.
   MatSetSizes(pA,neq,neq,PETSC_DETERMINE,PETSC_DETERMINE);
 
-  // Allocate sparsity pattern
-  std::vector<IntSet> dofc;
-  if (!adm.dd.isPartitioned())
-    sam.getDofCouplings(dofc);
-
   if (matvec.empty()) {
     MatSetFromOptions(pA);
 

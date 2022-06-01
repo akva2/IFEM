@@ -16,8 +16,11 @@
 
 #include "ASMstruct.h"
 #include "ASM3D.h"
+#include "BasisFunctionCache.h"
 #include "Interface.h"
 #include "ThreadGroups.h"
+
+#include <memory>
 
 namespace utl {
   class Point;
@@ -71,6 +74,30 @@ class ASMs3D : public ASMstruct, public ASM3D
     Face() { isnod = incrI = incrJ = nnodI = 0; indxI = 1; }
     //! \brief Returns \a isnod which then is incremented.
     int next();
+  };
+
+  class BasisFunctionCache : public ::BasisFunctionCache
+  {
+  public:
+    BasisFunctionCache(const ASMs3D& pch, int b = 1);
+
+    double getParam(int dir, size_t pt, size_t num) override;
+
+    size_t index(size_t el) override;
+
+  protected:
+    bool internalInit() override;
+    BasisFunctionVals calculatePt(size_t el, size_t gp) override;
+    void calculateAll() override;
+
+    const ASMs3D& patch;
+    std::array<Matrix,3> gpar;
+    std::array<int,3> ng;
+    int basis;
+    int nel1, nel2;
+
+private:
+    std::array<size_t, 3> elmIndex(size_t el);
   };
 
 public:
@@ -620,7 +647,7 @@ protected:
   //! \param[in] xi Dimensionless Gauss point coordinates [-1,1]
   //! \return The parameter value matrix casted into a one-dimensional vector
   const Vector& getGaussPointParameters(Matrix& uGP, int dir, int nGauss,
-					const double* xi) const;
+                                        const double* xi) const;
 
   //! \brief Calculates parameter values for the Greville points.
   //! \param[out] prm Parameter values in given direction for all points
@@ -821,6 +848,9 @@ protected:
   ThreadGroups                threadGroupsVol;
   //! Element groups for multi-threaded face assembly
   std::map<char,ThreadGroups> threadGroupsFace;
+
+  //! Basis function cache
+  std::vector<std::unique_ptr<BasisFunctionCache>> myCache;
 };
 
 #endif

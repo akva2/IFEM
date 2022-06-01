@@ -762,6 +762,7 @@ private:
 public:
   static bool ignoreDirichlet; //!< Set to \e true for free vibration analysis
   static bool preserveNOrder;  //!< Set to \e true to preserve node ordering
+  AlgEqSystem*  myEqSys;     //!< The actual linear equation system
 
 protected:
   //! \brief Scalar field container
@@ -823,7 +824,6 @@ protected:
   const std::map<int,int>* g2l; //!< Pointer to global-to-local node mapping
 
   // Equation solver attributes
-  AlgEqSystem*  myEqSys;     //!< The actual linear equation system
   SAM*          mySam;       //!< Auxiliary data for FE assembly management
   LinSolParams* mySolParams; //!< Input parameters for PETSc
   LinSolParams* myGl2Params; //!< Input parameters for PETSc, for L2 projection

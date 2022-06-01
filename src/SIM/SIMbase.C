@@ -390,6 +390,7 @@ bool SIMbase::preprocess (const IntVec& ignored, bool fixDup)
 #endif
     return false;
   }
+  IFEM::reportMemoryUsage();
 
   if (mdFlag > 0)
     nDofS = mySam->getNoDOFs();
@@ -399,6 +400,7 @@ bool SIMbase::preprocess (const IntVec& ignored, bool fixDup)
               <<" domain decomposition data."<< std::endl;
     return false;
   }
+  IFEM::reportMemoryUsage();
 
   // Now perform the sub-class specific final preprocessing, if any
   return this->preprocessB() && ierr == 0;

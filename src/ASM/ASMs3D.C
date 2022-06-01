@@ -1978,6 +1978,12 @@ bool ASMs3D::integrate (Integrand& integrand,
   bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
   bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
 
+  if (myCache.empty())
+    myCache.emplace_back(std::make_unique<BasisFunctionCache>(*this, 1));
+
+  BasisFunctionCache& cache = *myCache.front();
+  cache.init(use2ndDer ? 2 : 1);
+
   // Get Gaussian quadrature points and weights
   std::array<int,3> ng;
   std::array<const double*,3> xg, wg;
@@ -2187,8 +2193,10 @@ bool ASMs3D::integrate (Integrand& integrand,
         // --- Integration loop over all Gauss points in each direction --------
 
         int ip = (((i3-p3)*ng[2]*nel2 + i2-p2)*ng[1]*nel1 + i1-p1)*ng[0];
+        int ip2 = cache.index(iel-1);
         int jp = (((i3-p3)*nel2 + i2-p2)*nel1 + i1-p1)*ng[0]*ng[1]*ng[2];
         fe.iGP = firstIp + jp; // Global integration point counter
+        std::cout << ip << " vs " << ip2 << std::endl;
 
         for (int k = 0; k < ng[2]; k++, ip += ng[1]*(nel2-1)*ng[0]*nel1)
           for (int j = 0; j < ng[1]; j++, ip += ng[0]*(nel1-1))
@@ -2200,9 +2208,15 @@ bool ASMs3D::integrate (Integrand& integrand,
               fe.zeta = xg[2][k];
 
               // Parameter values of current integration point
+              double u2 = cache.getParam(0, iel-1, i+1);
+              double v2 = cache.getParam(1, iel-1, j+1);
+              double w2 = cache.getParam(2, iel-1, k+1);
               fe.u = param[0] = gpar[0](i+1,i1-p1+1);
               fe.v = param[1] = gpar[1](j+1,i2-p2+1);
               fe.w = param[2] = gpar[2](k+1,i3-p3+1);
+
+              std::cout << u2 << " " << v2 << " " << w2 << " vs\n"
+                        << fe.u << " " << fe.v << " " << fe.w << std::endl;
 
               // Fetch basis function derivatives at current integration point
               if (use2ndDer)
@@ -3790,4 +3804,116 @@ bool ASMs3D::addRigidCpl (int lindx, int ldim, int basis,
   }
 
   return this->ASMstruct::addRigidCpl(lindx,ldim,basis,gMaster,Xmaster,extraPt);
+}
+
+
+ASMs3D::BasisFunctionCache::BasisFunctionCache (const ASMs3D& pch, int b) :
+  patch(pch), basis(b)
+{
+
+}
+
+
+bool ASMs3D::BasisFunctionCache::internalInit ()
+{
+  // Get Gaussian quadrature points and weights
+  std::array<const double*,3> xg, wg;
+  for (int d = 0; d < 3; d++)
+  {
+    ng[d] = patch.getNoGaussPt(patch.svol->order(d));
+    xg[d] = GaussQuadrature::getCoord(ng[d]);
+    wg[d] = GaussQuadrature::getWeight(ng[d]);
+    if (!xg[d] || !wg[d]) return false;
+  }
+
+  // Compute parameter values of the Gauss points over the whole patch
+  for (int d = 0; d < 3; d++)
+    patch.getGaussPointParameters(gpar[d],d,ng[d],xg[d]);
+
+  const int p1 = patch.svol->order(0);
+  const int p2 = patch.svol->order(1);
+  const int n1 = patch.svol->numCoefs(0);
+  const int n2 = patch.svol->numCoefs(1);
+  nel1 = n1 - p1 + 1;
+  nel2 = n2 - p2 + 1;
+
+  return true;
+}
+
+
+double ASMs3D::BasisFunctionCache::getParam (int dir, size_t el, size_t gp)
+{
+  std::array<size_t,3> elIdx = this->elmIndex(el);
+  return gpar[dir](gp,elIdx[dir]+1);
+}
+
+
+BasisFunctionVals ASMs3D::BasisFunctionCache::calculatePt (size_t el, size_t gp)
+{
+  std::array<size_t,3> elIdx = this->elmIndex(el);
+
+  size_t i3 = gp / (ng[0]*ng[1]);
+  gp -= i3*ng[0]*ng[1];
+  size_t i2 = gp / ng[0];
+  size_t i1 = gp % ng[0];
+
+  BasisFunctionVals result;
+  if (nderiv == 1) {
+    Go::BasisDerivs spline;
+    patch.getBasis(basis)->computeBasis(this->getParam(0, elIdx[0], i1),
+                                        this->getParam(1, elIdx[1], i2),
+                                        this->getParam(2, elIdx[2], i3), spline);
+    SplineUtils::extractBasis(spline, result.N, result.dNdu);
+  } else if (nderiv == 2) {
+    Go::BasisDerivs2 spline;
+    patch.getBasis(basis)->computeBasis(this->getParam(0, elIdx[0], i1),
+                                        this->getParam(1, elIdx[1], i2),
+                                        this->getParam(2, elIdx[2], i3), spline);
+    SplineUtils::extractBasis(spline, result.N, result.dNdu, result.d2Ndu2);
+  }
+
+  return result;
+}
+
+
+size_t ASMs3D::BasisFunctionCache::index (size_t el)
+{
+  std::array<size_t,3> elIdx = this->elmIndex(el);
+  return ((elIdx[2]*ng[2]*nel2 + elIdx[1])*ng[1]*nel1 + elIdx[0])*ng[0];
+}
+
+
+std::array<size_t, 3> ASMs3D::BasisFunctionCache::elmIndex(size_t el)
+{
+  std::array<size_t, 3> result;
+
+  result[0] = el % nel1;
+  result[1] = (el / nel1) % nel2;
+  result[2] = el / (nel1*nel2);
+
+  return result;
+}
+
+
+void ASMs3D::BasisFunctionCache::calculateAll ()
+{
+  if (nderiv == 1) {
+    std::vector<Go::BasisDerivs>  spline;
+     patch.getBasis(basis)->computeBasisGrid(gpar[0], gpar[1], gpar[2], spline);
+     values.resize(spline.size());
+     size_t idx = 0;
+     for (const Go::BasisDerivs& spl : spline) {
+       SplineUtils::extractBasis(spl, values[idx].N, values[idx].dNdu);
+       ++idx;
+     }
+  } else if (nderiv == 2) {
+    std::vector<Go::BasisDerivs2> spline;
+     patch.getBasis(basis)->computeBasisGrid(gpar[0], gpar[1], gpar[2], spline);
+     values.resize(spline.size());
+     size_t idx = 0;
+     for (const Go::BasisDerivs2& spl : spline) {
+       SplineUtils::extractBasis(spl, values[idx].N, values[idx].dNdu, values[idx].d2Ndu2);
+       ++idx;
+     }
+  }
 }

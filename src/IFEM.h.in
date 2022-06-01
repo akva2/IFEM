@@ -59,6 +59,8 @@ public:
   //! \brief Polls the control fifo for instructions.
   static bool pollControllerFifo();
 
+  static void reportMemoryUsage();
+
   static utl::LogStream cout; //!< Combined standard out for parallel processes
 
   static std::shared_ptr<std::ostringstream> memoryLog; //!< Logging data stored in memory

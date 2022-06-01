@@ -181,6 +181,30 @@ void dgetrs_(const char& trans, const int& n, const int& nrhs,
              Real* A, const int& lda, int* ipiv,
              Real* B, const int& ldb, int& info);
 
+//! \brief Compute the Cholesky factorization.
+void dpotrf_(const char& trans, const int& n, Real* A,
+             const int& lda, int& info);
+
+void dsygst_(const int& itype, const char& trans, const int& N,
+             Real* A, const int& lda, Real* B,
+             const int& ldb, int& info);
+
+void dsytrd_(const char& trans, const int& N, Real* A,
+             const int& lda, Real* D, Real* E,
+             Real* tau, Real* work, const int& lwork, int& info);
+
+void dorgtr_(const char& trans, const int& N, Real* A,
+             const int& lda, Real* tau, Real* work,
+             const int& lwork, int& info);
+
+void dsteqr_(const char& compz, const int& N,
+             Real* D, Real* E, Real* z, const int& ldz,
+             Real* work, int& info);
+
+void dtrsv_(const char& Uplo, const char& trans, const char& diag,
+            const int& N, Real* A, const int& lda, Real* X,
+            const int& incx);
+
 //! \brief Returns a norm of the matrix \b A.
 //! \details This is a FORTRAN-77 function in the LAPack library.
 //! \sa LAPack library documentation.

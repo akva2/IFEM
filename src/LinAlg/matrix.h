@@ -1648,7 +1648,7 @@ namespace utl //! General utility classes and functions.
         for (size_t k = 0; k < nsp; k++) s <<' ';
       }
       for (size_t j = 1; j <= A.cols(); j++)
-        s <<' '<< trunc(A(i,j));
+        s <<' '<< /*trunc(*/A(i,j)/*)*/;
     }
     s <<" ];"<< std::endl;
   }

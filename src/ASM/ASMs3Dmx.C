@@ -460,6 +460,7 @@ Vec3 ASMs3Dmx::getCoord (size_t inod) const
   return RealArray(cit,cit+3);
 }
 
+#include "IFEM.h"
 
 bool ASMs3Dmx::getSize (int& n1, int& n2, int& n3, int basis) const
 {
@@ -493,27 +494,34 @@ bool ASMs3Dmx::integrate (Integrand& integrand,
   if (!xg || !wg) return false;
 
   // Compute parameter values of the Gauss points over the whole patch
+  static constexpr bool conservative = true;
+  IFEM::reportMemoryUsage();
   std::array<Matrix,3> gpar;
-  for (int d = 0; d < 3; d++)
-    this->getGaussPointParameters(gpar[d],d,nGauss,xg);
+  //if constexpr (!conservative)
+    for (int d = 0; d < 3; d++)
+      this->getGaussPointParameters(gpar[d],d,nGauss,xg);
 
   // Evaluate basis function derivatives at all integration points
   std::vector<std::vector<Go::BasisDerivs>>  splinex;
   std::vector<std::vector<Go::BasisDerivs2>> splinex2;
-  if (use2ndDer)
-  {
-    splinex2.resize(m_basis.size());
-#pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < m_basis.size(); i++)
-      m_basis[i]->computeBasisGrid(gpar[0],gpar[1],gpar[2],splinex2[i]);
+  IFEM::reportMemoryUsage();
+  if constexpr (!conservative) {
+    if (use2ndDer)
+    {
+      splinex2.resize(m_basis.size());
+  #pragma omp parallel for schedule(static)
+      for (size_t i = 0; i < m_basis.size(); i++)
+        m_basis[i]->computeBasisGrid(gpar[0],gpar[1],gpar[2],splinex2[i]);
+    }
+    else
+    {
+      splinex.resize(m_basis.size());
+  #pragma omp parallel for schedule(static)
+      for (size_t i = 0; i < m_basis.size(); i++)
+        m_basis[i]->computeBasisGrid(gpar[0],gpar[1],gpar[2],splinex[i]);
+    }
   }
-  else
-  {
-    splinex.resize(m_basis.size());
-#pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < m_basis.size(); i++)
-      m_basis[i]->computeBasisGrid(gpar[0],gpar[1],gpar[2],splinex[i]);
-  }
+  IFEM::reportMemoryUsage();
 
   const int p1 = svol->order(0);
   const int p2 = svol->order(1);
@@ -613,10 +621,20 @@ bool ASMs3Dmx::integrate (Integrand& integrand,
               // Fetch basis function derivatives at current integration point
               if (use2ndDer)
                 for (size_t b = 0; b < m_basis.size(); ++b)
-                  SplineUtils::extractBasis(splinex2[b][ip],fe.basis(b+1),dNxdu[b], d2Nxdu2[b]);
+                  if constexpr (conservative) {
+                    Go::BasisDerivs2 splin;
+                    m_basis[b]->computeBasis(fe.u, fe.v, fe.w, splin);
+                    SplineUtils::extractBasis(splin,fe.basis(b+1),dNxdu[b], d2Nxdu2[b]);
+                   } else
+                    SplineUtils::extractBasis(splinex2[b][ip],fe.basis(b+1),dNxdu[b], d2Nxdu2[b]);
               else
                 for (size_t b = 0; b < m_basis.size(); ++b)
-                  SplineUtils::extractBasis(splinex[b][ip],fe.basis(b+1),dNxdu[b]);
+                  if constexpr (conservative) {
+                    Go::BasisDerivs splin;
+                    m_basis[b]->computeBasis(fe.u, fe.v, fe.w, splin);
+                    SplineUtils::extractBasis(splin,fe.basis(b+1),dNxdu[b]);
+                  } else
+                    SplineUtils::extractBasis(splinex[b][ip],fe.basis(b+1),dNxdu[b]);
 
               // Compute Jacobian inverse of the coordinate mapping and
               // basis function derivatives w.r.t. Cartesian coordinates
