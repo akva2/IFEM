@@ -87,6 +87,8 @@ public:
   bool getDofCouplings(IntVec& irow, IntVec& jcol) const;
   //! \brief Finds the set of free DOFs coupled to each free DOF.
   bool getDofCouplings(std::vector<IntSet>& dofc) const;
+  //! \brief The sparse structure (DOF couplings) in the system matrix for an element.
+  bool resolve1PCs(std::vector<int>& meen) const;
 
   //! \brief Initializes the system matrices prior to the element assembly.
   //! \param sysK   The system left-hand-side matrix to be initialized

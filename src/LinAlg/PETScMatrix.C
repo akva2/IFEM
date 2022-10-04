@@ -308,6 +308,7 @@ void PETScMatrix::setupSparsityPartitioned (const SAM& sam)
   for (int elm = 1; elm <= sam.nel; ++elm) {
     IntVec meen;
     sam.getElmEqns(meen,elm);
+    sam.resolve1PCs(meen);
     for (int i : meen)
       if (i > 0 && adm.dd.getGlobalEq(i) >= iMin && adm.dd.getGlobalEq(i) <= iMax)
         for (int j : meen)
@@ -323,6 +324,7 @@ void PETScMatrix::setupSparsityPartitioned (const SAM& sam)
   for (int elm : adm.dd.getElms()) {
     IntVec meen;
     sam.getElmEqns(meen,elm+1);
+    sam.resolve1PCs(meen);
     for (int i : meen)
       if (i > 0)
         for (int j : meen)
@@ -745,7 +747,7 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool knoll)
   if (solParams.getIntValue("verbosity") > 1) {
     PetscInt its;
     KSPGetIterationNumber(ksp,&its);
-    PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %D\n",solParams.getStringValue("type").c_str(),its);
+    PetscPrintf(PETSC_COMM_WORLD,"\n Iterations for %s = %i\n",solParams.getStringValue("type").c_str(),its);
   }
   nLinSolves++;
   factored = true;

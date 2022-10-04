@@ -354,6 +354,24 @@ bool SAM::getDofCouplings (IntVec& irow, IntVec& jcol) const
 }
 
 
+bool SAM::resolve1PCs(std::vector<int>& meen) const
+{
+  for (int& jeq : meen)
+  {
+    if (jeq < 0)
+    {
+      int jpmceq1 = mpmceq[-jeq-1];
+      int jpmceq2 = mpmceq[-jeq]-1;
+      if (jpmceq2-jpmceq1 == 1)
+        if (mmceq[jpmceq1] > 0)
+          jeq = meqn[mmceq[jpmceq1]-1];
+    }
+  }
+
+  return true;
+}
+
+
 bool SAM::getDofCouplings (std::vector<IntSet>& dofc) const
 {
   dofc.resize(neq);
