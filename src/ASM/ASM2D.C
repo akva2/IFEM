@@ -23,7 +23,8 @@
 #include "LR/ASMu2DIB.h"
 #include "LR/ASMu2DC1.h"
 #include "LR/ASMu2Dmx.h"
-#include "ASMu2Dnurbs.h"
+#include "LR/ASMu2Dnurbs.h"
+#include "LR/ASMu2Dmxnurbs.h"
 #endif
 #include "Vec3Oper.h"
 
@@ -66,7 +67,10 @@ ASMbase* ASM2D::create (ASM::Discretization discretization,
     else
       return new ASMu2D(nd,nf.front());
   case ASM::LRNurbs:
-    return new ASMu2Dnurbs(nd,nf.front());
+    if (nf.size() > 1 || mixedFEM)
+      return new ASMu2Dmxnurbs(nd,nf);
+    else
+      return new ASMu2Dnurbs(nd,nf.front());
 #endif
 
   default:
@@ -101,6 +105,7 @@ ASMbase* ASM2D::clone (const CharVec& nf) const
   TRY_CLONE1(ASMs2DIB,nf)
   TRY_CLONE1(ASMs2D,nf)
 #ifdef HAS_LRSPLINE
+  TRY_CLONE2(ASMu2Dmxnurbs,nf)
   TRY_CLONE2(ASMu2Dmx,nf)
   TRY_CLONE1(ASMu2DC1,nf)
   TRY_CLONE1(ASMu2DIB,nf)

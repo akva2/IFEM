@@ -104,6 +104,8 @@ bool SIMoptions::parseDiscretizationTag (const TiXmlElement* elem)
         discretization = ASM::Spline;
       else if (discr == "lrsplines")
         discretization = ASM::LRSpline;
+      else if (discr == "lrnurbs")
+        discretization = ASM::LRNurbs;
       else if (discr == "triangular")
         discretization = ASM::Triangle;
     }

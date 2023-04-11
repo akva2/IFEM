@@ -162,7 +162,7 @@ public:
                 const std::string& basisName,
                 const std::string& fieldName,
                 int level = 0);
-  //! \brief Wrap an existings field.
+  //! \brief Wrap existing fields.
   //! \param fields Field to evaluate
   //! \details Takes ownership of given fields.
   FieldFunction(const std::vector<Field*>& fields);
@@ -238,10 +238,8 @@ protected:
   //! \brief Evaluates the field at the givent point \b X.
   std::vector<Real> getValues(const Vec3& X);
 
-private:
   mutable int currentLevel; //!< Current time level to evaluate at
 
-protected:
   std::vector<std::string> fName; //!< Name of field components
   std::string              bName; //!< Name of basis
 
@@ -265,6 +263,10 @@ public:
                    const std::string& basisName,
                    const std::string& fieldName,
                    int level = 0);
+  //! \brief Wrap existing fields.
+  //! \param fields Field to evaluate
+  //! \details Takes ownership of given fields.
+  VecFieldFunction(const std::vector<Fields*>& fields);
   //! \brief Empty destructor.
   virtual ~VecFieldFunction() {}
 

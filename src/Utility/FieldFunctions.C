@@ -417,6 +417,15 @@ VecFieldFunction::VecFieldFunction (const std::string& fileName,
     ncmp = field.front()->getNoFields();
 }
 
+VecFieldFunction::VecFieldFunction (const std::vector<Fields*>& fields)
+    : FieldsFuncBase("", "", "", -1)
+{
+  field = fields;
+  hasMultipleLevels = false;
+  lastLevel = currentLevel = 0;
+  npch = fields.size();
+}
+
 
 Vec3 VecFieldFunction::evaluate (const Vec3& X) const
 {

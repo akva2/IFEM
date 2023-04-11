@@ -216,17 +216,21 @@ void ASMu2Dnurbs::computeBasis (double u, double v,
 
 
 void ASMu2Dnurbs::computeBasis (double u, double v,
-                                Go::BasisDerivsSf2& bas, int iel) const
+                                Go::BasisDerivsSf2& bas, int iel,
+                                const LR::LRSplineSurface* spline) const
 {
   if (noNurbs)
     return this->ASMu2DC1::computeBasis(u,v,bas,iel);
 
   PROFILE3("ASMu2Dn::compBasis(2)");
 
-  const LR::Element* el = lrspline->getElement(iel);
+  if (!spline)
+    spline = lrspline.get();
+
+  const LR::Element* el = spline->getElement(iel);
 
   Go::BasisDerivsSf2 tmp;
-  lrspline->computeBasis(u,v,tmp,iel);
+  spline->computeBasis(u,v,tmp,iel);
   Vector w; w.reserve(tmp.basisValues.size());
   for (const LR::Basisfunction* func : el->support())
     w.push_back(func->cp(func->dim()-1));

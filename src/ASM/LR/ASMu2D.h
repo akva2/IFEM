@@ -419,7 +419,9 @@ public:
 
   //! \brief Returns a field using the projection basis.
   //! \param[in] coefs The coefficients for the field
-  virtual Fields* getProjectedFields(const Vector& coefs, size_t = 0) const;
+  //! \param[in] flag Flag.
+  //!\details Give a non-zero flag to force returning fields even if no separate projection basis.
+  virtual Fields* getProjectedFields(const Vector& coefs, size_t flag = 0) const;
 
   //! \brief Stores the mesh basis to encapsulated postscript files.
   //! \param[in] fName Prefix for file names
@@ -602,7 +604,8 @@ protected:
                             const LR::LRSplineSurface* spline = nullptr) const;
   //! \brief Evaluate basis functions and two derivatives in a point.
   virtual void computeBasis(double u, double v,
-                            Go::BasisDerivsSf2& bas, int iel) const;
+                            Go::BasisDerivsSf2& bas, int iel,
+                            const LR::LRSplineSurface* spline = nullptr) const;
   //! \brief Evaluate basis functions and three derivatives in a point.
   virtual void computeBasis(double u, double v,
                             Go::BasisDerivsSf3& bas, int iel) const;

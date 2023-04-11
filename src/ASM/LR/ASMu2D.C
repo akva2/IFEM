@@ -2461,9 +2461,9 @@ Field* ASMu2D::getProjectedField (const Vector& coefs) const
 }
 
 
-Fields* ASMu2D::getProjectedFields (const Vector& coefs, size_t) const
+Fields* ASMu2D::getProjectedFields (const Vector& coefs, size_t flag) const
 {
-  if (projBasis.get() == this->getBasis(1))
+  if (!this->separateProjectionBasis() && flag == 0)
     return nullptr;
 
   size_t ncmp = coefs.size() / this->getNoProjectionNodes();
@@ -2857,11 +2857,14 @@ void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf& bas,
 
 
 void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf2& bas,
-                           int iel) const
+                           int iel, const LR::LRSplineSurface* spline) const
 {
   PROFILE3("ASMu2D::compBasis(2)");
 
-  lrspline->computeBasis(u,v,bas,iel);
+  if (spline)
+    spline->computeBasis(u,v,bas,iel);
+  else
+    lrspline->computeBasis(u,v,bas,iel);
 }
 
 

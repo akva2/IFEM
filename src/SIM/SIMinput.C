@@ -125,7 +125,15 @@ bool SIMinput::parseGeometryTag (const TiXmlElement* elem)
     if (myPatches.empty() && !isReading)
       nGlPatches = myModel.size();
   }
-
+  else if (!strncasecmp(elem->Value(),"geompatchfile",13) && elem->FirstChild())
+  {
+    if (this->isRefined)
+      return true;
+    const char* patch = elem->FirstChild()->Value();
+    std::fstream isp(elem->FirstChild()->Value(), std::ios_base::in);
+    if (myModel.front()->read(isp, -1))
+      IFEM::cout <<"\tReading data file "<< patch << std::endl;
+  }
   else if (!strcasecmp(elem->Value(),"nodefile") && elem->FirstChild())
   {
     if (!this->createFEMmodel())

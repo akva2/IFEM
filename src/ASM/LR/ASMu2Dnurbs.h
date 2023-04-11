@@ -50,7 +50,8 @@ protected:
                             const LR::LRSplineSurface* spline) const;
   //! \brief Evaluate basis functions and two derivatives in a point.
   virtual void computeBasis(double u, double v,
-                            Go::BasisDerivsSf2& bas, int iel) const;
+                            Go::BasisDerivsSf2& bas, int iel,
+                            const LR::LRSplineSurface* spline) const;
 
   //! \brief Evaluate basis functions and two derivatives in a point.
   virtual void computeBasis(double u, double v,
