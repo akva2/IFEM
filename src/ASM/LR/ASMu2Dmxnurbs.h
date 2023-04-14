@@ -227,6 +227,9 @@ protected:
                             bool ignoreGlobalLM);
 
 private:
+  //! \brief Copied from libLRSpline and modified to be NURBS aware.
+  void writePostscriptElements (std::shared_ptr<LR::LRSplineSurface> mesh,
+                                std::ostream& out, int nu=2, int nv=2);
   std::vector<std::shared_ptr<LR::LRSplineSurface>> m_basis; //!< All bases
   LR::LRSplineSurface* threadBasis; //!< Basis for thread groups
   std::shared_ptr<LR::LRSplineSurface> refBasis; //!< Basis to refine based on

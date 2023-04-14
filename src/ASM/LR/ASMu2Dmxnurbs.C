@@ -1199,8 +1199,8 @@ size_t ASMu2Dmxnurbs::getNoRefineElms() const
 
 void ASMu2Dmxnurbs::storeMesh (const std::string& fName, int fType) const
 {
-  auto&& writeBasis = [fName,fType](const LR::LRSplineSurface* patch,
-                                    const std::string& tag)
+  auto&& writeBasis = [fName,fType,this](const std::shared_ptr<LR::LRSplineSurface>& patch,
+                                         const std::string& tag)
   {
     std::string fileName = "_patch_" + tag + "_" + fName + ".eps";
     if (fType%2) {
@@ -1209,11 +1209,15 @@ void ASMu2Dmxnurbs::storeMesh (const std::string& fName, int fType) const
     }
     if ((fType/2)%2) {
       std::ofstream meshFile("physical"+fileName);
-      patch->writePostscriptElements(meshFile);
+      ASMu2Dmxnurbs* This = const_cast<ASMu2Dmxnurbs*>(this);
+      This->writePostscriptElements(const_cast<std::shared_ptr<LR::LRSplineSurface>&>(patch),
+                                    meshFile);
     }
     if ((fType/4)%2) {
       std::ofstream meshFile("param_dot"+fileName);
-      patch->writePostscriptElements(meshFile);
+      ASMu2Dmxnurbs* This = const_cast<ASMu2Dmxnurbs*>(this);
+      This->writePostscriptElements(const_cast<std::shared_ptr<LR::LRSplineSurface>&>(patch),
+                                    meshFile);
     }
     if ((fType/8)%2) {
       std::ofstream meshFile("physical_dot"+fileName);
@@ -1224,11 +1228,11 @@ void ASMu2Dmxnurbs::storeMesh (const std::string& fName, int fType) const
   std::string btag("basis1");
   for (const auto& patch : m_basis)
   {
-    writeBasis(patch.get(), btag);
+    writeBasis(patch, btag);
     ++btag.back();
   }
-  writeBasis(projBasis.get(), "proj");
-  writeBasis(refBasis.get(), "ref");
+  writeBasis(projBasis, "proj");
+  writeBasis(refBasis, "ref");
 }
 
 
@@ -1254,4 +1258,103 @@ void ASMu2Dmxnurbs::swapProjectionBasis ()
     std::swap(projBasis, altProjBasis);
     std::swap(projThreadGroups, altProjThreadGroups);
   }
+}
+
+void ASMu2Dmxnurbs::writePostscriptElements (std::shared_ptr<LR::LRSplineSurface> mesh,
+                                             std::ostream& out,
+                                             int nu, int nv)
+{
+    // get date
+    time_t t = time(0);
+    tm* lt = localtime(&t);
+    char date[128];
+    sprintf(date, "%02d/%02d/%04d", lt->tm_mday, lt->tm_mon + 1, lt->tm_year+1900);
+
+    mesh.swap(lrspline);
+    LR::LRSpline* geoBak = geo;
+    geo = lrspline.get();
+
+    this->generateBezierBasis();
+    this->generateBezierExtraction();
+
+    // get bounding box (max/min of the control points)
+    double x[2];
+    double y[2];
+    x[0] = 1e7;
+    x[1] = -1e7;
+    y[0] = 1e7;
+    y[1] = -1e7;
+    for (LR::Basisfunction *b : lrspline->getAllBasisfunctions()) {
+        std::vector<double>::const_iterator cp = b->cp();
+        x[0] = (cp[0] < x[0]) ? cp[0] : x[0];
+        x[1] = (cp[0] > x[1]) ? cp[0] : x[1];
+        y[0] = (cp[1] < y[0]) ? cp[1] : y[0];
+        y[1] = (cp[1] > y[1]) ? cp[1] : y[1];
+    }
+
+    double dx = x[1]-x[0];
+    double dy = y[1]-y[0];
+    double scale = (dx>dy) ? 1000.0/dx : 1000.0/dy;
+
+    int xmin = (x[0] - dx/20.0)*scale;
+    int ymin = (y[0] - dy/20.0)*scale;
+    int xmax = (x[1] + dx/20.0)*scale;
+    int ymax = (y[1] + dy/20.0)*scale;
+
+    // print eps header
+    out << "%!PS-Adobe-3.0 EPSF-3.0\n";
+    out << "%%Creator: LRSplineHelpers.cpp object\n";
+    out << "%%Title: LR-spline physical domain\n";
+    out << "%%CreationDate: " << date << std::endl;
+    out << "%%Origin: 0 0\n";
+    out << "%%BoundingBox: " << xmin << " " << ymin << " " << xmax << " " << ymax << std::endl;
+    out << "0 setgray\n";
+    out << "1 setlinewidth\n";
+
+    for(const LR::Element* el : lrspline->getAllElements()) {
+        double umin = el->umin();
+        double umax = el->umax();
+        double vmin = el->vmin();
+        double vmax = el->vmax();
+
+        Vec3 pt;
+        double u[2] = {umin, vmin};
+        this->evalPoint(el->getId(), u, pt);
+
+        out << "newpath\n";
+        out <<  pt[0]*scale << " " << pt[1]*scale << " moveto\n";
+        for(int i=1; i<nu; i++) { // SOUTH side
+            u[0] = umin + (umax-umin)*i/(nu-1);
+            u[1] = vmin;
+            this->evalPoint(el->getId(), u, pt);
+            out <<  pt[0]*scale << " " << pt[1]*scale << " lineto\n";
+        }
+        for(int i=1; i<nv; i++) { // EAST side
+            u[0] = umax;
+            u[1] = vmin + (vmax-vmin)*i/(nv-1);
+            this->evalPoint(el->getId(), u, pt);
+            out <<  pt[0]*scale << " " << pt[1]*scale << " lineto\n";
+        }
+        for(int i=nu-1; i-->0; ) { // NORTH side
+            u[0] = umin + (umax-umin)*i/(nu-1);
+            u[1] = vmax;
+            this->evalPoint(el->getId(), u, pt);
+            out <<  pt[0]*scale << " " << pt[1]*scale << " lineto\n";
+        }
+        for(int i=nv-1; i-->1; ) { // WEST side
+            u[0] = umin;
+            u[1] = vmin + (vmax-vmin)*i/(nv-1);
+            this->evalPoint(el->getId(), u, pt);
+            out <<  pt[0]*scale << " " << pt[1]*scale << " lineto\n";
+        }
+        out << "closepath\n";
+        out << "stroke\n";
+    }
+
+    out << "%%EOF\n";
+
+    mesh.swap(lrspline);
+    geo = geoBak;
+    this->generateBezierBasis();
+    this->generateBezierExtraction();
 }

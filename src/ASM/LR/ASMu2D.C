@@ -2819,7 +2819,7 @@ void ASMu2D::generateBezierExtraction ()
   const int p1 = geo->order(0);
   const int p2 = geo->order(1);
 
-  myBezierExtract.resize(nel);
+  myBezierExtract.resize(geo->nElements());
   RealArray extrMat;
   int iel = 0;
   for (const LR::Element* elm : geo->getAllElements())
