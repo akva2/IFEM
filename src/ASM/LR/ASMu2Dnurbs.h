@@ -60,6 +60,16 @@ protected:
   //! \brief Converts current tensor spline object to LR-spline.
   virtual LR::LRSplineSurface* createLRfromTensor();
 
+  //! \brief Returns a field using the projection basis.
+  //! \param[in] coefs The coefficients for the field
+  virtual Field* getProjectedField(const Vector& coefs) const;
+
+  //! \brief Returns a field using the projection basis.
+  //! \param[in] coefs The coefficients for the field
+  //! \param[in] flag Flag.
+  //!\details Give a non-zero flag to force returning fields even if no separate projection basis.
+  virtual Fields* getProjectedFields(const Vector& coefs, size_t flag = 0) const;
+
 private:
   bool noNurbs; //!< If \e true, we read a spline and thus forward to ASMu2D
 };

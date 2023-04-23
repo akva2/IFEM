@@ -20,6 +20,8 @@
 #include "ASMu2Dnurbs.h"
 #include "FiniteElement.h"
 #include "CoordinateMapping.h"
+#include "LRNURBSField2D.h"
+#include "LRNURBSFields2D.h"
 #include "Profiler.h"
 
 
@@ -358,4 +360,32 @@ LR::LRSplineSurface* ASMu2Dnurbs::createLRfromTensor ()
   }
 
   return lrspline.get();
+}
+
+
+Field* ASMu2Dnurbs::getProjectedField (const Vector& coefs) const
+{
+  if (coefs.size() == this->getNoProjectionNodes())
+    return new LRNURBSField2D(projBasis.get(),coefs);
+
+  std::cerr <<" *** ASMu2Dnurbs::getProjectedFields: Non-matching coefficent array,"
+            <<" size="<< coefs.size() <<" nnod="<< this->getNoProjectionNodes()
+            << std::endl;
+  return nullptr;
+}
+
+
+Fields* ASMu2Dnurbs::getProjectedFields (const Vector& coefs, size_t flag) const
+{
+  if (!this->separateProjectionBasis() && flag == 0)
+    return nullptr;
+
+  size_t ncmp = coefs.size() / this->getNoProjectionNodes();
+  if (ncmp*this->getNoProjectionNodes() == coefs.size())
+    return new LRNURBSFields2D(projBasis.get(),coefs,ncmp);
+
+  std::cerr <<" *** ASMu2Dnurbs::getProjectedFields: Non-matching coefficent array,"
+            <<" size="<< coefs.size() <<" nnod="<< this->getNoProjectionNodes()
+            << std::endl;
+  return nullptr;
 }

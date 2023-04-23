@@ -19,7 +19,9 @@
 #include "ASMs3DLag.h"
 #ifdef HAS_LRSPLINE
 #include "LR/ASMu2D.h"
+#include "LR/ASMu2Dnurbs.h"
 #include "LR/ASMu3D.h"
+#include "LR/LRNURBSField2D.h"
 #include "LR/LRSplineField2D.h"
 #include "LR/LRSplineField3D.h"
 #endif
@@ -29,6 +31,8 @@ Field* Field::create (const ASMbase* pch, const RealArray& v,
                       char basis, char cmp, const char* name)
 {
 #ifdef HAS_LRSPLINE
+  const ASMu2Dnurbs* pnu2 = dynamic_cast<const ASMu2Dnurbs*>(pch);
+  if (pnu2) return new LRNURBSField2D(pnu2,v,basis,cmp,name);
   const ASMu2D* pu2 = dynamic_cast<const ASMu2D*>(pch);
   if (pu2) return new LRSplineField2D(pu2,v,basis,cmp,name);
 
