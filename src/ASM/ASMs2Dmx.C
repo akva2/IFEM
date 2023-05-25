@@ -15,6 +15,7 @@
 #include "GoTools/geometry/SplineSurface.h"
 
 #include "ASMs2Dmx.h"
+#include "PiolaMapping.h"
 #include "TimeDomain.h"
 #include "FiniteElement.h"
 #include "GlobalIntegral.h"
@@ -523,8 +524,8 @@ double ASMs2Dmx::getParametricLength (int iel, int dir) const
 
 
 bool ASMs2Dmx::integrate (Integrand& integrand,
-			  GlobalIntegral& glInt,
-			  const TimeDomain& time)
+                         GlobalIntegral& glInt,
+                         const TimeDomain& time)
 {
   if (!surf) return true; // silently ignore empty patches
 
@@ -532,6 +533,7 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
 
   bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
   bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
+  bool usePiola = integrand.getIntegrandType() & Integrand::PIOLA;
 
   // Get Gaussian quadrature points and weights
   const double* xg = GaussQuadrature::getCoord(nGauss);
@@ -556,9 +558,15 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
   else
   {
     splinex.resize(m_basis.size());
+    if (usePiola)
+      splinex2.resize(m_basis.size());
 #pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < m_basis.size(); i++)
-      m_basis[i]->computeBasisGrid(gpar[0],gpar[1],splinex[i]);
+    for (size_t i = 0; i < m_basis.size(); i++) {
+      if (usePiola && i == static_cast<size_t>(geoBasis)-1)
+        m_basis[i]->computeBasisGrid(gpar[0],gpar[1],splinex2[i]);
+      else
+        m_basis[i]->computeBasisGrid(gpar[0],gpar[1],splinex[i]);
+    }
   }
 
   const int p1 = surf->order_u();
@@ -652,8 +660,12 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
               for (size_t b = 0; b < m_basis.size(); ++b)
                 SplineUtils::extractBasis(splinex2[b][ip],fe.basis(b+1),dNxdu[b],d2Nxdu2[b]);
             else
-              for (size_t b = 0; b < m_basis.size(); ++b)
-                SplineUtils::extractBasis(splinex[b][ip],fe.basis(b+1),dNxdu[b]);
+              for (size_t b = 0; b < m_basis.size(); ++b) {
+                if (usePiola && b == static_cast<size_t>(geoBasis)-1)
+                  SplineUtils::extractBasis(splinex2[b][ip],fe.basis(b+1),dNxdu[b],d2Nxdu2[b]);
+                else
+                  SplineUtils::extractBasis(splinex[b][ip],fe.basis(b+1),dNxdu[b]);
+              }
 
             // Compute Jacobian inverse of the coordinate mapping and
             // basis function derivatives w.r.t. Cartesian coordinates
@@ -666,16 +678,17 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
                 fe.grad(b+1).multiply(dNxdu[b],Jac);
 
             // Compute Hessian of coordinate mapping and 2nd order derivatives
-            if (use2ndDer) {
+            if (use2ndDer || usePiola)
               if (!utl::Hessian(Hess,fe.hess(geoBasis),Jac,Xnod,
                                 d2Nxdu2[geoBasis-1],fe.grad(geoBasis),true))
                 ok = false;
+
+            if (use2ndDer)
               for (size_t b = 0; b < m_basis.size() && ok; ++b)
                 if ((int)b != geoBasis)
                   if (!utl::Hessian(Hess,fe.hess(b+1),Jac,Xnod,
                                     d2Nxdu2[b],fe.grad(b+1),false))
                     ok = false;
-            }
 
             // Compute G-matrix
             if (integrand.getIntegrandType() & Integrand::G_MATRIX)
@@ -683,6 +696,13 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
 
             // Cartesian coordinates of current integration point
             X.assign(Xnod * fe.basis(geoBasis));
+
+            if (usePiola) {
+              Matrix J;
+              J.multiply(Xnod,dNxdu[geoBasis-1]);
+              if (!utl::piolaMapping(fe, J, Jac, dNxdu, Hess))
+                ok = false;
+            }
 
             // Evaluate the integrand and accumulate element contributions
             fe.detJxW *= dA*wg[i]*wg[j];

@@ -27,9 +27,10 @@
 #include "IntegrandBase.h"
 #include "CoordinateMapping.h"
 #include "GaussQuadrature.h"
-#include "SplineUtils.h"
+#include "PiolaMapping.h"
 #include "Point.h"
 #include "Profiler.h"
+#include "SplineUtils.h"
 #include "Vec3.h"
 
 #include <array>
@@ -328,6 +329,7 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
   const double* wg = GaussQuadrature::getWeight(nGauss);
   if (!xg || !wg) return false;
   bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
+  bool usePiola = integrand.getIntegrandType() & Integrand::PIOLA;
 
   ThreadGroups oneGroup;
   if (glInt.threadSafe()) oneGroup.oneGroup(nel);
@@ -428,9 +430,15 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
             }
           else
             for (size_t b=0; b < m_basis.size(); ++b) {
-              Go::BasisDerivsSf spline;
-              this->computeBasis(fe.u, fe.v, spline, els[b]-1, m_basis[b].get());
-              SplineUtils::extractBasis(spline,fe.basis(b+1),dNxdu[b]);
+              if (b == static_cast<size_t>(geoBasis)-1 && usePiola) {
+                  Go::BasisDerivsSf2 spline;
+                  this->computeBasis(fe.u, fe.v, spline, els[b]-1, m_basis[b].get());
+                  SplineUtils::extractBasis(spline,fe.basis(b+1),dNxdu[b],d2Nxdu2[b]);
+              } else {
+                Go::BasisDerivsSf spline;
+                m_basis[b]->computeBasis(fe.u, fe.v, spline, els[b]-1);
+                SplineUtils::extractBasis(spline,fe.basis(b+1),dNxdu[b]);
+              }
             }
 
           // Compute Jacobian inverse of coordinate mapping and derivatives
@@ -442,16 +450,16 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
               fe.grad(b+1).multiply(dNxdu[b],Jac);
 
           // Compute Hessian of coordinate mapping and 2nd order derivatives
-          if (use2ndDer) {
+          if (use2ndDer || usePiola)
             if (!utl::Hessian(Hess,fe.hess(geoBasis),Jac,Xnod,
                               d2Nxdu2[geoBasis-1],fe.grad(geoBasis),true))
               ok = false;
 
+          if (use2ndDer)
             for (size_t b = 0; b < m_basis.size() && ok; ++b)
               if ((int)b != geoBasis-1)
                 utl::Hessian(Hess,fe.hess(b+1),Jac,Xnod,
                              d2Nxdu2[b],fe.grad(b+1),false);
-          }
 
           // Compute G-matrix
           if (integrand.getIntegrandType() & Integrand::G_MATRIX)
@@ -459,6 +467,13 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
 
           // Cartesian coordinates of current integration point
           X.assign(Xnod * fe.basis(geoBasis));
+
+          if (usePiola) {
+            Matrix J;
+            J.multiply(Xnod,dNxdu[geoBasis-1]);
+            if (!utl::piolaMapping(fe, J, Jac, dNxdu, Hess))
+              ok = false;
+          }
 
           // Evaluate the integrand and accumulate element contributions
           fe.detJxW *= 0.25*dA*wg[i]*wg[j];
@@ -496,6 +511,8 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
   const double* xg = GaussQuadrature::getCoord(nGP);
   const double* wg = GaussQuadrature::getWeight(nGP);
   if (!xg || !wg) return false;
+
+  bool usePiola = integrand.getIntegrandType() & Integrand::PIOLA;
 
   // Find the parametric direction of the edge normal {-2,-1, 1, 2}
   const int edgeDir = (lIndex%10+1)/((lIndex%2) ? -2 : 2);
@@ -600,6 +617,17 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
         this->computeBasis(fe.u, fe.v, splinex[b], els[b]-1, m_basis[b].get());
         SplineUtils::extractBasis(splinex[b],fe.basis(b+1),dNxdu[b]);
       }
+      Matrix3D d2Ndu2;
+      for (size_t b = 0; b < m_basis.size(); ++b)
+        if (b == static_cast<size_t>(geoBasis)-1 && usePiola) {
+            Go::BasisDerivsSf2 spline;
+            this->computeBasis(fe.u, fe.v, splinex[b], els[b]-1, m_basis[b].get());
+            m_basis[b]->computeBasis(fe.u,fe.v,spline,els[b]-1);
+            SplineUtils::extractBasis(spline,fe.basis(b+1),dNxdu[b],d2Ndu2);
+        } else {
+          this->computeBasis(fe.u, fe.v, splinex[b], els[b]-1, m_basis[b].get());
+          SplineUtils::extractBasis(splinex[b],fe.basis(b+1),dNxdu[b]);
+        }
 
       // Compute Jacobian inverse of the coordinate mapping and
       // basis function derivatives w.r.t. Cartesian coordinates
@@ -616,6 +644,19 @@ bool ASMu2Dmx::integrate (Integrand& integrand, int lIndex,
 
       // Cartesian coordinates of current integration point
       X.assign(Xnod * fe.basis(geoBasis));
+
+      if (usePiola) {
+        Matrix3D Hess, dummy;
+        if (!utl::Hessian(Hess,dummy,Jac,Xnod,
+                          d2Ndu2,fe.grad(geoBasis),true)) {
+          ok = false;
+          continue;
+        }
+        Matrix J;
+        J.multiply(Xnod,dNxdu[geoBasis-1]);
+        if (!utl::piolaMapping(fe, J, Jac, dNxdu, Hess))
+          ok = false;
+      }
 
       // Evaluate the integrand and accumulate element contributions
       fe.detJxW *= dS*wg[i];
@@ -850,11 +891,6 @@ bool ASMu2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
     return false;
 
   Vector   ptSol;
-  std::vector<Matrix> dNxdu(m_basis.size()), dNxdX(m_basis.size());
-  Matrix   Jac, Xnod, eSol, ptDer;
-
-  std::vector<Go::BasisPtsSf> splinex(m_basis.size());
-
   std::vector<size_t> nc(nfx.size(), 0);
   if (nf)
     nc[0] = nf;
@@ -865,31 +901,83 @@ bool ASMu2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
   sField.resize(std::accumulate(nc.begin(), nc.end(), 0), nPoints);
   for (size_t i = 0; i < nPoints; i++)
   {
-    size_t ofs=0;
+    size_t ofs = 0;
     Vector Ztmp;
-    for (size_t j=0; j <  m_basis.size(); ++j) {
-      if (nc[j] == 0)
-        continue;
-      // Fetch element containing evaluation point.
-      // Sadly, points are not always ordered in the same way as the elements.
-      int iel = m_basis[j]->getElementContaining(gpar[0][i],gpar[1][i]);
+    if (true) {
+      std::vector<Vector> bcoeffs(m_basis.size());
 
-      // Evaluate basis function values/derivatives at current parametric point
-      // and multiply with control point values to get the point-wise solution
-      this->computeBasis(gpar[0][i],gpar[1][i],splinex[j],iel,m_basis[j].get());
+      auto eval = [this,&locSol](const int b, const int iel)
+      {
+          size_t ofs = std::accumulate(nb.begin(), nb.begin() + b, 0);
+          const LR::Element* elem = m_basis[b]->getElement(iel);
+          Vector U(elem->nBasisFunctions());
+          size_t col = 1;
+          for (const LR::Basisfunction* f : elem->support())
+            U(col++) = locSol(1 + f->getId() + ofs);
 
-      std::vector<LR::Element*>::iterator el_it = m_basis[j]->elementBegin()+iel;
-      Matrix val1(nc[j], splinex[j].basisValues.size());
-      size_t col=1;
-      for (auto* b : (*el_it)->support()) {
-        for (size_t n = 1; n <= nc[j]; ++n)
-          val1(n, col) = locSol(b->getId()*nc[j]+n+ofs);
-        ++col;
+          return U;
+      };
+
+      Matrix Xnod, dNdu;
+      Vector vals(m_basis.size());
+      Matrix J;
+      for (size_t j = 0; j <  m_basis.size(); ++j) {
+        int iel = m_basis[j]->getElementContaining(gpar[0][i], gpar[1][i]);
+        Vector bcoeffs;
+        if (j == static_cast<size_t>(geoBasis) - 1) {
+          Go::BasisDerivsSf spline;
+          m_basis[j]->computeBasis(gpar[0][i], gpar[1][i], spline, iel);
+          SplineUtils::extractBasis(spline, bcoeffs, dNdu);
+          // Set up control point (nodal) coordinates for current element
+          this->getElementCoordinates(Xnod, iel + 1);
+          J.multiply(Xnod, dNdu);
+          bcoeffs *= 1.0 / J.det();
+          J /= J.det();
+        } else {
+          // Evaluate basis function values/derivatives at current parametric point
+          // and multiply with control point values to get the point-wise solution
+          Go::BasisPtsSf spline;
+          m_basis[j]->computeBasis(gpar[0][i], gpar[1][i], spline, iel);
+          bcoeffs = spline.basisValues;
+        }
+        vals[j] = bcoeffs * eval(j, iel);
       }
-      Vector Ytmp;
-      val1.multiply(splinex[j].basisValues,Ytmp);
-      Ztmp.insert(Ztmp.end(),Ytmp.begin(),Ytmp.end());
-      ofs += nb[j]*nc[j];
+
+      Vector uv(2);
+      uv(1) = vals(1);
+      uv(2) = vals(2);
+      const auto uv2 = J * uv;
+
+      Ztmp.resize(3);
+      Ztmp(1) = uv2(1);
+      Ztmp(2) = uv2(2);
+      Ztmp(3) = vals(3);
+    } else {
+      std::vector<Go::BasisPtsSf> splinex(m_basis.size());
+      for (size_t j=0; j <  m_basis.size(); ++j) {
+        if (nc[j] == 0)
+          continue;
+        // Fetch element containing evaluation point.
+        // Sadly, points are not always ordered in the same way as the elements.
+        int iel = m_basis[j]->getElementContaining(gpar[0][i],gpar[1][i]);
+
+        // Evaluate basis function values/derivatives at current parametric point
+        // and multiply with control point values to get the point-wise solution
+        m_basis[j]->computeBasis(gpar[0][i],gpar[1][i],splinex[j],iel);
+
+        std::vector<LR::Element*>::iterator el_it = m_basis[j]->elementBegin()+iel;
+        Matrix val1(nc[j], splinex[j].basisValues.size());
+        size_t col=1;
+        for (const LR::Basisfunction* b : (*el_it)->support()) {
+          for (size_t n = 1; n <= nc[j]; ++n)
+            val1(n, col) = locSol(b->getId()*nc[j]+n+ofs);
+          ++col;
+        }
+        Vector Ytmp;
+        val1.multiply(splinex[j].basisValues,Ytmp);
+        Ztmp.insert(Ztmp.end(),Ytmp.begin(),Ytmp.end());
+        ofs += nb[j]*nc[j];
+      }
     }
 
     sField.fillColumn(i+1, Ztmp);

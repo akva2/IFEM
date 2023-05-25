@@ -77,6 +77,9 @@ public:
   Matrix     G;    //!< Covariant basis / Matrix used for stabilized methods
   Matrix     H;    //!< Hessian
 
+  Matrix PN;       //!< Piola basis functions
+  Matrix dPndX;    //!< Piola derivatives
+
   // Element quantities
   short int           p;    //!< Polynomial order of the basis in u-direction
   short int           q;    //!< Polynomial order of the basis in v-direction

@@ -169,7 +169,8 @@ public:
     XO_ELEMENTS        = 1<< 8, //!< Integrand uses extraordinary elements
     INTERFACE_TERMS    = 1<< 9, //!< Integrand has element interface terms
     NORMAL_DERIVS      = 1<<10, //!< Integrand uses p-order normal derivatives
-    UPDATED_NODES      = 1<<11  //!< Integrand wants updated nodal coordinates
+    UPDATED_NODES      = 1<<11, //!< Integrand wants updated nodal coordinates
+    PIOLA              = 1<<12  //!< Integrand wants Piola mappping
   };
 
   //! \brief Defines which FE quantities are needed by the integrand.
