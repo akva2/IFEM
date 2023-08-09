@@ -74,6 +74,20 @@ public:
   Matrix     G;    //!< Covariant basis / Matrix used for stabilized methods
   Matrix     H;    //!< Hessian
 
+  //! \brief Struct holding Piola mapped basis functions and derivatives.
+  //! \details The index i is cummulative, e.g. for N1 functions for basis
+  //!          1 and N2 functions for basis 2, 1 <= i <= N1 for the first basis
+  //!          and  N1+1 <= i <= N1+N2 for the second basis.
+  //!          The N matrix is then 2 x (N1 + N2), while the dNdX matrix is 4 x (N1 + N2)
+  //!          where the two first rows is the X derivatives
+  //!          and the two last is the Y derivatives.
+  struct Piola {
+    Matrix N; //!< Piola basis functions
+    Matrix dNdX; //!< Piola basis derivatives
+  };
+
+  Piola piola; //!< Piola mapping
+
   // Element quantities
   short int           p;    //!< Polynomial order of the basis in u-direction
   short int           q;    //!< Polynomial order of the basis in v-direction
