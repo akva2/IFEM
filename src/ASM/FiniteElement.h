@@ -51,6 +51,29 @@ public:
   //! \brief Returns a const reference to the basis function 3nd-derivatives.
   virtual const Matrix4D& hess2(char) const { return d3NdX3; }
 
+  //! \brief Calculates the Piola basis functions and their derivatives.
+  //! \param[in] detJ Determinant of Jacobian of the geometry mapping
+  //! \param[in] J Jacobian of the geometry mapping
+  //! \param[in] Ji Inverse jacobian of the geometry mapping
+  //! \param[in] dNdu Vector of basis function derivatives in parameter domain
+  //! \param[in] H Hessian of geometry mapping in parameter domain
+  void piolaMapping(const double detJ, const Matrix& J, const Matrix& Ji,
+                    const std::vector<Matrix>& dNdu, const Matrix3D& H);
+
+  //! \brief Calculates the Piola basis functions.
+  //! \param[in] detJ Determinant of Jacobian of the geometry mapping
+  //! \param[in] J The Jacobian of the geometry mapping
+  void piolaBasis(const double detJ, const Matrix& J);
+
+  //! \brief Calculates the Piola derivatives.
+  //! \param[in] detJ Determinant of Jacobian of the geometry mapping
+  //! \param[in] J Jacobian of the geometry mapping
+  //! \param[in] Ji Inverse jacobian of the geometry mapping
+  //! \param[in] dNdu Vector of basis function derivatives in parameter domain
+  //! \param[in] H Hessian of geometry mapping in parameter domain
+  void piolaGradient(const double detJ, const Matrix& J, const Matrix& Ji,
+                     const std::vector<Matrix>& dNdu, const Matrix3D& H);
+
 protected:
   //! \brief Returns a reference to the basis function derivatives.
   virtual Matrix& grad(char) { return dNdX; }
@@ -75,6 +98,26 @@ public:
   Matrix4D d3NdX3; //!< Third derivatives of the basis functions
   Matrix     G;    //!< Covariant basis / Matrix used for stabilized methods
   Matrix     H;    //!< Hessian
+
+  //! \brief Matrix holding Piola-mapped basis function values.
+  //! \details The column index \a i is cummulative, e.g., if
+  //! N1 is the number of functions in basis 1 and
+  //! N2 is the number of functions in basis 2, then
+  //! 1 &le; \a i &le; N1 for the first basis and
+  //! N1+1 &le; \a i &le; N1+N2 or the second basis.
+  //! This matrix is therefore of dimension 2&times;(N1+N2).
+  Matrix P;
+
+  //! \brief Matrix holding Piola-mapped basis derivatives.
+  //! \details The column index \a i is cummulative, e.g., if
+  //! N1 is the number of functions in basis 1 and
+  //! N2 is the number of functions in basis 2, then
+  //! 1 &le; \a i &le; N1 for the first basis and
+  //! N1+1 &le; \a i &le; N1+N2 or the second basis.
+  //! This matrix is therefore of dimension 4&times;(N1+N2),
+  //! where the two first rows are the X-derivatives
+  //! and the two last rows are the Y-derivatives.
+  Matrix dPdX;
 
   // Element quantities
   short int           p;    //!< Polynomial order of the basis in u-direction
