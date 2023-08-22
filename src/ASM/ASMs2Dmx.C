@@ -53,7 +53,7 @@ ASMs2Dmx::~ASMs2Dmx ()
 Go::SplineSurface* ASMs2Dmx::getBasis (int basis) const
 {
   if (basis < 1 || basis > (int)m_basis.size())
-    return surf;
+    return this->ASMs2D::getBasis(basis);
 
   return m_basis[basis-1].get();
 }
@@ -222,9 +222,9 @@ bool ASMs2Dmx::generateFEMTopology ()
       return false; // Logic error
   }
   delete surf;
-  const Go::SplineSurface* surfOld = surf;
+  bool geoAndItgBasisAreSame = surf == geomB;
   surf = m_basis[elmBasis-1]->clone();
-  if (geomB == surfOld)
+  if (geoAndItgBasisAreSame)
     geomB = surf;
 
   nb.clear();
@@ -385,27 +385,50 @@ bool ASMs2Dmx::getElementCoordinates (Matrix& X, int iel) const
   }
 #endif
 
-  size_t nenod = surf->order_u()*surf->order_v();
+  const Go::SplineSurface* geo = this->getBasis(ASM::GEOMETRY_BASIS);
+
+  size_t nenod = geo->order_u()*geo->order_v();
   size_t lnod0 = 0;
   for (int i = 1; i < elmBasis; ++i)
-    lnod0 += m_basis[i-1]->order_u()*m_basis[i-1]->order_v();
+    lnod0 += this->getBasis(i)->order_u()*this->getBasis(i)->order_v();
 
   X.resize(nsd,nenod);
   const IntVec& mnpc = MNPC[iel-1];
 
-  RealArray::const_iterator cit = surf->coefs_begin();
-  for (size_t n = 0; n < nenod; n++)
-  {
-    int iI = nodeInd[mnpc[lnod0+n]].I;
-    int iJ = nodeInd[mnpc[lnod0+n]].J;
-    int ip = (iJ*surf->numCoefs_u() + iI)*surf->dimension();
-    for (size_t i = 0; i < nsd; i++)
-      X(i+1,n+1) = *(cit+(ip+i));
+  if (geo == surf) {
+    RealArray::const_iterator cit = surf->coefs_begin();
+    for (size_t n = 0; n < nenod; n++)
+    {
+      int iI = nodeInd[mnpc[lnod0+n]].I;
+      int iJ = nodeInd[mnpc[lnod0+n]].J;
+      int ip = (iJ*surf->numCoefs_u() + iI)*surf->dimension();
+      for (size_t i = 0; i < nsd; i++)
+        X(i+1,n+1) = *(cit+(ip+i));
+    }
+  } else {
+    int node = mnpc[lnod0];
+    double u = surf->basis_u().getKnots()[nodeInd[node].I + surf->order_u() - 1];
+    double v = surf->basis_v().getKnots()[nodeInd[node].J + surf->order_v() - 1];
+    int ni, nj;
+  #pragma omp critical
+    {
+      ni = geo->basis_u().knotInterval(u) - geo->order_u() + 1;
+      nj = geo->basis_v().knotInterval(v) - geo->order_v() + 1;
+    }
+
+    size_t n = 0;
+    for (int i2 = 0; i2 < geo->order_v(); ++i2)
+      for (int i1 = 0; i1 < geo->order_u(); ++i1, n++)
+      {
+        auto it = geo->coefs_begin() + (ni + i1 + (nj + i2)*geo->numCoefs_u())*geo->dimension();
+        for (size_t i = 0; i < nsd; i++)
+          X(i+1,n+1) = *it++;
+      }
   }
 
-#if SP_DEBUG > 2
+//#if SP_DEBUG > 2
   std::cout <<"\nCoordinates for element "<< iel << X << std::endl;
-#endif
+//#endif
   return true;
 }
 
@@ -550,13 +573,10 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
     cache->init(use2ndDer ? 2 : 1);
   }
 
-  size_t elm_ofs = 0;
   if (geomB != surf) {
     myCache.emplace_back(std::make_unique<BasisFunctionCache>(*myCache.front(), 0));
     myCache.back()->setIntegrand(&integrand);
     myCache.back()->init(1);
-    for (int i = 0; i < elmBasis-1; ++i)
-      elm_ofs += m_basis[i]->order_u()*m_basis[i]->order_v();
   }
 
   BasisFunctionCache& cache = *myCache.front();
@@ -613,12 +633,6 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
           break;
         }
 
-        if (geomB != surf && !this->getGeoElementCoordinates(Xnodg, myMNPC[iel-1][elm_ofs]))
-        {
-          ok = false;
-          break;
-        }
-
         if (useElmVtx)
           fe.h = this->getElementCorners(i1-1,i2-1,fe.XC);
 
@@ -662,19 +676,16 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
               bfs[b] = &myCache[b]->getVals(iel-1, ip);
               fe.basis(b+1) = bfs[b]->N;
             }
+            if (this->getBasis(ASM::GEOMETRY_BASIS) != surf)
+              bfs.push_back(&myCache.back()->getVals(iel-1,ip));
+
+            const Vector& Ng = this->getBasis(ASM::GEOMETRY_BASIS) == surf ?
+                                   fe.basis(elmBasis) : bfs.back()->N;
 
             // Compute Jacobian inverse of the coordinate mapping and
             // basis function derivatives w.r.t. Cartesian coordinates
-            if (geomB != surf) {
-              const BasisFunctionVals& bfsg = myCache.back()->getVals(iel-1,ip);
-              fe.detJxW = utl::Jacobian(Jac,fe.dNdX,Xnodg,bfsg.dNdu,false);
-              if (fe.detJxW <= 0.0)
+            if (!fe.Jacobian(Jac, Xnod, elmBasis, &bfs))
                 continue;
-              X.assign(Xnodg * bfsg.N);
-              if (!fe.Jacobian(Jac,Xnod,this->getNoBasis()+1,&bfs))
-                continue;
-            } else if (!fe.Jacobian(Jac,Xnod,elmBasis,&bfs))
-              continue; // skip singular points
 
             // Compute Hessian of coordinate mapping and 2nd order derivatives
             if (use2ndDer && !fe.Hessian(Hess,Jac,Xnod,elmBasis,&bfs))
@@ -685,8 +696,7 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
               utl::getGmat(Jac,dXidu,fe.G);
 
             // Cartesian coordinates of current integration point
-            if (geomB == surf)
-              X.assign(Xnod * fe.basis(elmBasis));
+            X.assign(Xnod * Ng);
 
             // Evaluate the integrand and accumulate element contributions
             fe.detJxW *= dA*wg[0][i]*wg[1][j];

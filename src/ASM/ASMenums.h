@@ -46,6 +46,12 @@ namespace ASM //! Assembly scope
     FULL_CACHE  //!< Cache basis function values up front
   };
 
+  //! \brief Enumeration of different basis types.
+  enum BasisType {
+      GEOMETRY_BASIS = 0,
+      PROJECTION_BASIS = -1,
+  };
+
 }
 
 #endif

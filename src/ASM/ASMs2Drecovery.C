@@ -196,7 +196,7 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   if (continuous)
   {
     proj->computeBasisGrid(gpar[0],gpar[1],spl1);
-    surf->computeBasisGrid(gpar[0],gpar[1],spl2);
+    this->getBasis(0)->computeBasisGrid(gpar[0],gpar[1],spl2);
   }
   else
     proj->computeBasisGrid(gpar[0],gpar[1],spl0);
@@ -234,7 +234,7 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
       int ip = (i2*ng1*nel1 + i1)*ng2;
       IntVec lmnpc;
-      if (proj != surf)
+      if (proj != this->getBasis(0))
       {
         // Establish nodal point correspondance for the projection element
         int i, j, vidx;
@@ -247,7 +247,7 @@ bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
           for (i = 0; i < p1; i++)
             lmnpc.push_back(vidx+i);
       }
-      const IntVec& mnpc = proj == surf ? MNPC[iel] : lmnpc;
+      const IntVec& mnpc = proj == this->getBasis(0) ? MNPC[iel] : lmnpc;
 
       // --- Integration loop over all Gauss points in each direction ----------
 

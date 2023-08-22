@@ -81,18 +81,21 @@ bool MxFiniteElement::Jacobian (Matrix& Jac, const Matrix& Xnod,
                                 const std::vector<Matrix>* dNxdu)
 {
   size_t nBasis = bf ? bf->size() : dNxdu->size();
-  if (gBasis <= nBasis) {
-    detJxW = utl::Jacobian(Jac,
-                           gBasis > 1 ? dMdX[gBasis-2] : dNdX, Xnod,
-                           bf ? (*bf)[gBasis-1]->dNdu : (*dNxdu)[gBasis-1]);
-    if (detJxW == 0.0) return false; // singular point
-  }
+  bool separateGeometry = nBasis > this->getNoBasis();
+  if (separateGeometry)
+    --nBasis;;
 
-  if (gBasis > 1)
+  detJxW = utl::Jacobian(Jac,
+                         gBasis > 1 ? dMdX[gBasis-2] : dNdX, Xnod,
+                         bf ? (*bf)[gBasis-1]->dNdu : (*dNxdu)[gBasis-1],
+                         !separateGeometry);
+  if (detJxW == 0.0) return false; // singular point
+
+  if (gBasis > 1 || separateGeometry)
     dNdX.multiply(bf ? bf->front()->dNdu : dNxdu->front(),Jac);
 
   for (size_t b = 2; b <= nBasis; b++)
-    if (b != gBasis)
+    if (b != gBasis || separateGeometry)
       dMdX[b-2].multiply(bf ? (*bf)[b-1]->dNdu : (*dNxdu)[b-1], Jac);
 
   return true;
@@ -111,6 +114,9 @@ bool MxFiniteElement::Hessian (Matrix3D& Hess, const Matrix& Jac,
                                const std::vector<const BasisFunctionVals*>* bf,
                                const std::vector<Matrix3D>* d2Nxdu2)
 {
+  size_t nBasis = bf ? bf->size() : d2Nxdu2->size();
+  if (nBasis > this->getNoBasis())
+    --nBasis;
   bool ok = utl::Hessian(Hess,
                          gBasis > 1 ? d2MdX2[gBasis-2] : d2NdX2, Jac, Xnod,
                          bf ? (*bf)[gBasis-1]->d2Ndu2 : (*d2Nxdu2)[gBasis-1],
@@ -121,7 +127,6 @@ bool MxFiniteElement::Hessian (Matrix3D& Hess, const Matrix& Jac,
                       bf ? bf->front()->d2Ndu2 : d2Nxdu2->front(),
                       dNdX, false);
 
-  size_t nBasis = bf ? bf->size() : d2Nxdu2->size();
   for (size_t b = 2; b <= nBasis && ok; b++)
     if (b != gBasis)
       ok = utl::Hessian(Hess, d2MdX2[b-2], Jac, Xnod,

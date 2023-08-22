@@ -187,15 +187,13 @@ public:
   //! \brief The destructor frees the dynamically allocated boundary curves.
   virtual ~ASMs2D();
 
-  //! \brief Returns the spline surface representing the geometry of this patch.
-  const Go::SplineSurface* getGeometry() const;
   //! \brief Returns the spline surface representing the integration basis of this patch.
   Go::SplineSurface* getSurface() const { return surf; }
   //! \brief Returns the spline curve representing a boundary of this patch.
   //! \param[in] dir Parameter direction defining which boundary to return
   virtual Go::SplineCurve* getBoundary(int dir, int = 1);
   //! \brief Returns the spline surface representing the basis of this patch.
-  virtual Go::SplineSurface* getBasis(int = 1) const { return surf; }
+  virtual Go::SplineSurface* getBasis(int basis = 1) const;
   //! \brief Copies the parameter domain from the \a other patch.
   virtual void copyParameterDomain(const ASMbase* other);
 
@@ -244,12 +242,6 @@ public:
   //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes
   //! in one element
   virtual bool getElementCoordinates(Matrix& X, int iel) const;
-
-  //! \brief Returns a matrix with nodal coordinates for geometry element.
-  //! \param[in] node Node index on integration basis
-  //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes
-  //! in geometry element
-  bool getGeoElementCoordinates(Matrix& X, int node) const;
 
   //! \brief Returns a matrix with all nodal coordinates within the patch.
   //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes

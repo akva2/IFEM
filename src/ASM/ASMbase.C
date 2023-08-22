@@ -49,7 +49,7 @@ std::map<int,int> ASMbase::xNode;
 static bool Aerror (const char* name)
 {
   std::cerr <<" *** ASMbase::"<< name
-	    <<": Must be implemented in sub-class."<< std::endl;
+        <<": Must be implemented in sub-class."<< std::endl;
   return false;
 }
 
@@ -444,15 +444,15 @@ public:
   {
     if (bc.node == myNode)
       for (int dof = myDofs; dof > 0; dof /= 10)
-	switch (dof%10)
-	  {
-	  case 1: return bc.CX == 0;
-	  case 2: return bc.CY == 0;
-	  case 3: return bc.CZ == 0;
-	  case 4: return bc.RX == 0;
-	  case 5: return bc.RY == 0;
-	  case 6: return bc.RZ == 0;
-	  }
+    switch (dof%10)
+      {
+      case 1: return bc.CX == 0;
+      case 2: return bc.CY == 0;
+      case 3: return bc.CZ == 0;
+      case 4: return bc.RX == 0;
+      case 5: return bc.RY == 0;
+      case 6: return bc.RZ == 0;
+      }
     return false;
   }
 };
@@ -695,7 +695,7 @@ bool ASMbase::addPeriodicity (size_t master, size_t slave, int dir)
   if (slaveNode < 1 || masterNode < 1)
   {
     std::cerr <<" *** ASMbase::addPeriodicity: Invalid node indices "
-	      << master <<", "<< slave << std::endl;
+          << master <<", "<< slave << std::endl;
     return false;
   }
 
@@ -704,8 +704,8 @@ bool ASMbase::addPeriodicity (size_t master, size_t slave, int dir)
     return true;
 
   std::cerr <<" *** ASMbase::addPeriodicity: Failed to connect nodes "
-	    << masterNode <<" and "<< slaveNode <<" in direction "
-	    << dir << std::endl;
+        << masterNode <<" and "<< slaveNode <<" in direction "
+        << dir << std::endl;
   return false;
 }
 
@@ -884,32 +884,32 @@ void ASMbase::mergeAndGetAllMPCs (const ASMVec& model, MPCSet& allMPCs)
     uniqueMPC.reserve(pch->getNoMPCs());
     for (MPC* mpc : pch->mpcs)
       if ((ret = allMPCs.insert(mpc)).second)
-	uniqueMPC.push_back(mpc);
+    uniqueMPC.push_back(mpc);
       else
       {
-	// Merge multiple constraint equations with common slave definition
-	if ((*ret.first)->getSlave().coeff == 0.0 &&
-	    (*ret.first)->getNoMaster() > 1 &&
-	    (*ret.first)->merge(mpc))
-	{
+    // Merge multiple constraint equations with common slave definition
+    if ((*ret.first)->getSlave().coeff == 0.0 &&
+        (*ret.first)->getNoMaster() > 1 &&
+        (*ret.first)->merge(mpc))
+    {
 #if SP_DEBUG > 1
-	  std::cout <<"Merging constraint "<< *mpc;
-	  std::cout <<"Resulting constraint "<< **ret.first;
+      std::cout <<"Merging constraint "<< *mpc;
+      std::cout <<"Resulting constraint "<< **ret.first;
 #endif
-	  nmerged++;
-	}
-	else
-	{
-	  // The found constraint *ret.first is either a prescribed movement
-	  // or a single-master constraint. Such MPCs are not to be merged but
-	  // should superseed any multi-master constraints with matching slave.
+      nmerged++;
+    }
+    else
+    {
+      // The found constraint *ret.first is either a prescribed movement
+      // or a single-master constraint. Such MPCs are not to be merged but
+      // should superseed any multi-master constraints with matching slave.
 #if SP_DEBUG > 1
-	  std::cout <<"Deleted constraint "<< *mpc;
+      std::cout <<"Deleted constraint "<< *mpc;
 #endif
-	  ndeleted++;
-	}
-	pch->dCode.erase(mpc);
-	delete mpc;
+      ndeleted++;
+    }
+    pch->dCode.erase(mpc);
+    delete mpc;
       }
 
     if (uniqueMPC.size() < pch->getNoMPCs())
@@ -993,7 +993,7 @@ void ASMbase::resolveMPCchains (const MPCSet& allMPCs,
         resolved = true;
       }
       else
-	i++;
+    i++;
     }
 
 #if SP_DEBUG > 1
@@ -1469,13 +1469,13 @@ bool ASMbase::getSolution (Matrix& sField, const Vector& locSol,
     if (nodes[i] < 1 || (size_t)nodes[i] > MLGN.size())
     {
       std::cerr <<" *** ASMbase::getSolution: Node #"<< nodes[i]
-		<<" is out of range [1,"<< MLGN.size() <<"]."<< std::endl;
+        <<" is out of range [1,"<< MLGN.size() <<"]."<< std::endl;
       return false;
     }
     else if (this->isLMn(nodes[i]))
     {
       std::cerr <<"  ** ASMbase::getSolution: Node #"<< nodes[i]
-		<<" is a Lagrange multiplier, returning 0.0."<< std::endl;
+        <<" is a Lagrange multiplier, returning 0.0."<< std::endl;
       sField.fillColumn(i+1,RealArray(nf,0.0));
     }
     else
@@ -1587,14 +1587,14 @@ bool ASMbase::evalSolution (Matrix&, const Vector&,
 
 
 bool ASMbase::evalSolution (Matrix&, const IntegrandBase&,
-			    const int*, char) const
+                const int*, char) const
 {
   return Aerror("evalSolution(Matrix&,const IntegrandBase&,const int*,char)");
 }
 
 
 bool ASMbase::evalSolution (Matrix&, const IntegrandBase&,
-			    const RealArray*, bool) const
+                const RealArray*, bool) const
 {
   return Aerror("evalSolution(Matrix&,const IntegrandBase&,const RealArray*)");
 }
