@@ -39,6 +39,7 @@
 #include "IFEM.h"
 #include <array>
 #include <fstream>
+#include <utility>
 
 
 ASMu2D::ASMu2D (unsigned char n_s, unsigned char n_f)
@@ -66,7 +67,7 @@ ASMu2D::ASMu2D (const ASMu2D& patch, unsigned char n_f)
 }
 
 
-LR::LRSplineSurface* ASMu2D::getBasis (int basis) const
+const LR::LRSplineSurface* ASMu2D::getBasis (int basis) const
 {
   if (basis == ASM::GEOMETRY_BASIS)
     return static_cast<LR::LRSplineSurface*>(geomB.get());
@@ -78,6 +79,15 @@ LR::LRSplineSurface* ASMu2D::getBasis (int basis) const
     return static_cast<LR::LRSplineSurface*>(refB.get());
   else
     return lrspline.get();
+}
+
+
+LR::LRSplineSurface* ASMu2D::getBasis (int basis)
+{
+  if (tensorspline)
+    this->createLRfromTensor();
+
+  return const_cast<LR::LRSplineSurface*>(std::as_const(*this).getBasis(basis));
 }
 
 

@@ -38,6 +38,7 @@
 #include "Point.h"
 #include "IFEM.h"
 #include <array>
+#include <utility>
 
 
 ASMu3D::ASMu3D (unsigned char n_f)
@@ -64,7 +65,7 @@ ASMu3D::ASMu3D (const ASMu3D& patch, unsigned char n_f)
 }
 
 
-LR::LRSplineVolume* ASMu3D::getBasis (int basis) const
+const LR::LRSplineVolume* ASMu3D::getBasis (int basis) const
 {
   if (basis == ASM::GEOMETRY_BASIS)
     return static_cast<LR::LRSplineVolume*>(geomB.get());
@@ -76,6 +77,15 @@ LR::LRSplineVolume* ASMu3D::getBasis (int basis) const
     return static_cast<LR::LRSplineVolume*>(refB.get());
   else
     return lrspline.get();
+}
+
+
+LR::LRSplineVolume* ASMu3D::getBasis (int basis)
+{
+  if (tensorspline)
+    this->createLRfromTensor();
+
+  return const_cast<LR::LRSplineVolume*>(std::as_const(*this).getBasis(basis));
 }
 
 

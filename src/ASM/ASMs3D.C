@@ -79,16 +79,22 @@ Go::SplineSurface* ASMs3D::getBoundary (int dir, int)
 }
 
 
-Go::SplineVolume* ASMs3D::getBasis (int basis) const
+const Go::SplineVolume* ASMs3D::getBasis (int basis) const
 {
   if (basis == ASM::GEOMETRY_BASIS)
-    return static_cast<Go::SplineVolume*>(geomB);
+    return static_cast<const Go::SplineVolume*>(geomB);
   else if (basis == ASM::PROJECTION_BASIS)
-    return static_cast<Go::SplineVolume*>(projB);
+    return static_cast<const Go::SplineVolume*>(projB);
   else if (basis == ASM::ALT_PROJECTION_BASIS)
-    return static_cast<Go::SplineVolume*>(altProjB);
+    return static_cast<const Go::SplineVolume*>(altProjB);
   else
     return svol;
+}
+
+
+Go::SplineVolume* ASMs3D::getBasis (int basis)
+{
+  return const_cast<Go::SplineVolume*>(std::as_const(*this).getBasis(basis));
 }
 
 
@@ -3579,7 +3585,7 @@ short int ASMs3D::InterfaceChecker::hasContribution (int, int I, int J, int K) c
 bool ASMs3D::evaluate (const FunctionBase* func, RealArray& vec,
                        int basisNum, double time) const
 {
-  Go::SplineVolume* oldVol = this->getBasis(basisNum);
+  const Go::SplineVolume* oldVol = this->getBasis(basisNum);
   Go::SplineVolume* newVol = SplineUtils::project(oldVol,*func,
                                                   func->dim(),time);
   if (!newVol)
