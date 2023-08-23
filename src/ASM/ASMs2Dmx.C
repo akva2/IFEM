@@ -53,7 +53,7 @@ ASMs2Dmx::~ASMs2Dmx ()
 Go::SplineSurface* ASMs2Dmx::getBasis (int basis) const
 {
   if (basis < 1 || basis > (int)m_basis.size())
-    return surf;
+    return this->ASMs2D::getBasis(basis);
 
   return m_basis[basis-1].get();
 }
@@ -81,11 +81,16 @@ Go::SplineCurve* ASMs2Dmx::getBoundary (int dir, int basis)
 
 bool ASMs2Dmx::read (std::istream& is, int basis)
 {
-  if (basis == 0)
-    return this->ASMs2D::read(is);
-
-  if (basis < 0 || basis > static_cast<int>(nfx.size()))
+  if (basis > static_cast<int>(nfx.size()))
     return false;
+
+  if (basis == 0) // TODO: the use of 0 conflicts with GEOMETRY_BASIS!
+    return this->ASMs2D::read(is);
+  else if (basis < 0) {
+    std::cerr << "*** ASMs2DMx::read: Asked to read basis " << basis
+              << ", not implemented yet!" << std::endl;
+    return false;
+  }
 
   if (m_basis.empty()) {
     m_basis.resize(nfx.size());
