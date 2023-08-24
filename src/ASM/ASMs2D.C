@@ -179,9 +179,12 @@ bool ASMs2D::read (std::istream& is, int)
 bool ASMs2D::write (std::ostream& os, int basis) const
 {
   if (!surf) return false;
-  if (basis > 1) return false;
+  if (basis > static_cast<int>(this->getNoBasis())) return false;
+  const Go::SplineSurface* spline = this->getBasis(basis);
+  if (!spline)
+    return false;
 
-  os <<"200 1 0 0\n" << *this->getBasis(basis);
+  os <<"200 1 0 0\n" << *spline;
 
   return os.good();
 }
