@@ -322,13 +322,15 @@ bool ASMu3Dmx::integrate (Integrand& integrand,
   }
 
   bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
+  const bool separateGeometry = this->getBasis(ASM::GEOMETRY_BASIS) != lrspline.get();
 
   if (myCache.empty()) {
     myCache.emplace_back(std::make_unique<BasisFunctionCache>(*this, cachePolicy, 1));
-    for (size_t b = 2; b <= this->getNoBasis(); ++b) {
-      const BasisFunctionCache& c = static_cast<const BasisFunctionCache&>(*myCache.front());
+    const BasisFunctionCache& c = static_cast<const BasisFunctionCache&>(*myCache.front());
+    for (size_t b = 2; b <= this->getNoBasis(); ++b)
       myCache.emplace_back(std::make_unique<BasisFunctionCache>(c,b));
-    }
+    if (separateGeometry)
+      myCache.emplace_back(std::make_unique<BasisFunctionCache>(c,ASM::GEOMETRY_BASIS));
   }
 
   for (std::unique_ptr<ASMu3D::BasisFunctionCache>& cache : myCache) {
@@ -370,8 +372,10 @@ bool ASMu3Dmx::integrate (Integrand& integrand,
       double   param[3] = { 0.0, 0.0, 0.0 };
       Vec4     X(param,time.t);
 
-      int iEl = el->getId();
+      int iEl = els[itgBasis-1]-1;
       fe.iel = MLGE[iEl];
+
+      el = lrspline->getElement(iEl);
 
       // Get element volume in the parameter space
       double dV = 0.125*el->volume();
@@ -460,10 +464,11 @@ bool ASMu3Dmx::integrate (Integrand& integrand,
             fe.v = param[1] = cache.getParam(1,iEl,j);
             fe.w = param[2] = cache.getParam(2,iEl,k);
 
-            std::vector<const BasisFunctionVals*> bfs(this->getNoBasis());
-            for (size_t b = 0; b < m_basis.size(); ++b) {
+            std::vector<const BasisFunctionVals*> bfs(myCache.size());
+            for (size_t b = 0; b < myCache.size(); ++b) {
               bfs[b] = &myCache[b]->getVals(iEl,ig);
-              fe.basis(b+1) = bfs[b]->N;
+              if (b < m_basis.size())
+                fe.basis(b+1) = bfs[b]->N;
             }
 
             // Compute Jacobian inverse of the coordinate mapping and
@@ -480,7 +485,7 @@ bool ASMu3Dmx::integrate (Integrand& integrand,
               utl::getGmat(Jac,dXidu,fe.G);
 
             // Cartesian coordinates of current integration point
-            X.assign(Xnod * fe.basis(itgBasis));
+            X.assign(Xnod * (separateGeometry ? bfs.back()->N : fe.basis(itgBasis)));
 
             // Evaluate the integrand and accumulate element contributions
             fe.detJxW *= dV*wg[0][i]*wg[1][j]*wg[2][k];
@@ -513,6 +518,8 @@ bool ASMu3Dmx::integrate (Integrand& integrand, int lIndex,
     return true; // silently ignore empty patches
 
   PROFILE2("ASMu3Dmx::integrate(B)");
+
+  const bool separateGeometry = this->getBasis(ASM::GEOMETRY_BASIS) != lrspline.get();
 
   // Get Gaussian quadrature points and weights
   int nGP = integrand.getBouIntegrationPoints(nGauss);
@@ -585,11 +592,12 @@ bool ASMu3Dmx::integrate (Integrand& integrand, int lIndex,
     fe.v = gpar[1](1);
     fe.w = gpar[2](1);
 
-    std::vector<Matrix> dNxdu(m_basis.size());
+    std::vector<Matrix> dNxdu(m_basis.size() + separateGeometry);
     Matrix Xnod, Jac;
 
     double param[3] = { fe.u, fe.v, fe.w };
     Vec4   X(param,time.t);
+    Vector Ng;
     Vec3   normal;
     double dXidu[3];
 
@@ -648,18 +656,17 @@ bool ASMu3Dmx::integrate (Integrand& integrand, int lIndex,
           fe.w = param[2] = gpar[2](k3+1);
         }
 
+        if (separateGeometry)
+          this->evaluateBasis(els.back(), ASM::GEOMETRY_BASIS, fe.u, fe.v, fe.w,
+                              Ng, dNxdu.back());
+
         // Fetch basis function derivatives at current integration point
         for (size_t b = 1; b <= m_basis.size(); ++b)
           this->evaluateBasis(iEl, fe, dNxdu[b-1], b);
 
         // Compute basis function derivatives and the face normal
-        fe.detJxW = utl::Jacobian(Jac, normal, fe.grad(itgBasis), Xnod,
-                                  dNxdu[itgBasis-1], t1, t2);
-        if (fe.detJxW == 0.0) continue; // skip singular points
-
-        for (size_t b = 1; b <= m_basis.size(); ++b)
-          if ((int)b != itgBasis)
-            fe.grad(b).multiply(dNxdu[b-1],Jac);
+        if (!fe.Jacobian(Jac,normal,Xnod,itgBasis,dNxdu,t1,t2))
+          continue; // skip singular points
 
         if (faceDir < 0) normal *= -1.0;
 
@@ -1034,6 +1041,9 @@ void ASMu3Dmx::getElementsAt (const RealArray& param,
     elms.push_back(1+iel);
     sizes.push_back(basis->getElement(iel)->nBasisFunctions());
   }
+  const LR::LRSplineVolume* geo = this->getBasis(ASM::GEOMETRY_BASIS);
+  if (geo != lrspline.get())
+    elms.push_back(1+geo->getElementContaining(param));
 }
 
 
