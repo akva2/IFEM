@@ -1364,13 +1364,39 @@ bool ASMs2D::getElementCoordinates (Matrix& X, int iel) const
   }
 #endif
 
-  X.resize(nsd,surf->order_u()*surf->order_v());
+  const Go::SplineSurface* geo = this->getBasis(ASM::GEOMETRY_BASIS);
 
+  X.resize(nsd,geo->order_u()*geo->order_v());
   int lnod0 = this->getFirstItgElmNode();
-  RealArray::const_iterator cit = surf->coefs_begin();
+  int ni, nj;
+  bool found = false;
+  auto&& cInd = [this,geo,iel,lnod0,&found,&ni,&nj](size_t n)
+  {
+    if (geo == surf)
+      return this->coeffInd(MNPC[iel-1][n + lnod0])*surf->dimension();
+    else {
+      if (!found) {
+        const int node = MNPC[iel-1][lnod0];
+        double u = surf->basis_u().getKnots()[nodeInd[node].I + surf->order_u() - 1];
+        double v = surf->basis_v().getKnots()[nodeInd[node].J + surf->order_v() - 1];
+#pragma omp critical
+        {
+          ni = geo->basis_u().knotInterval(u) - geo->order_u() + 1;
+          nj = geo->basis_v().knotInterval(v) - geo->order_v() + 1;
+        }
+        found = true;
+      }
+
+      int iu = n % geo->order_u();
+      int iv = n / geo->order_u();
+      return (ni + iu + (nj + iv)*geo->numCoefs_u())*geo->dimension();
+    }
+  };
+
+  RealArray::const_iterator cit = geo->coefs_begin();
   for (size_t n = 0; n < X.cols(); n++)
   {
-    int ip = this->coeffInd(MNPC[iel-1][n + lnod0])*surf->dimension();
+    int ip = cInd(n);
     if (ip < 0) return false;
 
     for (size_t i = 0; i < nsd; i++)
