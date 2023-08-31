@@ -1622,7 +1622,7 @@ Vec3 ASMs3D::getCoord (size_t inod) const
 }
 
 
-bool ASMs3D::getElementCoordinates (Matrix& X, int iel, bool) const
+bool ASMs3D::getElementCoordinates (Matrix& X, int iel, bool forceItg) const
 {
 #ifdef INDEX_CHECK
   if (iel < 1 || (size_t)iel > MNPC.size())
@@ -1633,13 +1633,44 @@ bool ASMs3D::getElementCoordinates (Matrix& X, int iel, bool) const
   }
 #endif
 
-  X.resize(3,svol->order(0)*svol->order(1)*svol->order(2));
-  int lnod0 = this->getFirstItgElmNode();
+  const Go::SplineVolume* geo = this->getBasis(ASM::GEOMETRY_BASIS);
+  if (forceItg)
+    geo = svol;
 
-  RealArray::const_iterator cit = svol->coefs_begin();
+  X.resize(3,geo->order(0)*geo->order(1)*geo->order(2));
+  int lnod0 = this->getFirstItgElmNode();
+  int ni, nj, nk;
+  bool found = false;
+  auto&& cInd = [this,geo,iel,lnod0,&found,&ni,&nj,&nk](size_t n)
+  {
+    if (geo == svol)
+      return this->coeffInd(MNPC[iel-1][n + lnod0])*svol->dimension();
+    else {
+      if (!found) {
+        const int node = MNPC[iel-1][lnod0];
+        double u = *(svol->basis(0).begin() + nodeInd[node].I + svol->order(0) - 1);
+        double v = *(svol->basis(1).begin() + nodeInd[node].J + svol->order(1) - 1);
+        double w = *(svol->basis(2).begin() + nodeInd[node].K + svol->order(2) - 1);
+#pragma omp critical
+        {
+          ni = geo->basis(0).knotInterval(u) - geo->order(0) + 1;
+          nj = geo->basis(1).knotInterval(v) - geo->order(1) + 1;
+          nk = geo->basis(2).knotInterval(w) - geo->order(2) + 1;
+        }
+        found = true;
+      }
+
+      int iu = n % geo->order(0);
+      int iv = (n / geo->order(0)) % geo->order(1);
+      int iw = n / (geo->order(0) * geo->order(1));
+      return (ni + iu + ((nk + iw)*geo->numCoefs(1) + (nj + iv))*geo->numCoefs(0))*geo->dimension();
+    }
+  };
+
+  RealArray::const_iterator cit = geo->coefs_begin();
   for (size_t n = 0; n < X.cols(); n++)
   {
-    int ip = this->coeffInd(MNPC[iel-1][n + lnod0])*svol->dimension();
+    int ip = cInd(n);
     if (ip < 0) return false;
 
     for (size_t i = 0; i < 3; i++)
