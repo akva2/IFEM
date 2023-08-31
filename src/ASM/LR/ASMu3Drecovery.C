@@ -110,9 +110,9 @@ bool ASMu3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 {
   size_t nnod = this->getNoProjectionNodes();
 
-  const LR::LRSplineVolume* itg = this->getBasis(ASM::INTEGRATION_BASIS);
+  const LR::LRSplineVolume* geo = this->getBasis(ASM::GEOMETRY_BASIS);
   const LR::LRSplineVolume* proj = this->getBasis(ASM::PROJECTION_BASIS);
-  const bool separateProjBasis = proj != itg;
+  const bool separateProjBasis = proj != geo;
 
   const int p1 = proj->order(0);
   const int p2 = proj->order(1);
@@ -156,7 +156,8 @@ bool ASMu3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
       Go::BasisDerivs spl2;
       int ielp = group[t][e];
       const LR::Element* elm = proj->getElement(ielp);
-      int iel = lrspline->getElementContaining(elm->midpoint())+1;
+      int iel = lrspline->getElementContaining(elm->midpoint()) + 1;
+      int ielG = geo->getElementContaining(elm->midpoint()) + 1;
 
       if (continuous)
       {
@@ -199,7 +200,7 @@ bool ASMu3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
           {
             if (continuous)
             {
-              itg->computeBasis(gpar[0][i],gpar[1][j],gpar[2][k],spl2,iel-1);
+              geo->computeBasis(gpar[0][i],gpar[1][j],gpar[2][k],spl2,ielG-1);
               SplineUtils::extractBasis(spl2,phi,dNdu);
             }
 
