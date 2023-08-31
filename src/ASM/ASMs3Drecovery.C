@@ -166,21 +166,18 @@ bool ASMs3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 {
   const size_t nnod = this->getNoProjectionNodes();
 
-  const Go::SplineVolume* itg = this->getBasis(ASM::INTEGRATION_BASIS);
+  const Go::SplineVolume* geo = this->getBasis(ASM::GEOMETRY_BASIS);
   const Go::SplineVolume* proj = this->getBasis(ASM::PROJECTION_BASIS);
-  const bool separateProjBasis = proj != itg;
+  const bool separateProjBasis = proj != geo;
 
-  const int g1 = itg->order(0);
-  const int g2 = itg->order(1);
-  const int g3 = itg->order(2);
   const int p1 = proj->order(0);
   const int p2 = proj->order(1);
   const int p3 = proj->order(2);
   const int n1 = proj->numCoefs(0);
   const int n2 = proj->numCoefs(1);
-  const int nel1 = itg->numCoefs(0) - g1 + 1;
-  const int nel2 = itg->numCoefs(1) - g2 + 1;
-  const int nel3 = itg->numCoefs(2) - g3 + 1;
+  const int nel1 = proj->numCoefs(0) - p1 + 1;
+  const int nel2 = proj->numCoefs(1) - p2 + 1;
+  const int nel3 = proj->numCoefs(2) - p3 + 1;
 
   int pmax = p1 > p2 ? p1 : p2;
   if (pmax < p3) pmax = p3;
@@ -207,7 +204,7 @@ bool ASMs3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   std::vector<Go::BasisPts>    spl1;
   std::vector<Go::BasisDerivs> spl2;
   if (continuous)
-    itg->computeBasisGrid(gpar[0],gpar[1],gpar[2],spl2);
+    geo->computeBasisGrid(gpar[0],gpar[1],gpar[2],spl2);
 
   if (!continuous || separateProjBasis)
     proj->computeBasisGrid(gpar[0],gpar[1],gpar[2],spl1);
@@ -223,7 +220,7 @@ bool ASMs3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   }
 
   double dV = 1.0;
-  Vector phi(p1*p2*p3), phi2(g1*g2*g3);
+  Vector phi(p1*p2*p3);
   Matrix dNdu, Xnod, J;
 
 
@@ -247,21 +244,26 @@ bool ASMs3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
 
         int ip = ((i3*ng2*nel2 + i2)*ng1*nel1 + i1)*ng3;
         IntVec lmnpc;
-        if (separateProjBasis)
+        if (proj != svol)
         {
           // Establish nodal point correspondance for the projection element
           int i, j, k, vidx, widx;
           lmnpc.reserve(phi.size());
-          widx = ((spl1[ip].left_idx[2]-p3+1)*n1*n2 +
-                  (spl1[ip].left_idx[1]-p2+1)*n1    +
-                  (spl1[ip].left_idx[0]-p1+1));
+          if (separateProjBasis)
+            widx = ((spl1[ip].left_idx[2]-p3+1)*n1*n2 +
+                    (spl1[ip].left_idx[1]-p2+1)*n1    +
+                    (spl1[ip].left_idx[0]-p1+1));
+          else
+            widx = ((spl2[ip].left_idx[2]-p3+1)*n1*n2 +
+                    (spl2[ip].left_idx[1]-p2+1)*n1    +
+                    (spl2[ip].left_idx[0]-p1+1));
 
           for (k = 0; k < p3; k++, widx += n1*n2)
             for (j = vidx = 0; j < p2; j++, vidx += n1)
               for (i = 0; i < p1; i++)
                 lmnpc.push_back(widx+vidx+i);
         }
-        const IntVec& mnpc = separateProjBasis ? lmnpc : MNPC[iel];
+        const IntVec& mnpc = proj != svol ? lmnpc : MNPC[iel];
 
         // --- Integration loop over all Gauss points in each direction --------
 
