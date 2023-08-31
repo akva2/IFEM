@@ -240,8 +240,9 @@ public:
   //! \brief Returns a matrix with nodal coordinates for an element.
   //! \param[in] iel Element index
   //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes
+  //! \param[in] forceItg If true return integration basis element coordinates
   //! in one element
-  virtual bool getElementCoordinates(Matrix& X, int iel) const;
+  virtual bool getElementCoordinates(Matrix& X, int iel, bool forceItg = false) const;
 
   //! \brief Returns a matrix with all nodal coordinates within the patch.
   //! \param[out] X 3\f$\times\f$n-matrix, where \a n is the number of nodes

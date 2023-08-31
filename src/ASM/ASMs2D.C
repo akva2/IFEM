@@ -1353,7 +1353,7 @@ Vec3 ASMs2D::getCoord (size_t inod) const
 }
 
 
-bool ASMs2D::getElementCoordinates (Matrix& X, int iel) const
+bool ASMs2D::getElementCoordinates (Matrix& X, int iel, bool forceItg) const
 {
 #ifdef INDEX_CHECK
   if (iel < 1 || (size_t)iel > MNPC.size())
@@ -1365,6 +1365,8 @@ bool ASMs2D::getElementCoordinates (Matrix& X, int iel) const
 #endif
 
   const Go::SplineSurface* geo = this->getBasis(ASM::GEOMETRY_BASIS);
+  if (forceItg)
+    geo = surf;
 
   X.resize(nsd,geo->order_u()*geo->order_v());
   int lnod0 = this->getFirstItgElmNode();
