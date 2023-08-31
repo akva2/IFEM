@@ -195,7 +195,7 @@ bool ASMs2Dmx::injectNodeVec (const RealArray& nodeRes, RealArray& globRes,
 
 
 bool ASMs2Dmx::getSolution (Matrix& sField, const Vector& locSol,
-			    const IntVec& nodes) const
+                            const IntVec& nodes) const
 {
   return this->getSolutionMx(sField,locSol,nodes);
 }
@@ -243,9 +243,9 @@ bool ASMs2Dmx::generateFEMTopology ()
       return true;
 
     std::cerr <<" *** ASMs2Dmx::generateFEMTopology: Inconsistency between the"
-	      <<" number of FE nodes "<< nodeInd.size()
-	      <<"\n     and the number of spline coefficients "<< nnod
-	      <<" in the patch."<< std::endl;
+              <<" number of FE nodes "<< nodeInd.size()
+              <<"\n     and the number of spline coefficients "<< nnod
+              <<" in the patch."<< std::endl;
     return false;
   }
   else if (shareFE == 'F')
@@ -420,8 +420,8 @@ bool ASMs2Dmx::getSize (int& n1, int& n2, int basis) const
 
 
 bool ASMs2Dmx::integrate (Integrand& integrand,
-			  GlobalIntegral& glInt,
-			  const TimeDomain& time)
+                          GlobalIntegral& glInt,
+                          const TimeDomain& time)
 {
   if (!surf) return true; // silently ignore empty patches
 
@@ -585,8 +585,8 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
 
 
 bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
-			  GlobalIntegral& glInt,
-			  const TimeDomain& time)
+                          GlobalIntegral& glInt,
+                          const TimeDomain& time)
 {
   if (!surf) return true; // silently ignore empty patches
 
@@ -671,12 +671,12 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
       // Skip elements that are not on current boundary edge
       bool skipMe = false;
       switch (edgeDir)
-	{
-	case -1: if (i1 > p1) skipMe = true; break;
-	case  1: if (i1 < n1) skipMe = true; break;
-	case -2: if (i2 > p2) skipMe = true; break;
-	case  2: if (i2 < n2) skipMe = true; break;
-	}
+      {
+        case -1: if (i1 > p1) skipMe = true; break;
+        case  1: if (i1 < n1) skipMe = true; break;
+        case -2: if (i2 > p2) skipMe = true; break;
+        case  2: if (i2 < n2) skipMe = true; break;
+      }
       if (skipMe) continue;
 
       // Get element edge length in the parameter space
@@ -703,16 +703,16 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
       {
         // Local element coordinates and parameter values
         // of current integration point
-	if (gpar[0].size() > 1)
-	{
+        if (gpar[0].size() > 1)
+        {
           fe.xi = xg[i];
           fe.u = param[0] = gpar[0](i+1,i1-p1+1);
-	}
-	if (gpar[1].size() > 1)
-	{
+        }
+        if (gpar[1].size() > 1)
+        {
           fe.eta = xg[i];
           fe.v = param[1] = gpar[1](i+1,i2-p2+1);
-	}
+        }
 
         if (separateGeometry)
           SplineUtils::extractBasis(splinex.back()[ip],Ng,dNxdu.back());
@@ -724,14 +724,14 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
         if (!fe.Jacobian(Jac,normal,Xnod,itgBasis,dNxdu,t1,t2))
           continue; // skip singular points
 
-	if (edgeDir < 0) normal *= -1.0;
+        if (edgeDir < 0) normal *= -1.0;
 
         // Cartesian coordinates of current integration point
         X.assign(Xnod * (separateGeometry ? Ng : fe.basis(itgBasis)));
 
-	// Evaluate the integrand and accumulate element contributions
-	fe.detJxW *= dS*wg[i];
-	ok = integrand.evalBouMx(*A,fe,time,X,normal);
+        // Evaluate the integrand and accumulate element contributions
+        fe.detJxW *= dS*wg[i];
+        ok = integrand.evalBouMx(*A,fe,time,X,normal);
       }
 
       // Finalize the element quantities
@@ -1022,7 +1022,7 @@ bool ASMs2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
 
 
 bool ASMs2Dmx::evalSolution (Matrix& sField, const IntegrandBase& integrand,
-			     const RealArray* gpar, bool regular) const
+                             const RealArray* gpar, bool regular) const
 {
   sField.resize(0,0);
 
