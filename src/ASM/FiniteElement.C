@@ -98,6 +98,29 @@ bool MxFiniteElement::Jacobian (Matrix& Jac, const Matrix& Xnod,
 }
 
 
+bool MxFiniteElement::Jacobian (Matrix& Jac, Vec3& n,
+                                const Matrix& Xnod,
+                                unsigned short int gBasis,
+                                const std::vector<Matrix>& dNxdu,
+                                size_t t1, size_t t2)
+{
+  const bool separateGeometry = dNxdu.size() > this->getNoBasis();
+  if (separateGeometry)
+    gBasis = dNxdu.size();
+
+  Matrix dummy;
+  Matrix& dX = separateGeometry ? dummy : this->grad(gBasis);
+  detJxW = utl::Jacobian(Jac,n,dX,Xnod,dNxdu[gBasis-1],t1,t2);
+  if (detJxW == 0.0) return false; // skip singular points
+
+  for (size_t b = 1; b <= this->getNoBasis(); ++b)
+    if (b != gBasis || separateGeometry)
+      this->grad(b).multiply(dNxdu[b-1],Jac);
+
+  return true;
+}
+
+
 /*!
   This method also calculates the second-derivatives of the basis functions
   with respect to the Cartesian coordinates, using the same geometry mapping

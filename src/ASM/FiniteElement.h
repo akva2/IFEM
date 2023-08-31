@@ -129,6 +129,19 @@ public:
                 const std::vector<const BasisFunctionVals*>* bf,
                 const std::vector<Matrix>* dNxdu = nullptr);
 
+  //! \brief Set up the Jacobian matrix of the coordinate mapping on a boundary.
+  //! \param[out] Jac The inverse of the Jacobian matrix
+  //! \param[out] n Outward-directed unit normal vector on the boundary
+  //! \param[in] X Matrix of element nodal coordinates
+  //! \param[in] gBasis 1-based index of basis representing the geometry
+  //! \param[in] dNxdu First order derivatives of basis functions
+  //! \param[in] t1 First parametric tangent direction of the boundary
+  //! \param[in] t2 Second parametric tangent direction of the boundary
+  bool Jacobian(Matrix& Jac, Vec3& n, const Matrix& Xnod,
+                unsigned short int gBasis,
+                const std::vector<Matrix>& dNxdu,
+                size_t t1, size_t t2);
+
   //! \brief Sets up the Hessian matrix of the coordinate mapping.
   //! \param[out] Hess The Hessian matrix
   //! \param[in] Jac The inverse of the Jacobian matrix
