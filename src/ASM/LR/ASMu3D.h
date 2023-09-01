@@ -637,8 +637,8 @@ protected:
                      Vector& N, Matrix& dNdu) const;
 
   //! \brief Evaluate all basis functions and first derivatives on one element
-  void evaluateBasis(FiniteElement& fe, Matrix& dNdu,
-                     const Matrix& C, const Matrix& B, int basis = 1) const;
+  void evaluateBasis(Vector& N, Matrix& dNdu,
+                     const Matrix& C, const Matrix& B) const;
 
   //! \brief Evaluate all basis functions and first derivatives on one element
   void evaluateBasis(int iel, FiniteElement& fe, Matrix& dNdu,
