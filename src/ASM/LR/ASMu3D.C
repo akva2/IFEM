@@ -2572,9 +2572,11 @@ BasisFunctionVals ASMu3D::BasisFunctionCache::calculatePt (size_t el,
 
   const LR::Element* elm = patch.lrspline->getElement(el);
   std::array<double,3> du;
-  du[0] = elm->umax() - elm->umin();
-  du[1] = elm->vmax() - elm->vmin();
-  du[2] = elm->wmax() - elm->wmin();
+  du[0] = 0.5*(elm->umax() - elm->umin());
+  du[1] = 0.5*(elm->vmax() - elm->vmin());
+  du[2] = 0.5*(elm->wmax() - elm->wmin());
+
+  el = patch.getBasis(basis)->getElementContaining(elm->midpoint());
 
   return this->calculatePrm(fe,du,el,gp,reduced);
 }
@@ -2586,22 +2588,22 @@ calculatePrm (FiniteElement& fe,
               size_t el, size_t gp, bool reduced) const
 {
   BasisFunctionVals result;
-  const BezierExtract& b = reduced ? reducedB : mainB;
-  RealArray extrMat;
-  patch.getBasis(basis)->getBezierExtraction(el,extrMat);
-  Matrix C;
-  const LR::Element* elm = patch.getBasis(basis)->getElement(el);
-  C.resize(elm->nBasisFunctions(), b.N.rows());
-  C.fill(extrMat.data(),extrMat.size());
-
   if (nderiv == 1 || reduced) {
+    const BezierExtract& b = reduced ? reducedB : mainB;
+    RealArray extrMat;
+    patch.getBasis(basis)->getBezierExtraction(el,extrMat);
+    Matrix C;
+    const LR::Element* elm = patch.getBasis(basis)->getElement(el);
+    C.resize(elm->nBasisFunctions(), b.N.rows());
+    C.fill(extrMat.data(),extrMat.size());
     Matrix B(b.N.rows(), 4);
     B.fillColumn(1, b.N.getColumn(gp+1));
-    B.fillColumn(2, b.dNdu.getColumn(gp+1)*2.0/du[0]);
-    B.fillColumn(3, b.dNdv.getColumn(gp+1)*2.0/du[1]);
-    B.fillColumn(4, b.dNdw.getColumn(gp+1)*2.0/du[2]);
+    B.fillColumn(2, b.dNdu.getColumn(gp+1) / du[0]);
+    B.fillColumn(3, b.dNdv.getColumn(gp+1) / du[1]);
+    B.fillColumn(4, b.dNdw.getColumn(gp+1) / du[2]);
 
     patch.evaluateBasis(result.N, result.dNdu, C, B);
+    patch.evaluateBasis(el, basis, fe.u, fe.v, fe.w, result.N, result.dNdu);
   } else if (nderiv == 2)
     patch.evaluateBasis(el, basis, fe.u, fe.v, fe.w,
                         result.N, result.dNdu, result.d2Ndu2);
@@ -2619,7 +2621,7 @@ void ASMu3D::BasisFunctionCache::calculateAll ()
   size_t iel, jp, rp;
   for (iel = jp = rp = 0; iel < patch.nel; iel++)
   {
-    for (int k = 0; k < reducedQ->ng[2]; k++)
+    for (int k = 0; k < mainQ->ng[2]; k++)
       for (int j = 0; j < mainQ->ng[1]; j++)
         for (int i = 0; i < mainQ->ng[0]; i++, jp++)
           values[jp] = this->calculatePt(iel,(k*mainQ->ng[1]+j)*mainQ->ng[0]+i,false);

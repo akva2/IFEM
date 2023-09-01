@@ -31,6 +31,7 @@
 #include "Point.h"
 #include "Profiler.h"
 #include "Vec3.h"
+#include "Vec3Oper.h"
 
 #include <array>
 #include <numeric>
@@ -487,6 +488,8 @@ bool ASMu3Dmx::integrate (Integrand& integrand,
 
             // Cartesian coordinates of current integration point
             X.assign(Xnod * (separateGeometry ? bfs.back()->N : fe.basis(itgBasis)));
+
+            std::cout << "pos: " << X << std::endl;
 
             // Evaluate the integrand and accumulate element contributions
             fe.detJxW *= dV*wg[0][i]*wg[1][j]*wg[2][k];
