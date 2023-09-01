@@ -885,16 +885,15 @@ void ASMu3D::evaluateBasis (Vector& N, Matrix& dNdu,
   dNdu.fillColumn(3,NB.getColumn(4));
 }
 
-void ASMu3D::evaluateBasis (int iel, FiniteElement& fe,
-                            Matrix& dNdu, Matrix3D& d2Ndu2,
-                            int basis) const
+void ASMu3D::evaluateBasis (int iel, int basis,
+                            double u, double v, double w,
+                            Vector& N, Matrix& dNdu, Matrix3D& d2Ndu2) const
 {
   PROFILE3("ASMu3D::evalBasis(2)");
 
   std::vector<RealArray> result;
-  this->getBasis(basis)->computeBasis(fe.u, fe.v, fe.w, result, 2, iel);
+  this->getBasis(basis)->computeBasis(u, v, w, result, 2, iel);
   size_t n = 0, nBasis = result.size();
-  Vector& N = fe.basis(basis);
 
   N.resize(nBasis);
   dNdu.resize(nBasis,3);
@@ -1769,7 +1768,7 @@ bool ASMu3D::evalSolution (Matrix& sField, const IntegrandBase& integrand,
     }
 
     if (use2ndDer)
-      this->evaluateBasis(iel, fe, dNdu, d2Ndu2);
+      this->evaluateBasis(iel, 1, fe.u, fe.v, fe.w, fe.basis(1), dNdu, d2Ndu2);
     else
       this->evaluateBasis(fe.basis(1), dNdu, bezierExtract[iel], B);
 
@@ -2603,10 +2602,9 @@ calculatePrm (FiniteElement& fe,
     B.fillColumn(4, b.dNdw.getColumn(gp+1)*2.0/du[2]);
 
     patch.evaluateBasis(result.N, result.dNdu, C, B);
-  } else if (nderiv == 2) {
-    patch.evaluateBasis(el, fe, result.dNdu, result.d2Ndu2, basis);
-    result.N = fe.N;
-  }
+  } else if (nderiv == 2)
+    patch.evaluateBasis(el, basis, fe.u, fe.v, fe.w,
+                        result.N, result.dNdu, result.d2Ndu2);
 
   return result;
 }
