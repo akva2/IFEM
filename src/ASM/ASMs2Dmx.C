@@ -206,6 +206,11 @@ bool ASMs2Dmx::generateFEMTopology ()
   if (!surf) return false;
 
   if (m_basis.empty()) {
+    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE &&
+        (surf->order_u() < 3 || surf->order_v() < 3)) {
+      std::cerr << "*** RT basis needs to start from quadratic or higher surface." << std::endl;
+      return false;
+    }
     m_basis = ASMmxBase::establishBases(surf, ASMmxBase::Type);
 
     // we need to project on something that is not one of our bases

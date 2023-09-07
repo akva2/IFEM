@@ -18,6 +18,7 @@
 #include <memory>
 
 namespace Go {
+  class BsplineBasis;
   class SplineSurface;
   class SplineVolume;
 }
@@ -95,6 +96,9 @@ protected:
   static Go::SplineSurface* raiseBasis(Go::SplineSurface* surf);
   //! \brief Returns a C^p-1 basis of one degree higher than \a *svol.
   static Go::SplineVolume*  raiseBasis(Go::SplineVolume* svol);
+
+  //! \brief Returns a C^p-1 basis of one degree lower than \a basis.
+  static Go::BsplineBasis reduceBasis(const Go::BsplineBasis& basis);
 
 private:
   std::vector<int> MADOF; //!< Matrix of accumulated DOFs for this patch

@@ -150,12 +150,11 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases (Go::SplineSurface* surf,
   {
     result.resize(3);
 
-    // basis1 should be one degree higher than basis2 and C^p-1 continuous
     int ndim = surf->dimension();
     Go::BsplineBasis a1 = surf->basis(0);
     Go::BsplineBasis a2 = surf->basis(1);
-    Go::BsplineBasis b1 = surf->basis(0).extendedBasis(surf->order_u()+1);
-    Go::BsplineBasis b2 = surf->basis(1).extendedBasis(surf->order_v()+1);
+    Go::BsplineBasis b1 = ASMmxBase::reduceBasis(surf->basis(0));
+    Go::BsplineBasis b2 = ASMmxBase::reduceBasis(surf->basis(1));
 
     // Compute parameter values of the Greville points
     size_t i;
@@ -175,12 +174,14 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases (Go::SplineSurface* surf,
     RealArray XYZ0(ndim*ug.size()*v0.size()), XYZ1(ndim*u0.size()*vg.size());
     surf->gridEvaluator(XYZ0,ug,v0);
     surf->gridEvaluator(XYZ1,u0,vg);
-    result[2].reset(new Go::SplineSurface(*surf));
-    result[0].reset(Go::SurfaceInterpolator::regularInterpolation(b1,a2,
-                                                                  ug,v0,XYZ0,ndim,
+    result[2].reset(Go::SurfaceInterpolator::regularInterpolation(b1,b2,
+                                                                  ug,vg,XYZ0,ndim,
                                                                   false,XYZ0));
-    result[1].reset(Go::SurfaceInterpolator::regularInterpolation(a1,b2,
-                                                                  u0,vg,XYZ1,ndim,
+    result[0].reset(Go::SurfaceInterpolator::regularInterpolation(a1,b2,
+                                                                  u0,vg,XYZ0,ndim,
+                                                                  false,XYZ0));
+    result[1].reset(Go::SurfaceInterpolator::regularInterpolation(b1,a2,
+                                                                  ug,v0,XYZ1,ndim,
                                                                   false,XYZ1));
     itgBasis = 3;
   } else if (type == SUBGRID) {
@@ -503,4 +504,21 @@ Go::SplineVolume* ASMmxBase::raiseBasis (Go::SplineVolume* svol)
   svol->gridEvaluator(ug[0],ug[1],ug[2],XYZ);
   // Project the coordinates onto the new basis (the 2nd XYZ is dummy here)
   return Go::VolumeInterpolator::regularInterpolation(basis[0],basis[1],basis[2],ug[0],ug[1],ug[2],XYZ,ndim,false,XYZ);
+}
+
+
+Go::BsplineBasis ASMmxBase::reduceBasis(const Go::BsplineBasis& basis)
+{
+  std::vector<double> knots;
+  basis.knotsSimple(knots);
+  std::vector<int> mult;
+  basis.knotMultiplicities(mult);
+  std::vector<int> cont(knots.size());
+  cont.front() = cont.back() = -1;
+  int order = basis.order();
+  for (size_t i = 1; i < knots.size()-1; ++i)
+    cont[i]  = order - 1 - (mult[i] == 1 ? 1 : mult[i]+1);
+
+  std::vector<double> newknot = SplineUtils::buildKnotVector(order, knots, cont);
+  return Go::BsplineBasis(order, newknot.begin(), newknot.end());
 }
