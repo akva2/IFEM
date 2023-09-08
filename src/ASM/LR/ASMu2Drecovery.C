@@ -17,8 +17,10 @@
 #include "ASMu2D.h"
 #include "IntegrandBase.h"
 #include "CoordinateMapping.h"
+#include "FiniteElement.h"
 #include "GaussQuadrature.h"
 #include "GlbL2projector.h"
+#include "PiolaMapping.h"
 #include "SparseMatrix.h"
 #include "DenseMatrix.h"
 #include "SplineUtils.h"
@@ -608,6 +610,153 @@ bool ASMu2D::edgeL2projection (const DirichletEdge& edge,
       std::cout <<" "<< c;
   }
   std::cout <<"\n-------------------"<< std::endl;
+#endif
+
+  // Solve the edge-global equation system
+  if (!A.solve(B)) return false;
+
+#if SP_DEBUG > 2
+  std::cout <<"---- SOLUTION -----\n"<< B
+            <<"-------------------"<< std::endl;
+#endif
+
+  // Store the control-point values of the projected field
+  result.resize(m,RealArray(n));
+  RealArray::const_iterator it = B.begin();
+  for (size_t i = 0; i < m; i++, it += n)
+    std::copy(it, it+n, result[i].begin());
+
+  return true;
+}
+
+
+bool ASMu2D::edgeL2projectionPiola (const DirichletEdge& edge,
+                                    const FunctionBase& values,
+                                    Real2DMat& result,
+                                    double time) const
+{
+  size_t n = edge.MLGN.size();
+  size_t m = values.dim();
+  SparseMatrix A(SparseMatrix::SUPERLU);
+  StdVector B(n*m);
+  A.resize(n,n);
+
+  const LR::LRSplineSurface* geo = this->getBasis(ASM::GEOMETRY_BASIS);
+
+  // find the normal and tangent direction for the edge
+  int edgeDir, t1, t2;
+  switch (edge.edg)
+  { //              id            normal  tangent
+    case LR::WEST:  edgeDir = -1; t1 = 1; t2 = 2; break;
+    case LR::EAST:  edgeDir =  1; t1 = 1; t2 = 2; break;
+    case LR::SOUTH: edgeDir = -2; t1 = 2; t2 = 1; break;
+    case LR::NORTH: edgeDir =  2; t1 = 2; t2 = 1; break;
+    default:        return false;
+  }
+
+  // Get Gaussian quadrature points and weights
+  const int nGP = this->getNoGaussPt(lrspline->order(t2-1),true);
+  const double* xg = GaussQuadrature::getCoord(nGP);
+  const double* wg = GaussQuadrature::getWeight(nGP);
+  if (!xg || !wg) return false;
+
+  std::array<Vector,2> gpar;
+  for (int d = 0; d < 2; d++)
+    if (-1-d == edgeDir)
+    {
+      gpar[d].resize(nGP);
+      gpar[d].fill(d == 0 ? lrspline->startparam(0) : lrspline->startparam(1));
+    }
+    else if (1+d == edgeDir)
+    {
+      gpar[d].resize(nGP);
+      gpar[d].fill(d == 0 ? lrspline->endparam(0) : lrspline->endparam(1));
+    }
+
+  Vector Ng;
+  std::vector<Matrix> dNdu(2);
+  Matrix dNdX, Xnod, J, Ji;
+  double param[3] = { 0.0, 0.0, 0.0 };
+  Vec4   X(param);
+
+  MxFiniteElement fe({size_t(edge.lr[0]->order(0)*edge.lr[0]->order(1)),
+                      size_t(edge.lr[1]->order(0)*edge.lr[1]->order(1))});
+
+
+  // === Assembly loop over all elements on the patch edge =====================
+
+  for (size_t i = 0; i < edge.MLGE.size(); i++) // for all edge elements
+  {
+    int iel = 1 + edge.MLGE[i];
+    int ielG = iel;
+    if (geo != lrspline.get())
+      ielG = geo->getElementContaining(lrspline->getElement(iel-1)->midpoint()) + 1;
+
+    // Get element edge length in the parameter space
+    double dS = 0.5*this->getParametricLength(iel,t2);
+    if (dS < 0.0) return false; // topology error (probably logic error)
+
+    // Set up control point coordinates for current element
+    if (!this->getElementCoordinates(Xnod,iel)) return false;
+
+    // Get integration gauss points over this element
+    this->getGaussPointParameters(gpar[t2-1],t2-1,nGP,iel,xg);
+
+    // --- Integration loop over all Gauss points along the edge ---------------
+
+    for (int j = 0; j < nGP; j++)
+    {
+      // Parameter values of current integration point
+      double u = param[0] = gpar[0][j];
+      double v = param[1] = gpar[1][j];
+
+      // Evaluate basis function derivatives at current integration points
+      Go::BasisDerivsSf splineg;
+      this->computeBasis(u,v,splineg,ielG-1,geo);
+
+      // Fetch basis function derivatives at current integration point
+      SplineUtils::extractBasis(splineg,Ng,dNdu[0]);
+
+      // Compute basis function derivatives
+      double detJxW = dS*utl::Jacobian(Ji,X,dNdX,Xnod,dNdu[0],t1,t2)*wg[j];
+      if (detJxW == 0.0) continue; // skip singular points
+      J.multiply(Xnod,dNdu[0]); // J = X * dNdu
+
+      // Cartesian coordinates of current integration point
+      X.assign(Xnod * Ng);
+      X.t = time;
+
+      Go::BasisPtsSf spline;
+      edge.lr[0]->computeBasis(u,v,spline,edge.lr[0]->getElementContaining(u,v));
+      fe.basis(1) = spline.basisValues;
+      edge.lr[1]->computeBasis(u,v,spline,edge.lr[0]->getElementContaining(u,v));
+      fe.basis(2) = spline.basisValues;
+      utl::piolaBasis(fe, J);
+
+      // Assemble into matrix A and vector B
+      for (size_t il = 0; il < edge.MNPC[i].size(); il++) { // local i-index
+        int ig;
+        if ((ig = 1+edge.MNPC[i][il]) > 0)         // global i-index
+        {
+          for (size_t jl = 0; jl < edge.MNPC[i].size(); jl++) { // local j-index
+            int jg;
+            if ((jg = 1+edge.MNPC[i][jl]) > 0)         // global j-index
+              A(ig,jg) += N[il]*N[jl]*detJxW;
+          }
+
+          RealArray val = values.getValue(X);
+          for (size_t k = 0; k < m; k++)
+            B(ig+k*n) += N[il]*val[k]*detJxW;
+        } // end basis-function loop
+      }
+    } // end gauss-point loop
+  } // end element loop
+
+#if SP_DEBUG > 2
+  std::cout <<"---- Matrix A -----\n"<< A
+            <<"-------------------"<< std::endl;
+  std::cout <<"---- Vector B -----\n"<< B
+            <<"-------------------"<< std::endl;
 #endif
 
   // Solve the edge-global equation system

@@ -530,6 +530,15 @@ public:
   bool edgeL2projection(const DirichletEdge& edge, const FunctionBase& values,
                         Real2DMat& result, double time) const;
 
+  //! \brief Projects inhomogenuous dirichlet conditions by continuous L2-fit.
+  //! \param[in] edge low-level edge information needed to do integration
+  //! \param[in] values inhomogenuous function which is to be fitted
+  //! \param[out] result fitted value in terms of control-point values
+  //! \param[in] time time used in dynamic problems
+  //! \details This version is used when Piola mapping is enabled.
+  bool edgeL2projectionPiola(const DirichletEdge& edge, const FunctionBase& values,
+                             Real2DMat& result, double time) const;
+
   //! \brief Transfers Gauss point variables from old basis to this patch.
   //! \param[in] old_basis The LR-spline basis to transfer from
   //! \param[in] oldVar Gauss point variables associated with \a oldBasis
