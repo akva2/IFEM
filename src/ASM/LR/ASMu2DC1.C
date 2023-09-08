@@ -48,8 +48,8 @@ void ASMu2DC1::constrainEdge (int dir, bool open, int dof, int code, char basis)
     // Get all basis functions on this boundary edge,
     // and the layer of functions next to the edge functions
     std::vector<LR::Basisfunction*> edgeFunc1, edgeFunc2;
-    de.lr->getEdgeFunctions(edgeFunc1,de.edg,1);
-    de.lr->getEdgeFunctions(edgeFunc2,de.edg,2);
+    de.lr.front()->getEdgeFunctions(edgeFunc1,de.edg,1);
+    de.lr.front()->getEdgeFunctions(edgeFunc2,de.edg,2);
 
     if (dof%1000) // Add constraints for all basis functions on the edge
       for (LR::Basisfunction* b : edgeFunc1)

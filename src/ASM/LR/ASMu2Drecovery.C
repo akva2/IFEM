@@ -561,10 +561,10 @@ bool ASMu2D::edgeL2projection (const DirichletEdge& edge,
       X.t = time;
 
       // For mixed basis, we need to compute functions separate from geometry
-      if (edge.lr != geo)
+      if (edge.lr.front() != geo)
       {
         // different lrspline instances enumerate elements differently
-        edge.lr->computeBasis(u,v,spline,edge.lr->getElementContaining(u,v));
+        edge.lr.front()->computeBasis(u,v,spline,edge.lr.front()->getElementContaining(u,v));
         SplineUtils::extractBasis(spline,N,dNdu);
       }
 

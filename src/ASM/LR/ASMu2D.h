@@ -472,14 +472,14 @@ protected:
   //! \brief Struct representing an inhomogeneous Dirichlet boundary condition.
   struct DirichletEdge
   {
-    LR::LRSplineSurface* lr;       //!< Pointer to the right object (in case of multiple bases)
-    LR::parameterEdge   edg;       //!< Which edge is this
-    IntVec              MLGE;      //!< Local-to-Global Element numbers
-    IntVec              MLGN;      //!< Local-to-Global Nodal numbers
-    IntMat              MNPC;      //!< Matrix of Nodal-Point Correpondanse
-    int                 dof;       //!< Local DOF to constrain along the boundary
-    int                 code;      //!< Inhomogeneous Dirichlet condition code
-    int                 corners[2];//!< Index of the two end-points of this line
+    std::vector<LR::LRSplineSurface*> lr; //!< Pointer to the bases
+    LR::parameterEdge   edg;              //!< Which edge is this
+    IntVec              MLGE;             //!< Local-to-Global Element numbers
+    IntVec              MLGN;             //!< Local-to-Global Nodal numbers
+    IntMat              MNPC;             //!< Matrix of Nodal-Point Correpondanse
+    int                 dof;              //!< Local DOF to constrain along the boundary
+    int                 code;             //!< Inhomogeneous Dirichlet condition code
+    int                 corners[2];       //!< Index of the two end-points of this line
 
     //! \brief The constructor detects the edge end points.
     DirichletEdge(LR::LRSplineSurface* sf, int dir,

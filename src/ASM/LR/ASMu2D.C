@@ -710,7 +710,7 @@ bool ASMu2D::connectBasis (int edge, ASMu2D& neighbor, int nedge, bool revers,
 
 ASMu2D::DirichletEdge::DirichletEdge (LR::LRSplineSurface* sf,
                                       int dir, int d, int c, int offset)
-  : lr(sf), edg(LR::NONE), dof(d), code(c)
+  : lr(1,sf), edg(LR::NONE), dof(d), code(c)
 {
   // Figure out what edge we are at, and
   // find the corners since these are not to be included in the L2-fitting
@@ -722,23 +722,23 @@ ASMu2D::DirichletEdge::DirichletEdge (LR::LRSplineSurface* sf,
   {
   case -2:
     edg = LR::SOUTH;
-    lr->getEdgeFunctions(c1, LR::SOUTH_WEST);
-    lr->getEdgeFunctions(c2, LR::SOUTH_EAST);
+    sf->getEdgeFunctions(c1, LR::SOUTH_WEST);
+    sf->getEdgeFunctions(c2, LR::SOUTH_EAST);
     break;
   case -1:
     edg = LR::WEST;
-    lr->getEdgeFunctions(c1, LR::SOUTH_WEST);
-    lr->getEdgeFunctions(c2, LR::NORTH_WEST);
+    sf->getEdgeFunctions(c1, LR::SOUTH_WEST);
+    sf->getEdgeFunctions(c2, LR::NORTH_WEST);
     break;
   case 1:
     edg = LR::EAST;
-    lr->getEdgeFunctions(c1, LR::NORTH_EAST);
-    lr->getEdgeFunctions(c2, LR::SOUTH_EAST);
+    sf->getEdgeFunctions(c1, LR::NORTH_EAST);
+    sf->getEdgeFunctions(c2, LR::SOUTH_EAST);
     break;
   case 2:
     edg = LR::NORTH;
-    lr->getEdgeFunctions(c1, LR::NORTH_WEST);
-    lr->getEdgeFunctions(c2, LR::NORTH_EAST);
+    sf->getEdgeFunctions(c1, LR::NORTH_WEST);
+    sf->getEdgeFunctions(c2, LR::NORTH_EAST);
     break;
   default:
     corners[0] = corners[1] = 0;
@@ -771,7 +771,7 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
 
   // Get all basis functions on this edge
   std::vector<LR::Basisfunction*> edgeFunctions;
-  de.lr->getEdgeFunctions(edgeFunctions,de.edg);
+  de.lr.front()->getEdgeFunctions(edgeFunctions,de.edg);
 
   // Add constraints for all basis functions on the edge
   for (LR::Basisfunction* b : edgeFunctions)
@@ -789,7 +789,7 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
 
   // Get all elements connected to this edge
   std::vector<LR::Element*> edgeElements;
-  de.lr->getEdgeElements(edgeElements,de.edg);
+  de.lr.front()->getEdgeElements(edgeElements,de.edg);
 
   // Build the MLGE and MNPC arrays
   de.MLGE.reserve(edgeElements.size());
@@ -797,7 +797,7 @@ void ASMu2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
   for (LR::Element* el : edgeElements)
   {
     // for mixed FEM models, let MLGE point to the *geometry* index
-    if (de.lr != this->lrspline.get())
+    if (de.lr.front() != this->lrspline.get())
     {
       double umid = (el->umax() + el->umin())/2.0;
       double vmid = (el->vmax() + el->vmin())/2.0;
