@@ -230,6 +230,8 @@ protected:
   virtual int getLastItgElmNode() const;
 
   std::vector<std::shared_ptr<Go::SplineSurface>> m_basis; //!< Vector of bases
+
+  bool hack = false;
 };
 
 #endif

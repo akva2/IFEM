@@ -199,6 +199,7 @@ void FiniteElement::piolaBasis (const double detJ, const Matrix& J)
       Ntmp(b,k) = this->basis(b)(i);
 
   P.multiply(J,Ntmp,false,false,false,1.0/detJ);
+  basis(3) *= 1.0 / detJ;
 }
 
 

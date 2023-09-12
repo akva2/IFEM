@@ -444,6 +444,9 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
   bool use2ndDer = integrand.getIntegrandType() & Integrand::SECOND_DERIVATIVES;
   bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
   const bool separateGeometry = this->getBasis(ASM::GEOMETRY_BASIS) != surf;
+  const bool piolaMapping = integrand.getIntegrandType() & Integrand::PIOLA_MAPPING;
+  if (piolaMapping)
+    hack = true;
 
   if (myCache.empty()) {
     myCache.emplace_back(std::make_unique<BasisFunctionCache>(*this, cachePolicy, 1));
@@ -456,7 +459,10 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
 
   for (std::unique_ptr<BasisFunctionCache>& cache : myCache) {
     cache->setIntegrand(&integrand);
-    cache->init(use2ndDer ? 2 : 1);
+    if (cache->getBasis() == ASM::GEOMETRY_BASIS)
+      cache->init(use2ndDer || piolaMapping ? 2 : 1);
+    else
+      cache->init(use2ndDer ? 2 : 1);
   }
 
   BasisFunctionCache& cache = *myCache.front();
@@ -567,6 +573,23 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
             if (use2ndDer && !fe.Hessian(Hess,Jac,Xnod,itgBasis,&bfs))
               ok = false;
 
+            if (piolaMapping) {
+              Matrix J;
+              J.multiply(Xnod,bfs.back()->dNdu);
+              Matrix3D H;
+              H.multiply(Xnod,bfs.back()->d2Ndu2);
+              std::vector<Matrix> dNdu;
+              dNdu.push_back(bfs[0]->dNdu);
+              dNdu.push_back(bfs[1]->dNdu);
+              fe.piolaMapping(fe.detJxW, J, Jac, dNdu, H);
+//              std::cout << "Jacobian: " << J << std::endl;
+//              std::cout << "JacInv: " << Jac << std::endl;
+//              std::cout << "Det: "<< fe.detJxW << std::endl;
+//              std::cout << "Hessian: " << H<< std::endl;
+//              std::cout << "PN: " << fe.P << std::endl;
+//              std::cout << "dPNdX: " << fe.dPdX << std::endl;
+            }
+
             // Compute G-matrix
             if (integrand.getIntegrandType() & Integrand::G_MATRIX)
               utl::getGmat(Jac,dXidu,fe.G);
@@ -585,6 +608,7 @@ bool ASMs2Dmx::integrate (Integrand& integrand,
           ok = false;
 
         // Assembly of global system integral
+        std::cout << "\n==== Element " << fe.iel << "=======";
         if (ok && !glInt.assemble(A->ref(),fe.iel))
           ok = false;
 
@@ -608,6 +632,7 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
 
   bool useElmVtx = integrand.getIntegrandType() & Integrand::ELEMENT_CORNERS;
   const bool separateGeometry = this->getBasis(ASM::GEOMETRY_BASIS) != surf;
+  const bool piolaMapping = integrand.getIntegrandType() & Integrand::PIOLA_MAPPING;
 
   // Get Gaussian quadrature points and weights
   const double* xg = GaussQuadrature::getCoord(nGauss);
@@ -640,13 +665,19 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
   integrand.setNeumannOrder(1 + lIndex/10);
 
   // Evaluate basis function derivatives at all integration points
-  std::vector<std::vector<Go::BasisDerivsSf>> splinex(m_basis.size() + separateGeometry);
+  std::vector<std::vector<Go::BasisDerivsSf>> splinex(m_basis.size());
 #pragma omp parallel for schedule(static)
   for (size_t i = 0; i < m_basis.size(); ++i)
     m_basis[i]->computeBasisGrid(gpar[0],gpar[1],splinex[i]);
 
-  if (separateGeometry)
-    this->getBasis(ASM::GEOMETRY_BASIS)->computeBasisGrid(gpar[0],gpar[1],splinex.back());
+  std::vector<Go::BasisDerivsSf> splineg1(m_basis.size());
+  std::vector<Go::BasisDerivsSf2> splineg2(m_basis.size());
+  if (separateGeometry) {
+    if (piolaMapping)
+      this->getBasis(ASM::GEOMETRY_BASIS)->computeBasisGrid(gpar[0],gpar[1],splineg2);
+    else
+      this->getBasis(ASM::GEOMETRY_BASIS)->computeBasisGrid(gpar[0],gpar[1],splineg1);
+  }
 
   const int p1 = surf->order_u();
   const int p2 = surf->order_v();
@@ -662,7 +693,8 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
   fe.v = gpar[1](1,1);
   double param[3] = { fe.u, fe.v, 0.0 };
 
-  Matrices dNxdu(splinex.size());
+  Matrices dNxdu(splinex.size() + separateGeometry);
+  Matrix3D dNg2du2;
   Vector Ng;
   Matrix Xnod, Jac;
   Vec4   X(param,time.t);
@@ -728,8 +760,12 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
           fe.v = param[1] = gpar[1](i+1,i2-p2+1);
         }
 
-        if (separateGeometry)
-          SplineUtils::extractBasis(splinex.back()[ip],Ng,dNxdu.back());
+        if (separateGeometry) {
+          if (piolaMapping)
+            SplineUtils::extractBasis(splineg2[ip],Ng,dNxdu.back(),dNg2du2);
+          else
+            SplineUtils::extractBasis(splineg1[ip],Ng,dNxdu.back());
+        }
 
         // Fetch basis function derivatives at current integration point
         for (size_t b = 0; b < m_basis.size(); ++b)
@@ -741,6 +777,14 @@ bool ASMs2Dmx::integrate (Integrand& integrand, int lIndex,
           continue; // skip singular points
 
         if (edgeDir < 0) normal *= -1.0;
+
+        if (piolaMapping) {
+          Matrix J;
+          J.multiply(Xnod,dNxdu.back());
+          Matrix3D H;
+          H.multiply(Xnod,dNg2du2);
+          fe.piolaMapping(fe.detJxW, J, Jac, dNxdu, H);
+        }
 
         // Cartesian coordinates of current integration point
         X.assign(Xnod * (separateGeometry ? Ng : fe.basis(itgBasis)));
@@ -970,11 +1014,15 @@ bool ASMs2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
                              const RealArray* gpar, bool regular, int, int nf) const
 {
   // Evaluate the basis functions at all points
+  const bool piolaMapping = hack;
   std::vector<std::vector<Go::BasisPtsSf>> splinex(m_basis.size());
+  std::vector<Go::BasisDerivsSf> splineg;
   if (regular)
   {
     for (size_t b = 0; b < m_basis.size(); ++b)
       m_basis[b]->computeBasisGrid(gpar[0],gpar[1],splinex[b]);
+    if (piolaMapping)
+      this->getBasis(ASM::GEOMETRY_BASIS)->computeBasisGrid(gpar[0],gpar[1],splineg);
   }
   else if (gpar[0].size() == gpar[1].size())
   {
@@ -1005,22 +1053,63 @@ bool ASMs2Dmx::evalSolution (Matrix& sField, const Vector& locSol,
   for (size_t i = 0; i < nPoints; i++)
   {
     size_t comp = 0;
-    for (size_t b = 0; b < m_basis.size(); ++b) {
-      if (nc[b] == 0)
-        continue;
-      IntVec ip;
-      scatterInd(m_basis[b]->numCoefs_u(),m_basis[b]->numCoefs_v(),
-                 m_basis[b]->order_u(),m_basis[b]->order_v(),
-                 splinex[b][i].left_idx,ip);
+    if (piolaMapping) {
+      std::vector<Vector> XX(3);
+      for (size_t b = 0; b < m_basis.size(); ++b) {
+        IntVec ip;
+        scatterInd(m_basis[b]->numCoefs_u(),m_basis[b]->numCoefs_v(),
+                   m_basis[b]->order_u(),m_basis[b]->order_v(),
+                   splinex[b][i].left_idx,ip);
 
-      utl::gather(ip,nc[b],locSol,Xtmp,comp);
-      if (b == 0)
-        Xtmp.multiply(splinex[b][i].basisValues,Ytmp);
-      else {
-        Xtmp.multiply(splinex[b][i].basisValues,Ztmp);
-        Ytmp.insert(Ytmp.end(),Ztmp.begin(),Ztmp.end());
+        if (nc[b])
+          utl::gather(ip,nc[b],locSol,XX[b],comp);
+        else
+          XX[b].resize(nb[b]);
+        comp += nc[b]*nb[b];
       }
-      comp += nc[b]*nb[b];
+      Matrix Xnod, dNdu;
+      Vector Ng;
+      SplineUtils::extractBasis(splineg[i], Ng, dNdu);
+      this->getElementCoordinatesPrm(Xnod, gpar[0][i % gpar[0].size()], gpar[1][i /gpar[0].size()]);
+      Matrix J;
+      J.multiply(Xnod, dNdu);
+      MxFiniteElement fe(elem_size);
+
+      const Real detJ = J.det();
+      fe.basis(1) = splinex[0][i].basisValues;
+      fe.basis(2) = splinex[1][i].basisValues;
+      fe.basis(3) = splinex[2][i].basisValues;
+      fe.piolaBasis(detJ, J);
+      const size_t N1 = fe.basis(1).size();
+      const size_t N2 = fe.basis(2).size();
+      Ytmp.resize(3,true);
+      for (size_t j = 1; j <= N1; ++j) {
+        Ytmp[0] += XX[0](j)*fe.P(1,j);
+        Ytmp[1] += XX[0](j)*fe.P(2,j);
+      }
+      for (size_t j = 1; j <= N2; ++j) {
+        Ytmp[0] += XX[1](j)*fe.P(1,j+N1);
+        Ytmp[1] += XX[1](j)*fe.P(2,j+N1);
+      }
+      Ytmp[2] = XX[2].dot(splinex[2][i].basisValues);
+    } else {
+      for (size_t b = 0; b < m_basis.size(); ++b) {
+        if (nc[b] == 0)
+          continue;
+        IntVec ip;
+        scatterInd(m_basis[b]->numCoefs_u(),m_basis[b]->numCoefs_v(),
+                   m_basis[b]->order_u(),m_basis[b]->order_v(),
+                   splinex[b][i].left_idx,ip);
+
+        utl::gather(ip,nc[b],locSol,Xtmp,comp);
+        if (b == 0)
+          Xtmp.multiply(splinex[b][i].basisValues,Ytmp);
+        else {
+          Xtmp.multiply(splinex[b][i].basisValues,Ztmp);
+          Ytmp.insert(Ytmp.end(),Ztmp.begin(),Ztmp.end());
+        }
+        comp += nc[b]*nb[b];
+      }
     }
     sField.fillColumn(1+i,Ytmp);
   }
