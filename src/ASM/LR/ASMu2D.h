@@ -68,6 +68,9 @@ protected:
     //! \brief Empty destructor.
     virtual ~BasisFunctionCache() = default;
 
+    //! \brief Returns basis the cache is for.
+    int getBasis() const { return basis; }
+
   protected:
     //! \brief Implementation specific initialization.
     bool internalInit() override;
@@ -84,7 +87,6 @@ protected:
     //! \brief Calculates basis function info in all integration points.
     void calculateAll() override;
 
-  protected:
     const ASMu2D& patch; //!< Reference to patch cache is for
     int basis; //!< Basis to use
 

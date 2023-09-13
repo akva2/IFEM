@@ -83,6 +83,9 @@ protected:
     const std::array<size_t,2>& noElms() const
     { return nel; }
 
+    //! \brief Returns basis the cache is for.
+    int getBasis() const { return basis; }
+
   protected:
     //! \brief Implementation specific initialization.
     bool internalInit() override;
