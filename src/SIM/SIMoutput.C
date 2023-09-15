@@ -594,7 +594,8 @@ bool SIMoutput::writeGlvS (const Vector& scl, const char* fieldName,
 
     int ncmp = scl.size() / this->getNoNodes(basis);
     this->extractPatchSolution(scl,lovec,pch,ncmp,basis);
-    if (!pch->evalSolution(field,lovec,opt.nViz,ncmp))
+    if (!pch->evalSolution(field,lovec,opt.nViz,ncmp,
+                           myProblem->getIntegrandType() & Integrand::PIOLA_MAPPING))
       return false;
 
     if (!myVtf->writeNres(field,++nBlock,++geomID))
@@ -682,7 +683,8 @@ int SIMoutput::writeGlvS1 (const Vector& psol, int iStep, int& nBlock,
 
     // Evaluate primary solution variables
 
-    if (!pch->evalSolution(field,lovec,opt.nViz))
+    if (!pch->evalSolution(field,lovec,opt.nViz,0,
+                           myProblem->getIntegrandType() & Integrand::PIOLA_MAPPING))
       return -1;
 
     pch->filterResults(field,myVtf->getBlock(++geomID));

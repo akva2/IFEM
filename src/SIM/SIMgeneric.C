@@ -53,8 +53,13 @@ Vector SIMgeneric::getSolution (const Vector& psol, const double* par,
   Matrix tmpVal;
   Vector localVec;
   pch->extractNodeVec(psol,localVec);
-  if (!pch->evalSolution(tmpVal,localVec,&params.front(),false,deriv))
-    return Vector();
+  if (myProblem->getIntegrandType() & Integrand::PIOLA_MAPPING) {
+    if (!pch->evalSolutionPiola(tmpVal,localVec,&params.front(),false))
+      return Vector();
+  } else {
+    if (!pch->evalSolution(tmpVal,localVec,&params.front(),false,deriv))
+      return Vector();
+  }
 
   return tmpVal.getColumn(1);
 }

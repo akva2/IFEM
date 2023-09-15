@@ -2018,7 +2018,7 @@ bool ASMu2D::tesselate (ElementBlock& grid, const int* npe) const
 
 
 bool ASMu2D::evalSolution (Matrix& sField, const Vector& locSol,
-                           const int* npe, int nf) const
+                           const int* npe, int nf, bool piola) const
 {
   // Compute parameter values of the result sampling points
   std::array<RealArray,2> gpar;
@@ -2027,7 +2027,10 @@ bool ASMu2D::evalSolution (Matrix& sField, const Vector& locSol,
       return false;
 
   // Evaluate the primary solution at all sampling points
-  return this->evalSolution(sField,locSol,gpar.data(),false,0,nf);
+  if (piola)
+    return this->evalSolutionPiola(sField,locSol,gpar.data(),false);
+  else
+    return this->evalSolution(sField,locSol,gpar.data(),false,0,nf);
 }
 
 
