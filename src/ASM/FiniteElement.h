@@ -14,6 +14,7 @@
 #ifndef _FINITE_ELEMENT_H
 #define _FINITE_ELEMENT_H
 
+#include "BasisFunctionVals.h"
 #include "ItgPoint.h"
 #include "MatVec.h"
 #include "Vec3.h"
@@ -122,25 +123,23 @@ public:
   //! \param[in] Xnod Matrix of element nodal coordinates
   //! \param[in] gBasis 1-based index of basis representing the geometry
   //! \param[in] bf Basis function values and derivatives
-  //! \param[in] dNxdu First order derivatives of basis functions
   bool Jacobian(Matrix& Jac, const Matrix& Xnod,
                 unsigned short int gBasis,
-                const std::vector<const BasisFunctionVals*>* bf,
-                const std::vector<Matrix>* dNxdu = nullptr);
+                const BasisValuesPtrs& bf);
 
   //! \brief Sets up the Jacobian matrix of the coordinate mapping on a boundary.
   //! \param[out] Jac The inverse of the Jacobian matrix
   //! \param[out] n Outward-directed unit normal vector on the boundary
   //! \param[in] Xnod Matrix of element nodal coordinates
   //! \param[in] gBasis 1-based index of basis representing the geometry
-  //! \param[in] dNxdu First order derivatives of basis functions
+  //! \param[in] dNxdu Derivatives of basis functions
   //! \param[in] t1 First parametric tangent direction of the boundary
   //! \param[in] t2 Second parametric tangent direction of the boundary
   //! \param[in] nBasis Number of basis functions
   //! \param[in] Xnod2 Matrix of element nodal coordinates for neighbor element
   bool Jacobian(Matrix& Jac, Vec3& n, const Matrix& Xnod,
                 unsigned short int gBasis,
-                const std::vector<Matrix>& dNxdu,
+                const BasisValuesPtrs& dNxdu,
                 size_t t1, size_t t2, size_t nBasis = 0,
                 const Matrix* Xnod2 = nullptr);
 
@@ -150,11 +149,9 @@ public:
   //! \param[in] Xnod Matrix of element nodal coordinates
   //! \param[in] gBasis 1-based index of basis representing the geometry
   //! \param[in] bf Basis function values and derivatives
-  //! \param[in] d2Nxdu2 Second order derivatives of basis functions
   bool Hessian(Matrix3D& Hess, const Matrix& Jac, const Matrix& Xnod,
                unsigned short int gBasis,
-               const std::vector<const BasisFunctionVals*>* bf,
-               const std::vector<Matrix3D>* d2Nxdu2 = nullptr);
+               const BasisValuesPtrs& bf);
 
 protected:
   //! \brief Returns a reference to the basis function derivatives.

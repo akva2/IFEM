@@ -29,4 +29,28 @@ struct BasisFunctionVals
   Matrix4D d3Ndu3; //!< Third order derivatives of basis functions
 };
 
+
+//! \brief Convenience type alias
+using BasisValuesPtrs = std::vector<const BasisFunctionVals*>;
+
+
+//! \brief Utility class holding a vector of basis function values.
+class BasisValues : public std::vector<BasisFunctionVals>
+{
+public:
+  //! \brief Constructor resizing to a given size.
+  BasisValues(size_t size) : std::vector<BasisFunctionVals>(size)
+  {
+    pointers.reserve(this->size());
+    for (const BasisFunctionVals& val : *this)
+      pointers.push_back(&val);
+  }
+
+  //! \brief Cast to a vector with pointers to our values.
+  operator const BasisValuesPtrs& () const { return pointers; }
+
+private:
+  BasisValuesPtrs pointers; //!< Vector of pointers to our values
+};
+
 #endif
