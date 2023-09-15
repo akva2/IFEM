@@ -31,6 +31,7 @@ BasisFunctionCache<Dim>::BasisFunctionCache (const BasisFunctionCache<Dim>& rhs)
   : policy(rhs.policy)
   , mainQ(rhs.mainQ)
   , reducedQ(rhs.reducedQ)
+  , basis(rhs.basis)
 {
 }
 

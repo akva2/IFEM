@@ -70,6 +70,9 @@ public:
   //! \brief Returns whether or not a reduced quadrature is enabled.
   bool hasReduced() const { return !reducedQ->gpar[0].empty(); }
 
+  //! \brief Returns basis cache is for.
+  int getBasis() const { return basis; }
+
   //! \brief Obtain a single integration point parameter.
   //! \param dir Direction of for integration point
   //! \param el Element number in given direction
@@ -134,6 +137,7 @@ protected:
 
   size_t nTotal = 0; //!< Total number of main integration points
   size_t nTotalRed = 0; //!< Total number of reduced integration points
+  int basis = 1; //!< Basis to use
 };
 
 #endif
