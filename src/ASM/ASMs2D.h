@@ -479,7 +479,7 @@ public:
   //! \param[in] npe Number of visualization nodes over each knot span
   //! \param[in] nf If nonzero, mixed evaluates nf fields on first basis
   virtual bool evalSolution(Matrix& sField, const Vector& locSol,
-                            const int* npe, int nf) const;
+                            const int* npe, int nf, bool piola) const;
 
   //! \brief Evaluates the primary solution field at the given points.
   //! \param[out] sField Solution field
