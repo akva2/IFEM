@@ -699,7 +699,7 @@ bool SIM2D::addConstraint (int patch, int lndx, int ldim, int dirs, int code,
     return false;
   };
 
-  if (patch < 1 || patch > (int)myModel.size())
+  if (patch < 1 || patch > static_cast<int>(myModel.size()))
     return error("patch index",patch);
 
   bool open = ldim < 0; // open means without its end points
@@ -712,7 +712,7 @@ bool SIM2D::addConstraint (int patch, int lndx, int ldim, int dirs, int code,
   IFEM::cout <<" in direction(s) "<< dirs;
   if (lndx < 0) IFEM::cout << (project ? " (local projected)" : " (local)");
   if (code != 0) IFEM::cout <<" code = "<< abs(code);
-  if (basis > 1) IFEM::cout <<" basis = "<< (int)basis;
+  if (basis > 1) IFEM::cout <<" basis = "<< static_cast<int>(basis);
 #if SP_DEBUG > 1
   std::cout << std::endl;
 #endif
@@ -722,43 +722,43 @@ bool SIM2D::addConstraint (int patch, int lndx, int ldim, int dirs, int code,
   if (!pch) return error("2D patch",patch);
 
   switch (abs(ldim))
-    {
+  {
     case 0: // Vertex constraints
       switch (lndx)
-	{
-	case 1: pch->constrainCorner(-1,-1,dirs,abs(code),basis); break;
-	case 2: pch->constrainCorner( 1,-1,dirs,abs(code),basis); break;
-	case 3: pch->constrainCorner(-1, 1,dirs,abs(code),basis); break;
-	case 4: pch->constrainCorner( 1, 1,dirs,abs(code),basis); break;
-	default:
-	  IFEM::cout << std::endl;
-	  return error("vertex index",lndx);
-	}
+      {
+        case 1: pch->constrainCorner(-1,-1,dirs,abs(code),basis); break;
+        case 2: pch->constrainCorner( 1,-1,dirs,abs(code),basis); break;
+        case 3: pch->constrainCorner(-1, 1,dirs,abs(code),basis); break;
+        case 4: pch->constrainCorner( 1, 1,dirs,abs(code),basis); break;
+        default:
+          IFEM::cout << std::endl;
+          return error("vertex index",lndx);
+      }
       break;
 
     case 1: // Edge constraints
       switch (lndx)
-	{
-	case  1: pch->constrainEdge(-1,open,dirs,code,basis); break;
-	case  2: pch->constrainEdge( 1,open,dirs,code,basis); break;
-	case  3: pch->constrainEdge(-2,open,dirs,code,basis); break;
-	case  4: pch->constrainEdge( 2,open,dirs,code,basis); break;
-	case -1:
-	  ngnod += pch->constrainEdgeLocal(-1,open,dirs,code,project);
-	  break;
-	case -2:
-	  ngnod += pch->constrainEdgeLocal( 1,open,dirs,code,project);
-	  break;
-	case -3:
-	  ngnod += pch->constrainEdgeLocal(-2,open,dirs,code,project);
-	  break;
-	case -4:
-	  ngnod += pch->constrainEdgeLocal( 2,open,dirs,code,project);
-	  break;
-	default:
-	  IFEM::cout << std::endl;
-	  return error("edge index",lndx);
-	}
+      {
+        case  1: pch->constrainEdge(-1,open,dirs,code,basis); break;
+        case  2: pch->constrainEdge( 1,open,dirs,code,basis); break;
+        case  3: pch->constrainEdge(-2,open,dirs,code,basis); break;
+        case  4: pch->constrainEdge( 2,open,dirs,code,basis); break;
+        case -1:
+          ngnod += pch->constrainEdgeLocal(-1,open,dirs,code,project);
+          break;
+        case -2:
+          ngnod += pch->constrainEdgeLocal( 1,open,dirs,code,project);
+          break;
+        case -3:
+          ngnod += pch->constrainEdgeLocal(-2,open,dirs,code,project);
+          break;
+        case -4:
+          ngnod += pch->constrainEdgeLocal( 2,open,dirs,code,project);
+          break;
+        default:
+          IFEM::cout << std::endl;
+          return error("edge index",lndx);
+      }
       break;
 
     case 2: // Face constraints
@@ -767,13 +767,13 @@ bool SIM2D::addConstraint (int patch, int lndx, int ldim, int dirs, int code,
 
     case 4: // Explicit nodal constraints
       myModel[patch-1]->constrainNodes(myModel[patch-1]->getNodeSet(lndx),
-				       dirs,code);
+                                       dirs,code);
       break;
 
     default:
       IFEM::cout << std::endl;
       return error("local dimension switch",ldim);
-    }
+  }
 
   return true;
 }
