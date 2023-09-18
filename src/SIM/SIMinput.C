@@ -557,12 +557,22 @@ bool SIMinput::parseBCTag (const TiXmlElement* elem)
     {
       if (!type.empty())
         IFEM::cout <<" ("<< type <<")";
+      const std::set<int> bases = utl::getDigits(basis);
+      const std::set<int> comps = utl::getDigits(comp);
       this->setPropertyType(code,Property::DIRICHLET_INHOM,comp,basis);
-      RealFunc* f = utl::parseRealFunc(dval->Value(),type);
-      if (!f)
-        return false;
-      else
-        myScalars[abs(code)] = f;
+      if (bases.size() == 1 && comps.size() == 1) {
+        RealFunc* f = utl::parseRealFunc(dval->Value(),type);
+        if (!f)
+          return false;
+        else
+          myScalars[abs(code)] = f;
+      } else {
+        VecFunc* f = utl::parseVecFunc(dval->Value(),type);
+        if (!f)
+          return false;
+        else
+          myVectors[abs(code)] = f;
+      }
     }
     else
     {

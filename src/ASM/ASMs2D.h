@@ -142,13 +142,13 @@ public:
     int next();
   };
 
-private:
+protected:
   typedef std::pair<int,int> Ipair; //!< Convenience type
 
   //! \brief Struct representing an inhomogeneous Dirichlet boundary condition.
   struct DirichletEdge
   {
-    Go::SplineCurve*   curve; //!< Pointer to spline curve for the boundary
+    Go::SplineCurve* curve;   //!< Pointer to spline curve(s) for the boundary
     int                dof;   //!< Local DOF to constrain along the boundary
     int                code;  //!< Inhomogeneous Dirichlet condition code
     std::vector<Ipair> nodes; //!< Nodes subjected to projection on the boundary
@@ -696,6 +696,12 @@ protected:
   //! \brief Returns 0-based index of last node on integration basis.
   virtual int getLastItgElmNode() const;
 
+  //! \brief Updates the time-dependent in-homogeneous vector Dirichlet coefficients.
+  //! \param[in] vfunc Vector property fields
+  //! \param[in] time Current time
+  virtual bool updateDirichletV(const std::map<int,VecFunc*>& vfunc, double time)
+  { return true; }
+
 public:
   //! \brief Auxilliary function for computation of basis function indices.
   static void scatterInd(int n1, int n2, int p1, int p2,
@@ -794,6 +800,9 @@ private:
   int coeffInd(size_t inod) const;
 
 protected:
+  DirichletEdge getConstrainedEdge(int dir, bool open, int dof,
+                                   int code, char basis);
+
   Go::SplineSurface* surf; //!< Pointer to the actual spline surface object
   Go::SplineCurve* bou[4]; //!< Pointers to the four boundary curves
   bool              swapV; //!< Has the v-parameter direction been swapped?
