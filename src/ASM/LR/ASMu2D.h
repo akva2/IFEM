@@ -84,7 +84,6 @@ protected:
     //! \brief Calculates basis function info in all integration points.
     void calculateAll() override;
 
-  protected:
     const ASMu2D& patch; //!< Reference to patch cache is for
 
 private:
