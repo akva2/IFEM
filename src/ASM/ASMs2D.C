@@ -853,43 +853,43 @@ void ASMs2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
     bcode = -code;
 
   switch (dir)
-    {
+  {
     case  1: // Right edge (positive I-direction)
       node += n1-1;
     case -1: // Left edge (negative I-direction)
       if (!open)
-	this->prescribe(node,dof,bcode);
+        this->prescribe(node,dof,bcode);
       node += n1;
       for (int i2 = 2; i2 < n2; i2++, node += n1)
       {
-	// If the Dirichlet condition is to be projected, add this node to
-	// the set of nodes to receive prescribed value from the projection
-	// **unless this node already has a homogeneous constraint**
-	if (this->prescribe(node,dof,-code) == 0 && code > 0)
-	  dirich.back().nodes.push_back(std::make_pair(i2,node));
+        // If the Dirichlet condition is to be projected, add this node to
+        // the set of nodes to receive prescribed value from the projection
+        // **unless this node already has a homogeneous constraint**
+        if (this->prescribe(node,dof,-code) == 0 && code > 0)
+          dirich.back().nodes.push_back(std::make_pair(i2,node));
       }
       if (!open)
-	this->prescribe(node,dof,bcode);
+        this->prescribe(node,dof,bcode);
       break;
 
     case  2: // Back edge (positive J-direction)
       node += n1*(n2-1);
     case -2: // Front edge (negative J-direction)
       if (!open)
-	this->prescribe(node,dof,bcode);
+        this->prescribe(node,dof,bcode);
       node++;
       for (int i1 = 2; i1 < n1; i1++, node++)
       {
-	// If the Dirichlet condition is to be projected, add this node to
-	// the set of nodes to receive prescribed value from the projection
-	// **unless this node already has a homogeneous constraint**
-	if (this->prescribe(node,dof,-code) == 0 && code > 0)
-	  dirich.back().nodes.push_back(std::make_pair(i1,node));
+        // If the Dirichlet condition is to be projected, add this node to
+        // the set of nodes to receive prescribed value from the projection
+        // **unless this node already has a homogeneous constraint**
+        if (this->prescribe(node,dof,-code) == 0 && code > 0)
+          dirich.back().nodes.push_back(std::make_pair(i1,node));
       }
       if (!open)
-	this->prescribe(node,dof,bcode);
+        this->prescribe(node,dof,bcode);
       break;
-    }
+  }
 
   if (code > 0)
     if (dirich.back().nodes.empty())
@@ -901,7 +901,7 @@ void ASMs2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
       for (const Ipair& node : dirich.back().nodes)
         std::cout <<" ("<< node.first <<","<< node.second <<")";
       std::cout <<"\nThese nodes will be subjected to Dirichlet projection"
-		<< std::endl;
+                << std::endl;
     }
 #endif
 }
