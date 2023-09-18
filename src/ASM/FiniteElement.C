@@ -244,7 +244,7 @@ void MxFiniteElement::piolaGradient (const double detJ,
         J.multiply(tmp, res, 1.0 / detJ);
         Ptmp[d-1].multiply(bf, res, false, 1);
         for (size_t j = 1; j <= dim; ++j)
-          dPdX((d-1) * dim + j,k + i) = res(j);
+          dPdX((d-1) * dim + j,k + i) = res(j) / sqrt(detJ);
       }
     }
 }

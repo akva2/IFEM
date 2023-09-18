@@ -12,16 +12,20 @@
 //==============================================================================
 
 #include "GoTools/geometry/ObjectHeader.h"
+#include "GoTools/geometry/SplineCurve.h"
+#include "GoTools/geometry/CurveInterpolator.h"
 #include "GoTools/geometry/SplineSurface.h"
 
 #include "ASMs2Dmx.h"
 #include "TimeDomain.h"
 #include "FiniteElement.h"
+#include "Function.h"
 #include "GlobalIntegral.h"
 #include "LocalIntegral.h"
 #include "IntegrandBase.h"
 #include "CoordinateMapping.h"
 #include "GaussQuadrature.h"
+#include "MPC.h"
 #include "SplineUtils.h"
 #include "Utilities.h"
 #include "Point.h"
@@ -1117,15 +1121,15 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
     SplineUtils::extractBasis(splineg[i], bf.N, bf.dNdu);
     Matrix Xnod;
     this->getElementCoordinatesPrm(Xnod,
-                                   splineg[i].param[0], splineg[i].param[1]);
+                                   splineg[i].param[0],splineg[i].param[1]);
     Matrix J;
-    J.multiply(Xnod, bf.dNdu);
+    J.multiply(Xnod,bf.dNdu);
 
     const Real detJ = J.det();
     fe.basis(1) = splinex[0][i].basisValues;
     fe.basis(2) = splinex[1][i].basisValues;
     fe.piolaBasis(detJ, J);
-    coefs[0].insert(coefs[0].end(), coefs[1].begin(), coefs[1].end());
+    coefs[0].insert(coefs[0].end(),coefs[1].begin(),coefs[1].end());
     fe.P.multiply(coefs[0], Ytmp);
     Ytmp.push_back(coefs[2].dot(splinex[2][i].basisValues));
     sField.fillColumn(1+i,Ytmp);
@@ -1304,4 +1308,109 @@ bool ASMs2Dmx::separateProjectionBasis () const
   return std::none_of(m_basis.begin(), m_basis.end(),
                       [this](const std::shared_ptr<Go::SplineSurface>& entry)
                       { return entry.get() == projB; });
+}
+
+
+/*!
+  A negative \a code value implies direct evaluation of the Dirichlet condition
+  function at the control point. Positive \a code implies projection onto the
+  spline basis representing the boundary curve (needed for curved edges and/or
+  non-constant functions).
+*/
+
+void ASMs2Dmx::constrainEdge (int dir, bool open, int dof, int code, char basis)
+{
+  if (basis < 10) {
+    this->ASMs2D::constrainEdge(dir, open, dof, code, basis);
+    return;
+  }
+
+  const std::set<int> bases = utl::getDigits(basis);
+  std::vector<DirichletEdge> edges;
+  for (int b : bases)
+    edges.emplace_back(this->getConstrainedEdge(dir, open, dof, code, b));
+
+  edges[0].dof = dir;
+
+  if (!edges.front().nodes.empty())
+    dirichV.emplace_back(std::move(edges));
+}
+
+#include "Vec3Oper.h"
+
+
+bool ASMs2Dmx::updateDirichletV (const std::map<int,VecFunc*>& vfunc, double time)
+{
+  for (const std::vector<DirichletEdge>& edge : dirichV)
+  {
+    const auto vfit = vfunc.find(edge[0].code);
+    if (vfit == vfunc.end()) {
+      std::cerr <<" *** ASMs2D::updateDirichletV: Code "<< edge[0].code
+                <<" is not associated with any function."<< std::endl;
+      return false;
+    }
+
+    const Go::SplineSurface* geo = this->getBasis(ASM::GEOMETRY_BASIS);
+
+    const int dir = edge[0].dof;
+    Real u = 0.0, v = 0.0;
+    switch (dir) {
+      case -1: u = this->getBasis(1)->startparam(0); break;
+      case  1: u = this->getBasis(1)->endparam(0); break;
+      case -2: v = this->getBasis(2)->startparam(1); break;
+      case  2: v = this->getBasis(2)->endparam(1); break;
+      default: return false;
+    }
+
+    for (size_t dof = 1; dof <= 2; ++dof)
+    {
+      // now evaluate in greville points for final projection
+      const Go::BsplineBasis& basis = edge[dof-1].curve->basis();
+      RealArray prm(basis.numCoefs()), fval(basis.numCoefs());
+      MxFiniteElement fe(elem_size);
+      for (size_t i = 0; i < prm.size(); i++) {
+        (abs(dir) == 2 ? u : v) = prm[i] = basis.grevilleParameter(i);
+        Go::BasisDerivsSf splineg;
+        geo->computeBasis(u,v,splineg);
+        BasisFunctionVals bf;
+        SplineUtils::extractBasis(splineg,bf.N,bf.dNdu);
+        Matrix Xnod, J;
+        this->getElementCoordinatesPrm(Xnod,u,v);
+        J.multiply(Xnod, bf.dNdu);
+        Vec4 X;
+        X.assign(Xnod * bf.N);
+        X.t = time;
+        Vector val(2);
+        val = vfit->second->getValue(X);
+        std::cout << "f(" << X << ") = " << val << std::endl;
+        Vector mapVal;
+        const Real detJ = J.det();
+        J.multiply(val, mapVal, 1.0 / detJ);
+        fval[i] = mapVal(dof);
+      }
+
+      std::unique_ptr<Go::SplineCurve> pcrv(
+        Go::CurveInterpolator::regularInterpolation(basis,prm,fval,1,
+                                                    false,fval));
+      std::cout << *pcrv << std::endl;
+    for (const Ipair& node : edge[dof-1].nodes) {
+      // Find the constraint equation for current (node,dof)
+      MPC pDOF(MLGN[node.second-1],1);
+      MPCIter mit = mpcs.find(&pDOF);
+      if (mit == mpcs.end()) continue; // probably a deleted constraint
+
+      // Find index to the control point value for this (node,dof) in dcrv
+      RealArray::const_iterator cit = pcrv->coefs_begin();
+      cit += (node.first-1);
+
+      // Now update the prescribed value in the constraint equation
+      (*mit)->setSlaveCoeff(*cit);
+//#if SP_DEBUG > 1
+        std::cout <<"Updated constraint: "<< **mit;
+//#endif
+      }
+    }
+  }
+
+  return true;
 }

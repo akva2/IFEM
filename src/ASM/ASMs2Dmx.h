@@ -101,6 +101,13 @@ public:
   //! \param[in] dir Parameter direction defining the periodic edges
   virtual void closeBoundaries(int dir, int, int);
 
+  //! \brief Constrains all DOFs on a given boundary edge.
+  //! \param[in] dir Parameter direction defining the edge to constrain
+  //! \param[in] open If \e true, exclude the end points of the edge
+  //! \param[in] dof Which DOFs to constrain at each node along the edge
+  //! \param[in] code Inhomogeneous dirichlet condition code
+  //! \param[in] basis Which basis to constrain edge for
+  virtual void constrainEdge(int dir, bool open, int dof, int code, char basis);
 
   // Methods for integration of finite element quantities.
   // These are the main computational methods of the ASM class hierarchy.
@@ -242,6 +249,14 @@ protected:
   virtual int getFirstItgElmNode() const;
   //! \brief Returns 0-based index of last node on integration basis.
   virtual int getLastItgElmNode() const;
+
+  //! \brief Updates the time-dependent in-homogeneous vector Dirichlet coefficients.
+  //! \param[in] vfunc Vector property fields
+  //! \param[in] time Current time
+  virtual bool updateDirichletV(const std::map<int,VecFunc*>& vfunc, double time);
+
+  //! Inhomogeneous Dirichlet boundary condition data - vectors
+  std::vector<std::vector<DirichletEdge>> dirichV;
 
   std::vector<std::shared_ptr<Go::SplineSurface>> m_basis; //!< Vector of bases
 };

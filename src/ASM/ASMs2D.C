@@ -835,11 +835,21 @@ bool ASMs2D::collapseEdge (int edge, int basis)
 void ASMs2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
 {
   if (basis < 1) basis = 1;
+  DirichletEdge edge = this->getConstrainedEdge(dir, open, dof, code, basis);
+  if (!edge.nodes.empty())
+    dirich.emplace_back(std::move(edge));
+}
 
+
+ASMs2D::DirichletEdge
+ASMs2D::getConstrainedEdge (int dir, bool open, int dof,
+                           int code, char basis)
+{
+  DirichletEdge edge;
   int n1 = 0, n2 = 0, node = 1;
   for (char i = 1; i <= basis; i++)
     if (!this->getSize(n1,n2,i))
-      return;
+      return edge;
     else if (i < basis)
       node += n1*n2;
 
@@ -848,7 +858,7 @@ void ASMs2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
 
   int bcode = code;
   if (code > 0) // Dirichlet projection will be performed
-    dirich.push_back(DirichletEdge(this->getBoundary(dir,basis),dof,code));
+    edge = DirichletEdge(this->getBoundary(dir,basis),dof,code);
   else if (code < 0)
     bcode = -code;
 
@@ -857,45 +867,43 @@ void ASMs2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
     case  1: // Right edge (positive I-direction)
       node += n1-1;
     case -1: // Left edge (negative I-direction)
-      if (!open)
-        this->prescribe(node,dof,bcode);
-      node += n1;
-      for (int i2 = 2; i2 < n2; i2++, node += n1)
+//      if (!open)
+//        this->prescribe(node,dof,bcode);
+      //node += n1;
+      for (int i2 = 1; i2 <= n2; i2++, node += n1)
       {
         // If the Dirichlet condition is to be projected, add this node to
         // the set of nodes to receive prescribed value from the projection
         // **unless this node already has a homogeneous constraint**
         if (this->prescribe(node,dof,-code) == 0 && code > 0)
-          dirich.back().nodes.push_back(std::make_pair(i2,node));
+          edge.nodes.push_back(std::make_pair(i2,node));
       }
-      if (!open)
-        this->prescribe(node,dof,bcode);
+//      if (!open)
+//        this->prescribe(node,dof,bcode);
       break;
 
     case  2: // Back edge (positive J-direction)
       node += n1*(n2-1);
     case -2: // Front edge (negative J-direction)
-      if (!open)
-        this->prescribe(node,dof,bcode);
-      node++;
-      for (int i1 = 2; i1 < n1; i1++, node++)
+//      if (!open)
+//        this->prescribe(node,dof,bcode);
+//      node++;
+      for (int i1 = 1; i1 <= n1; i1++, node++)
       {
         // If the Dirichlet condition is to be projected, add this node to
         // the set of nodes to receive prescribed value from the projection
         // **unless this node already has a homogeneous constraint**
         if (this->prescribe(node,dof,-code) == 0 && code > 0)
-          dirich.back().nodes.push_back(std::make_pair(i1,node));
+          edge.nodes.push_back(std::make_pair(i1,node));
       }
-      if (!open)
-        this->prescribe(node,dof,bcode);
+//      if (!open)
+//        this->prescribe(node,dof,bcode);
       break;
   }
 
-  if (code > 0)
-    if (dirich.back().nodes.empty())
-      dirich.pop_back(); // In the unlikely event of a 2-point boundary
 #if SP_DEBUG > 1
-    else
+  if (code > 0)
+    if (!edge.nodes.empty())
     {
       std::cout <<"Non-corner boundary nodes:";
       for (const Ipair& node : dirich.back().nodes)
@@ -904,6 +912,8 @@ void ASMs2D::constrainEdge (int dir, bool open, int dof, int code, char basis)
                 << std::endl;
     }
 #endif
+
+  return edge;
 }
 
 
@@ -1194,6 +1204,9 @@ bool ASMs2D::updateDirichlet (const std::map<int,RealFunc*>& func,
   std::map<int,RealFunc*>::const_iterator fit;
   std::map<int,VecFunc*>::const_iterator vfit;
 
+  if (!this->updateDirichletV(vfunc, time))
+    return false;
+
   for (size_t i = 0; i < dirich.size(); i++)
   {
     // Project the function onto the spline curve basis
@@ -1220,23 +1233,23 @@ bool ASMs2D::updateDirichlet (const std::map<int,RealFunc*>& func,
     for (const Ipair& node : dirich[i].nodes)
       for (int dofs = dirich[i].dof; dofs > 0; dofs /= 10)
       {
-	int dof = dofs%10;
-	// Find the constraint equation for current (node,dof)
-	MPC pDOF(MLGN[node.second-1],dof);
-	MPCIter mit = mpcs.find(&pDOF);
-	if (mit == mpcs.end()) continue; // probably a deleted constraint
+        int dof = dofs%10;
+        // Find the constraint equation for current (node,dof)
+        MPC pDOF(MLGN[node.second-1],dof);
+        MPCIter mit = mpcs.find(&pDOF);
+        if (mit == mpcs.end()) continue; // probably a deleted constraint
 
-	// Find index to the control point value for this (node,dof) in dcrv
-	RealArray::const_iterator cit = dcrv->coefs_begin();
-	if (dcrv->dimension() > 1) // A vector field is specified
-	  cit += (node.first-1)*dcrv->dimension() + (dof-1);
-	else // A scalar field is specified at this dof
-	  cit += (node.first-1);
+        // Find index to the control point value for this (node,dof) in dcrv
+        RealArray::const_iterator cit = dcrv->coefs_begin();
+        if (dcrv->dimension() > 1) // A vector field is specified
+          cit += (node.first-1)*dcrv->dimension() + (dof-1);
+        else // A scalar field is specified at this dof
+          cit += (node.first-1);
 
-	// Now update the prescribed value in the constraint equation
-	(*mit)->setSlaveCoeff(*cit);
+        // Now update the prescribed value in the constraint equation
+        (*mit)->setSlaveCoeff(*cit);
 #if SP_DEBUG > 1
-	std::cout <<"Updated constraint: "<< **mit;
+        std::cout <<"Updated constraint: "<< **mit;
 #endif
       }
     delete dcrv;
