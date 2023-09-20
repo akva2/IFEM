@@ -16,9 +16,11 @@
 
 #include "Function.h"
 #include "TensorFunction.h"
+
+#include <array>
+#include <memory>
 #include <string>
 #include <vector>
-#include <array>
 
 namespace ExprEval {
   template<class ArgType> class Expression;
@@ -33,13 +35,13 @@ namespace ExprEval {
 
 class EvalFunc : public ScalarFunc
 {
-  std::vector<ExprEval::Expression<Real>*> expr; //!< Roots of the expression tree
-  std::vector<ExprEval::FunctionList<Real>*>  f; //!< Lists of functions
-  std::vector<ExprEval::ValueList<Real>*>     v; //!< Lists of variables and constants
+  std::vector<std::unique_ptr<ExprEval::Expression<Real>>> expr; //!< Roots of the expression tree
+  std::vector<std::unique_ptr<ExprEval::FunctionList<Real>>>  f; //!< Lists of functions
+  std::vector<std::unique_ptr<ExprEval::ValueList<Real>>>     v; //!< Lists of variables and constants
 
   std::vector<Real*> arg; //!< Function argument values
 
-  EvalFunc* gradient; //!< First derivative expression
+  std::unique_ptr<EvalFunc> gradient; //!< First derivative expression
 
   Real dx; //!< Domain increment for calculation of numerical derivative
 
@@ -68,9 +70,6 @@ protected:
   EvalFunc& operator=(const EvalFunc&) = delete;
   //! \brief Evaluates the function expression.
   virtual Real evaluate(const Real& x) const;
-
-  //! \brief Cleans up the allocated data.
-  void cleanup();
 };
 
 
@@ -80,9 +79,9 @@ protected:
 
 class EvalFunction : public RealFunc
 {
-  std::vector<ExprEval::Expression<Real>*> expr; //!< Roots of the expression tree
-  std::vector<ExprEval::FunctionList<Real>*>  f; //!< Lists of functions
-  std::vector<ExprEval::ValueList<Real>*>     v; //!< Lists of variables and constants
+  std::vector<std::unique_ptr<ExprEval::Expression<Real>>> expr; //!< Roots of the expression tree
+  std::vector<std::unique_ptr<ExprEval::FunctionList<Real>>>  f; //!< Lists of functions
+  std::vector<std::unique_ptr<ExprEval::ValueList<Real>>>     v; //!< Lists of variables and constants
 
   //! \brief A struct representing a spatial function argument.
   struct Arg
@@ -95,8 +94,8 @@ class EvalFunction : public RealFunc
 
   std::vector<Arg> arg; //!< Function argument values
 
-  std::array<EvalFunction*,3> gradient;  //!< First derivative expressions
-  std::array<EvalFunction*,6> dgradient; //!< Second derivative expressions
+  std::array<std::unique_ptr<EvalFunction>,3> gradient;  //!< First derivative expressions
+  std::array<std::unique_ptr<EvalFunction>,6> dgradient; //!< Second derivative expressions
 
   bool IAmConstant; //!< Indicates whether the time coordinate is given or not
 
@@ -132,9 +131,6 @@ protected:
   EvalFunction& operator=(const EvalFunction&) = delete;
   //! \brief Evaluates the function expression.
   virtual Real evaluate(const Vec3& X) const;
-
-  //! \brief Cleans up the allocated data.
-  void cleanup();
 };
 
 
@@ -156,7 +152,7 @@ public:
                      const std::string& variables, int d1, int d2 = 0);
 
 protected:
-  std::vector<EvalFunction*> p; //!< Array of component expressions
+  std::vector<std::unique_ptr<EvalFunction>> p; //!< Array of component expressions
 };
 
 
@@ -182,7 +178,7 @@ public:
   //! \brief Returns whether the function is time-independent or not.
   virtual bool isConstant() const
   {
-    for (EvalFunction* func : p)
+    for (const std::unique_ptr<EvalFunction>& func : p)
       if (!func->isConstant())
         return false;
     return true;
@@ -199,7 +195,7 @@ public:
   //! \brief Set an additional parameter in the function.
   void setParam(const std::string& name, double value)
   {
-    for (EvalFunction* func : p)
+    for (std::unique_ptr<EvalFunction>& func : p)
       func->setParam(name, value);
   }
 
