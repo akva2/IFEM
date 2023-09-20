@@ -21,9 +21,9 @@
 #include <array>
 
 namespace ExprEval {
-  class Expression;
-  class FunctionList;
-  class ValueList;
+  template<class ArgType> class Expression;
+  template<class ArgType> class FunctionList;
+  template<class ArgType> class ValueList;
 }
 
 
@@ -33,9 +33,9 @@ namespace ExprEval {
 
 class EvalFunc : public ScalarFunc
 {
-  std::vector<ExprEval::Expression*> expr; //!< Roots of the expression tree
-  std::vector<ExprEval::FunctionList*>  f; //!< Lists of functions
-  std::vector<ExprEval::ValueList*>     v; //!< Lists of variables and constants
+  std::vector<ExprEval::Expression<Real>*> expr; //!< Roots of the expression tree
+  std::vector<ExprEval::FunctionList<Real>*>  f; //!< Lists of functions
+  std::vector<ExprEval::ValueList<Real>*>     v; //!< Lists of variables and constants
 
   std::vector<Real*> arg; //!< Function argument values
 
@@ -80,9 +80,9 @@ protected:
 
 class EvalFunction : public RealFunc
 {
-  std::vector<ExprEval::Expression*> expr; //!< Roots of the expression tree
-  std::vector<ExprEval::FunctionList*>  f; //!< Lists of functions
-  std::vector<ExprEval::ValueList*>     v; //!< Lists of variables and constants
+  std::vector<ExprEval::Expression<Real>*> expr; //!< Roots of the expression tree
+  std::vector<ExprEval::FunctionList<Real>*>  f; //!< Lists of functions
+  std::vector<ExprEval::ValueList<Real>*>     v; //!< Lists of variables and constants
 
   //! \brief A struct representing a spatial function argument.
   struct Arg
