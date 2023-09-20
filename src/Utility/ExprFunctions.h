@@ -201,7 +201,7 @@ public:
 
 protected:
   //! \brief Sets the number of spatial dimensions (default implementation).
-  void setNoDims() { ParentFunc::ncmp = nsd = p.size(); }
+  void setNoDims();
 
   //! \brief Evaluates the function expressions.
   Ret evaluate(const Vec3& X) const override;
@@ -215,14 +215,10 @@ using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor>;
 using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor>;
 
 //! \brief Specialization for tensor functions.
-template<> void TensorFuncExpr::setNoDims();
-//! \brief Specialization for tensor functions.
 template<> Tensor TensorFuncExpr::deriv(const Vec3& X, int dir) const;
 //! \brief Specialization for tensor functions.
 template<> Tensor TensorFuncExpr::dderiv(const Vec3& X, int d1, int d2) const;
 
-//! \brief Specialization for symmetric tensor functions.
-template<> void STensorFuncExpr::setNoDims();
 //! \brief Specialization for symmetric tensor functions.
 template<> SymmTensor STensorFuncExpr::deriv(const Vec3& X, int dir) const;
 //! \brief Specialization for symmetric tensor functions.
