@@ -394,15 +394,14 @@ void EvalFunctions::addDerivative (const std::string& functions,
 }
 
 
-template<>
-Vec3 VecFuncExpr::evaluate (const Vec3& X) const
+template <class ParentFunc, class Ret>
+Ret EvalMultiFunction<ParentFunc,Ret>::evaluate (const Vec3& X) const
 {
-  Vec3 result;
+  std::vector<Real> res_array(this->p.size());
+  for (size_t i = 0; i < this->p.size(); ++i)
+    res_array[i] = (*this->p[i])(X);
 
-  for (size_t i = 0; i < 3 && i < nsd; ++i)
-    result[i] = (*p[i])(X);
-
-  return result;
+  return Ret(res_array);
 }
 
 
@@ -441,20 +440,6 @@ void TensorFuncExpr::setNoDims ()
     nsd = 1;
 
   ncmp = nsd*nsd;
-}
-
-
-template<>
-Tensor TensorFuncExpr::evaluate (const Vec3& X) const
-{
-  Tensor sigma(nsd);
-
-  size_t i, j, k = 0;
-  for (i = 1; i <= nsd; ++i)
-    for (j = 1; j <= nsd; ++j)
-      sigma(i,j) = (*p[k++])(X);
-
-  return sigma;
 }
 
 
@@ -501,19 +486,6 @@ void STensorFuncExpr::setNoDims ()
 
 
 template<>
-SymmTensor STensorFuncExpr::evaluate (const Vec3& X) const
-{
-  SymmTensor sigma(nsd,p.size()==4);
-
-  std::vector<Real>& svec = sigma;
-  for (size_t i = 0; i < svec.size(); i++)
-    svec[i] = (*p[i])(X);
-
-  return sigma;
-}
-
-
-template<>
 SymmTensor STensorFuncExpr::deriv (const Vec3& X, int dir) const
 {
   SymmTensor sigma(nsd,p.size()==4);
@@ -537,3 +509,8 @@ SymmTensor STensorFuncExpr::dderiv (const Vec3& X, int d1, int d2) const
 
   return sigma;
 }
+
+
+template Vec3 VecFuncExpr::evaluate(const Vec3&) const;
+template Tensor TensorFuncExpr::evaluate(const Vec3&) const;
+template SymmTensor STensorFuncExpr::evaluate(const Vec3&) const;
