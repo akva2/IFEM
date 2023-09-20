@@ -208,9 +208,12 @@ public:
       func->setParam(name, value);
   }
 
+  //! \brief Returns number of spatial dimension.
+  size_t getNoSpaceDim() const { return nsd; }
+
 protected:
   //! \brief Sets the number of spatial dimensions (default implementation).
-  void setNoDims() { ParentFunc::ncmp = nsd = p.size(); }
+  void setNoDims();
 
   //! \brief Evaluates the function expressions.
   Ret evaluate(const Vec3& X) const override;
@@ -222,11 +225,5 @@ using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3>;
 using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor>;
 //! Symmetric tensor-valued function expression
 using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor>;
-
-//! \brief Specialization for tensor functions.
-template<> void TensorFuncExpr::setNoDims();
-
-//! \brief Specialization for symmetric tensor functions.
-template<> void STensorFuncExpr::setNoDims();
 
 #endif
