@@ -14,6 +14,7 @@
 #ifndef UTL_FUNCTION_H
 #define UTL_FUNCTION_H
 
+#include "matrixnd.h"
 #include "Tensor.h"
 #include "Vec3.h"
 #include <functional>
@@ -250,6 +251,44 @@ public:
   virtual Real getScalarValue(const Vec3& X) const
   {
     return this->evaluate(X).length();
+  }
+
+  Tensor gradient(const Vec3& X) const
+  {
+    Tensor result(ncmp);
+    result = this->evalGradient(X);
+    return result;
+  }
+
+  //! \brief Evaluates the time derivatives of function.
+  Vec3 tgradient(const Vec3& X) const
+  {
+    Vec3 result;
+    result = this->evalTGradient(X);
+    return result;
+  }
+
+  utl::matrix3d<Real> hessian(const Vec3& X) const
+  {
+    utl::matrix3d<Real> result(ncmp,ncmp,ncmp);
+    result.fill(this->evalHessian(X).data());
+    return result;
+  }
+
+protected:
+  virtual std::vector<Real> evalGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp);
+  }
+
+  virtual std::vector<Real> evalTGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp);
+  }
+
+  virtual std::vector<Real> evalHessian(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp*ncmp*ncmp);
   }
 };
 

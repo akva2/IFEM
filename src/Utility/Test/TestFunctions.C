@@ -12,6 +12,7 @@
 
 #include "ExprFunctions.h"
 #include "Functions.h"
+#include "autodiff/reverse/var/var.hpp"
 #include <cstdlib>
 #include <cmath>
 
@@ -174,4 +175,338 @@ TEST(TestEvalFunction, isConstant)
   EXPECT_FALSE(EvalFunction("2.0*x*t").isConstant());
   EXPECT_TRUE (EvalFunction("1.8*tan(x)*x").isConstant());
   EXPECT_FALSE(EvalFunction("2.0*x*tan(t*3)+y").isConstant());
+}
+
+TEST(TestEvalFunc, AutoDiff)
+{
+  EvalFuncImpl<autodiff::var> func("sin(x)");
+  EXPECT_DOUBLE_EQ(func(M_PI / 2.0), 1.0);
+  EXPECT_DOUBLE_EQ(func.deriv(0.0), 1.0);
+}
+
+
+TEST(TestEvalFunction, AutoDiff)
+{
+  EvalFunctionImpl<autodiff::var> func("sin(x)*sin(y)*sin(z)*sin(2*t)");
+  Vec4 X;
+  X.x = 1.0;
+  X.y = 2.0;
+  X.z = 3.0;
+  X.t = 4.0;
+
+  EXPECT_DOUBLE_EQ(func(X),          sin(1.0) * sin(2.0) * sin(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.deriv(X, 1), cos(1.0) * sin(2.0) * sin(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.deriv(X, 2), sin(1.0) * cos(2.0) * sin(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.deriv(X, 3), sin(1.0) * sin(2.0) * cos(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.deriv(X, 4), sin(1.0) * sin(2.0) * sin(3.0) * 2.0 * cos(2.0 * 4.0));
+
+  EXPECT_DOUBLE_EQ(func.dderiv(X, 1, 1), -sin(1.0) * sin(2.0) * sin(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.dderiv(X, 1, 2), cos(1.0) * cos(2.0) * sin(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.dderiv(X, 1, 3), cos(1.0) * sin(2.0) * cos(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.dderiv(X, 2, 2), sin(1.0) * -sin(2.0) * sin(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.dderiv(X, 2, 3), sin(1.0) * cos(2.0) * cos(3.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(func.dderiv(X, 3, 3), sin(1.0) * sin(2.0) * -sin(3.0) * sin(2.0 * 4.0));
+}
+
+
+TEST(TestVecFuncExpr, AutoDiff2D)
+{
+  EvalMultiFunction<VecFunc,Vec3,autodiff::var> func("sin(2*x)*sin(y)*sin(t) |"
+                                                     "sin(x)*sin(2*y)*sin(t)");
+  Vec4 X;
+  X.x = 1.0;
+  X.y = 2.0;
+  X.t = 4.0;
+
+  const auto val = func(X);
+
+  EXPECT_DOUBLE_EQ(val[0],          sin(2.0 * 1.0) * sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val[1],          sin(1.0) * sin(2.0 * 2.0) * sin(4.0));
+
+  const auto grad = func.gradient(X);
+  EXPECT_DOUBLE_EQ(grad(1,1), 2.0 * cos(2.0 * 1.0) * sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1), cos(1.0) * sin(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2), sin(2.0 * 1.0) * cos(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * sin(4.0));
+
+  const auto ut = func.tgradient(X);
+  EXPECT_DOUBLE_EQ(ut[0], sin(2.0 * 1.0) * sin(2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut[1], sin(1.0) * sin(2.0 * 2.0) * cos(4.0));
+
+  const auto hess = func.hessian(X);
+  EXPECT_DOUBLE_EQ(hess(1,1,1), -4.0 * sin(2.0 * 1.0) * sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,1), -sin(1.0) * sin(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1), 2.0 * cos(2.0 * 1.0) * cos(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1), hess(1,1,2));
+  EXPECT_DOUBLE_EQ(hess(2,1,2), cos(1.0) * 2.0 * cos(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1), hess(2,1,2));
+  EXPECT_DOUBLE_EQ(hess(1,2,2), sin(2.0 * 1.0) * -sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,2), sin(1.0) * -4.0 * sin(2.0 * 2.0) * sin(4.0));
+}
+
+
+TEST(TestVecFuncExpr, AutoDiff3D)
+{
+  EvalMultiFunction<VecFunc,Vec3,autodiff::var> func("sin(2*x)*sin(y)*sin(z)*sin(t) |"
+                                                     "sin(x)*sin(2*y)*sin(z)*sin(t) |"
+                                                     "sin(x)*sin(y)*sin(2*z)*sin(t)");
+  Vec4 X;
+  X.x = 1.0;
+  X.y = 2.0;
+  X.z = 3.0;
+  X.t = 4.0;
+
+  const auto val = func(X);
+
+  EXPECT_DOUBLE_EQ(val[0],          sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val[1],          sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val[2],          sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+
+  const auto grad = func.gradient(X);
+  EXPECT_DOUBLE_EQ(grad(1,1), 2.0 * cos(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1), cos(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,1), cos(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2), sin(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,2), sin(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,3), sin(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,3), sin(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,3), sin(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+
+  const auto ut = func.tgradient(X);
+  EXPECT_DOUBLE_EQ(ut[0], sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut[1], sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut[2], sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * cos(4.0));
+
+  const auto hess = func.hessian(X);
+  EXPECT_DOUBLE_EQ(hess(1,1,1), -4.0 * sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,1), -sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,1), -sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1), 2.0 * cos(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1), hess(1,1,2));
+  EXPECT_DOUBLE_EQ(hess(2,1,2), cos(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1), hess(2,1,2));
+  EXPECT_DOUBLE_EQ(hess(3,1,2), cos(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,1), hess(3,1,2));
+  EXPECT_DOUBLE_EQ(hess(1,1,3), 2.0 * cos(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,1,3), hess(1,3,1));
+  EXPECT_DOUBLE_EQ(hess(2,1,3), cos(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,3), hess(2,3,1));
+  EXPECT_DOUBLE_EQ(hess(3,1,3), cos(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,3), hess(3,3,1));
+  EXPECT_DOUBLE_EQ(hess(1,2,2), sin(2.0 * 1.0) * -sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,2), sin(1.0) * -4.0 * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,2), sin(1.0) * -sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,3), sin(2.0 * 1.0) * cos(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,3), hess(1,3,2));
+  EXPECT_DOUBLE_EQ(hess(2,2,3), sin(1.0) * 2.0 * cos(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,3), hess(2,3,2));
+  EXPECT_DOUBLE_EQ(hess(3,2,3), sin(1.0) * cos(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,3), hess(3,3,2));
+  EXPECT_DOUBLE_EQ(hess(1,3,3), sin(2.0 * 1.0) * sin(2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,3,3), sin(1.0) * sin(2.0 * 2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,3,3), sin(1.0) * sin(2.0) * -4.0 * sin(2.0 * 3.0) * sin(4.0));
+}
+
+
+TEST(TestTensorFuncExpr, AutoDiff2D)
+{
+  EvalMultiFunction<TensorFunc,Tensor,autodiff::var> func("sin(2*x)*sin(y)*sin(t) |"
+                                                          "sin(x)*sin(2*y)*sin(t) |"
+                                                          "sin(x)*sin(2*y)*cos(t) |"
+                                                          "sin(x)*sin(y)*sin(2*t)");
+  Vec4 X;
+  X.x = 1.0;
+  X.y = 2.0;
+  X.z = 0.0;
+  X.t = 4.0;
+
+  const auto val = func(X);
+  EXPECT_DOUBLE_EQ(val(1,1), sin(2.0 * 1.0) * sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(1,2), sin(1.0) * sin(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(2,1), sin(1.0) * sin(2.0 * 2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(val(2,2), sin(1.0) * sin(2.0) * sin(2.0 * 4.0));
+
+  const auto grad = func.gradient(X);
+  EXPECT_DOUBLE_EQ(grad(1,1,1), 2.0 * cos(2.0 * 1.0) * sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1,1), cos(1.0) * sin(2.0 * 2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2,1), cos(1.0) * sin(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2,1), cos(1.0) * sin(2.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(grad(1,1,2), sin(2.0 * 1.0) * cos(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2,2), sin(1.0) * cos(2.0) * sin(2.0 * 4.0));
+
+  const auto ut = func.tgradient(X);
+  EXPECT_DOUBLE_EQ(ut(1,1), sin(2.0 * 1.0) * sin(2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(1,2), sin(1.0) * sin(2.0 * 2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(2,1), sin(1.0) * sin(2.0 * 2.0) * -sin(4.0));
+  EXPECT_DOUBLE_EQ(ut(2,2), sin(1.0) * sin(2.0) * 2.0 * cos(2.0 * 4.0));
+
+  const auto hess = func.hessian(X);
+  EXPECT_DOUBLE_EQ(hess(1,1,1,1), -4.0 * sin(2.0 * 1.0) * sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,1), -sin(1.0) * sin(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,1), -sin(1.0) * sin(2.0 * 2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,1), -sin(1.0) * sin(2.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(hess(1,1,1,2), 2.0 * cos(2.0 * 1.0) * cos(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,1,1,2), hess(1,1,2,1));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,2), cos(1.0) * 2.0 * cos(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,2), hess(1,2,2,1));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,2), hess(2,1,2,1));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,2), cos(1.0) * cos(2.0) * sin(2.0 * 4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,2), hess(2,2,2,1));
+  EXPECT_DOUBLE_EQ(hess(1,1,2,2), sin(2.0 * 1.0) * -sin(2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,2,2), sin(1.0) * -4.0 * sin(2.0 * 2.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,2,2), sin(1.0) * -4.0 * sin(2.0 * 2.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,2,2), sin(1.0) * -sin(2.0) * sin(2.0 * 4.0));
+}
+
+
+TEST(TestTensorFuncExpr, AutoDiff3D)
+{
+  EvalMultiFunction<TensorFunc,Tensor,autodiff::var> func("sin(2*x)*sin(y)*sin(z)*sin(t) |"
+                                                          "sin(x)*sin(2*y)*sin(z)*sin(t) |"
+                                                          "sin(x)*sin(y)*sin(2*z)*sin(t) |"
+                                                          "sin(2*x)*sin(y)*sin(z)*sin(t) |"
+                                                          "sin(x)*sin(2*y)*sin(z)*sin(t) |"
+                                                          "sin(x)*sin(y)*sin(2*z)*sin(t) |"
+                                                          "sin(2*x)*sin(y)*sin(z)*sin(t) |"
+                                                          "sin(x)*sin(2*y)*sin(z)*sin(t) |"
+                                                          "sin(x)*sin(y)*sin(2*z)*sin(t)");
+  Vec4 X;
+  X.x = 1.0;
+  X.y = 2.0;
+  X.z = 3.0;
+  X.t = 4.0;
+
+  const auto val = func(X);
+  EXPECT_DOUBLE_EQ(val(1,1), sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(1,2), sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(1,3), sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(2,1), sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(2,2), sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(2,3), sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(3,1), sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(3,2), sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(val(3,3), sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+
+  const auto grad = func.gradient(X);
+  EXPECT_DOUBLE_EQ(grad(1,1,1), 2.0 * cos(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2,1), cos(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,3,1), cos(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1,1), 2.0 * cos(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2,1), cos(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,3,1), cos(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,1,1), 2.0 * cos(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,2,1), cos(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,3,1), cos(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+
+  EXPECT_DOUBLE_EQ(grad(1,1,2), sin(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,3,2), sin(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1,2), sin(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,3,2), sin(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,1,2), sin(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,2,2), sin(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,3,2), sin(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+
+  EXPECT_DOUBLE_EQ(grad(1,1,3), sin(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,2,3), sin(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(1,3,3), sin(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,1,3), sin(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,2,3), sin(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(2,3,3), sin(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,1,3), sin(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,2,3), sin(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(grad(3,3,3), sin(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+
+  const auto ut = func.tgradient(X);
+  EXPECT_DOUBLE_EQ(ut(1,1), sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(1,2), sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(1,3), sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(2,1), sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(2,2), sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(2,3), sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(3,1), sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(3,2), sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * cos(4.0));
+  EXPECT_DOUBLE_EQ(ut(3,3), sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * cos(4.0));
+
+  const auto hess = func.hessian(X);
+  EXPECT_DOUBLE_EQ(hess(1,1,1,1), -4.0 * sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,1), -sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,3,1,1), -sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,1), -4.0 * sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,1), -sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,3,1,1), -sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,1,1), -4.0 * sin(2.0 * 1.0) * sin(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,1,1), -sin(1.0) * sin(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,3,1,1), -sin(1.0) * sin(2.0) * sin(2.0 * 3.0) * sin(4.0));
+
+  EXPECT_DOUBLE_EQ(hess(1,1,1,2), 2.0 * cos(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,1,1,2), hess(1,1,2,1));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,2), cos(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,2), hess(1,2,2,1));
+  EXPECT_DOUBLE_EQ(hess(1,3,1,2), cos(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,3,1,2), hess(1,3,2,1));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,2), 2.0 * cos(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,2), hess(2,1,2,1));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,2), cos(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,2), hess(2,2,2,1));
+  EXPECT_DOUBLE_EQ(hess(2,3,1,2), cos(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,3,1,2), hess(2,3,2,1));
+  EXPECT_DOUBLE_EQ(hess(3,1,1,2), 2.0 * cos(2.0 * 1.0) * cos(2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,1,2), hess(3,1,2,1));
+  EXPECT_DOUBLE_EQ(hess(3,2,1,2), cos(1.0) * 2.0 * cos(2.0 * 2.0) * sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,1,2), hess(3,2,2,1));
+  EXPECT_DOUBLE_EQ(hess(3,3,1,2), cos(1.0) * cos(2.0) * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,3,1,2), hess(3,3,2,1));
+
+  EXPECT_DOUBLE_EQ(hess(1,1,1,3), 2.0 * cos(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,1,1,3), hess(1,1,3,1));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,3), cos(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,1,3), hess(1,2,3,1));
+  EXPECT_DOUBLE_EQ(hess(1,3,1,3), cos(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,3,1,3), hess(1,3,3,1));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,3), 2.0 * cos(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,1,3), hess(2,1,3,1));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,3), cos(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,1,3), hess(2,2,3,1));
+  EXPECT_DOUBLE_EQ(hess(2,3,1,3), cos(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,3,1,3), hess(2,3,3,1));
+  EXPECT_DOUBLE_EQ(hess(3,1,1,3), 2.0 * cos(2.0 * 1.0) * sin(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,1,3), hess(3,1,3,1));
+  EXPECT_DOUBLE_EQ(hess(3,2,1,3), cos(1.0) * sin(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,1,3), hess(3,2,3,1));
+  EXPECT_DOUBLE_EQ(hess(3,3,1,3), cos(1.0) * sin(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,3,1,3), hess(3,3,3,1));
+
+  EXPECT_DOUBLE_EQ(hess(1,1,2,3), sin(2.0 * 1.0) * cos(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,1,2,3), hess(1,1,3,2));
+  EXPECT_DOUBLE_EQ(hess(1,2,2,3), sin(1.0) * 2.0 * cos(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,2,3), hess(1,2,3,2));
+  EXPECT_DOUBLE_EQ(hess(1,3,2,3), sin(1.0) * cos(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,3,2,3), hess(1,3,3,2));
+  EXPECT_DOUBLE_EQ(hess(2,1,2,3), sin(2.0 * 1.0) * cos(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,2,3), hess(2,1,3,2));
+  EXPECT_DOUBLE_EQ(hess(2,2,2,3), sin(1.0) * 2.0 * cos(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,2,3), hess(2,2,3,2));
+  EXPECT_DOUBLE_EQ(hess(2,3,2,3), sin(1.0) * cos(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,3,2,3), hess(2,3,3,2));
+  EXPECT_DOUBLE_EQ(hess(3,1,2,3), sin(2.0 * 1.0) * cos(2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,2,3), hess(3,1,3,2));
+  EXPECT_DOUBLE_EQ(hess(3,2,2,3), sin(1.0) * 2.0 * cos(2.0 * 2.0) * cos(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,2,3), hess(3,2,3,2));
+  EXPECT_DOUBLE_EQ(hess(3,3,2,3), sin(1.0) * cos(2.0) * 2.0 * cos(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,3,2,3), hess(3,3,3,2));
+
+  EXPECT_DOUBLE_EQ(hess(1,1,3,3), sin(2.0 * 1.0) * sin(2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,2,3,3), sin(1.0) * sin(2.0 * 2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(1,3,3,3), sin(1.0) * sin(2.0) * -4.0 * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,1,3,3), sin(2.0 * 1.0) * sin(2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,2,3,3), sin(1.0) * sin(2.0 * 2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(2,3,3,3), sin(1.0) * sin(2.0) * -4.0 * sin(2.0 * 3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,1,3,3), sin(2.0 * 1.0) * sin(2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,2,3,3), sin(1.0) * sin(2.0 * 2.0) * -sin(3.0) * sin(4.0));
+  EXPECT_DOUBLE_EQ(hess(3,3,3,3), sin(1.0) * sin(2.0) * -4.0 * sin(2.0 * 3.0) * sin(4.0));
 }

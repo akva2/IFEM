@@ -33,15 +33,20 @@ namespace ExprEval {
   \brief A scalar-valued function, general expression.
 */
 
-class EvalFunc : public ScalarFunc
+template<class ArgType>
+class EvalFuncImpl : public ScalarFunc
 {
-  std::vector<std::unique_ptr<ExprEval::Expression<Real>>> expr; //!< Roots of the expression tree
-  std::vector<std::unique_ptr<ExprEval::FunctionList<Real>>>  f; //!< Lists of functions
-  std::vector<std::unique_ptr<ExprEval::ValueList<Real>>>     v; //!< Lists of variables and constants
+  using Expression = ExprEval::Expression<ArgType>; //!< Convenience type alias
+  using FunctionList = ExprEval::FunctionList<ArgType>; //!< Convenience type alias
+  using ValueList = ExprEval::ValueList<ArgType>; //!< Convenience type alias
+  using FuncType = EvalFuncImpl<ArgType>; //!< Convenience type alias
+  std::vector<std::unique_ptr<Expression>> expr; //!< Roots of the expression tree
+  std::vector<std::unique_ptr<FunctionList>>  f; //!< Lists of functions
+  std::vector<std::unique_ptr<ValueList>>     v; //!< Lists of variables and constants
 
-  std::vector<Real*> arg; //!< Function argument values
+  std::vector<ArgType*> arg; //!< Function argument values
 
-  std::unique_ptr<EvalFunc> gradient; //!< First derivative expression
+  std::unique_ptr<FuncType> gradient; //!< First derivative expression
 
   Real dx; //!< Domain increment for calculation of numerical derivative
 
@@ -49,10 +54,10 @@ public:
   static int numError; //!< Error counter - set by the exception handler
 
   //! \brief The constructor parses the expression string.
-  explicit EvalFunc(const char* function, const char* x = "x",
-                    Real eps = Real(1.0e-8));
+  explicit EvalFuncImpl(const char* function, const char* x = "x",
+                        Real eps = Real(1.0e-8));
   //! \brief The destructor frees the dynamically allocated objects.
-  virtual ~EvalFunc();
+  virtual ~EvalFuncImpl();
 
   //! \brief Adds an expression function for a first derivative.
   void derivative(const std::string& function, const char* x = "x");
@@ -64,10 +69,6 @@ public:
   Real deriv(Real x) const override;
 
 protected:
-  //! \brief Non-implemented copy constructor to disallow copying.
-  EvalFunc(const EvalFunc&) = delete;
-  //! \brief Non-implemented assignment operator to disallow copying.
-  EvalFunc& operator=(const EvalFunc&) = delete;
   //! \brief Evaluates the function expression.
   Real evaluate(const Real& x) const override;
 };
@@ -77,25 +78,30 @@ protected:
   \brief A scalar-valued spatial function, general function expression.
 */
 
-class EvalFunction : public RealFunc
+template<class ArgType>
+class EvalFunctionImpl : public RealFunc
 {
-  std::vector<std::unique_ptr<ExprEval::Expression<Real>>> expr; //!< Roots of the expression tree
-  std::vector<std::unique_ptr<ExprEval::FunctionList<Real>>>  f; //!< Lists of functions
-  std::vector<std::unique_ptr<ExprEval::ValueList<Real>>>     v; //!< Lists of variables and constants
+  using Expression = ExprEval::Expression<ArgType>; //!< Convenience type alias
+  using FunctionList = ExprEval::FunctionList<ArgType>; //!< Convenience type alias
+  using ValueList = ExprEval::ValueList<ArgType>; //!< Convenience type alias
+  using FuncType = EvalFunctionImpl<ArgType>; //!< Convenience type alias
+  std::vector<std::unique_ptr<Expression>> expr; //!< Roots of the expression tree
+  std::vector<std::unique_ptr<FunctionList>>  f; //!< Lists of functions
+  std::vector<std::unique_ptr<ValueList>>     v; //!< Lists of variables and constants
 
   //! \brief A struct representing a spatial function argument.
   struct Arg
   {
-    Real* x; //!< X-coordinate
-    Real* y; //!< Y-coordinate
-    Real* z; //!< Z-coordinate
-    Real* t; //!< Time
+    ArgType* x; //!< X-coordinate
+    ArgType* y; //!< Y-coordinate
+    ArgType* z; //!< Z-coordinate
+    ArgType* t; //!< Time
   };
 
   std::vector<Arg> arg; //!< Function argument values
 
-  std::array<std::unique_ptr<EvalFunction>,3> fgradient; //!< First derivative expressions
-  std::array<std::unique_ptr<EvalFunction>,6> dgradient; //!< Second derivative expressions
+  std::array<std::unique_ptr<FuncType>,3> fgradient; //!< First derivative expressions
+  std::array<std::unique_ptr<FuncType>,6> dgradient; //!< Second derivative expressions
 
   bool IAmConstant; //!< Indicates whether the time coordinate is given or not
 
@@ -104,10 +110,10 @@ class EvalFunction : public RealFunc
 
 public:
   //! \brief The constructor parses the expression string.
-  explicit EvalFunction(const char* function,
-                        Real epsX = Real(1.0e-8), Real epsT = Real(1.0e-12));
+  explicit EvalFunctionImpl(const char* function,
+                            Real epsX = Real(1.0e-8), Real epsT = Real(1.0e-12));
   //! \brief The destructor frees the dynamically allocated objects.
-  virtual ~EvalFunction();
+  virtual ~EvalFunctionImpl();
 
   //! \brief Adds an expression function for a first or second derivative.
   void addDerivative(const std::string& function, const std::string& variables,
@@ -122,13 +128,9 @@ public:
   Real dderiv(const Vec3& X, int dir1, int dir2) const override;
 
   //! \brief Set an additional parameter in the function.
-  void setParam(const std::string& name, double value);
+  void setParam(const std::string& name, ArgType value);
 
 protected:
-  //! \brief Non-implemented copy constructor to disallow copying.
-  EvalFunction(const EvalFunction&) = delete;
-  //! \brief Non-implemented assignment operator to disallow copying.
-  EvalFunction& operator=(const EvalFunction&) = delete;
   //! \brief Evaluates the function expression.
   Real evaluate(const Vec3& X) const override;
 };
@@ -138,9 +140,12 @@ protected:
   \brief A base class for multi-component expression functions.
 */
 
+template<class ArgType>
 class EvalFunctions
 {
 protected:
+  using FuncType = EvalFunctionImpl<ArgType>; //!< Convenience type alias
+
   //! \brief The constructor parses the expression string for each component.
   EvalFunctions(const std::string& functions, const std::string& variables);
   //! \brief The destructor frees the dynamically allocated function components.
@@ -152,7 +157,7 @@ public:
                      const std::string& variables, int d1, int d2 = 0);
 
 protected:
-  std::vector<std::unique_ptr<EvalFunction>> p; //!< Array of component expressions
+  std::vector<std::unique_ptr<FuncType>> p; //!< Array of component expressions
 };
 
 
@@ -161,16 +166,17 @@ protected:
   \details The function is implemented as an array of EvalFunction objects.
 */
 
-template <class ParentFunc, class Ret>
-class EvalMultiFunction : public ParentFunc, public EvalFunctions
+template <class ParentFunc, class Ret, class ArgType>
+class EvalMultiFunction : public ParentFunc, public EvalFunctions<ArgType>
 {
   size_t nsd; //!< Number of spatial dimensions
+  using FuncType = typename EvalFunctions<ArgType>::FuncType;
 
 public:
   //! \brief The constructor parses the expression string for each component.
   EvalMultiFunction(const std::string& functions,
                     const std::string& variables = "")
-    : EvalFunctions(functions,variables), nsd(0) { this->setNoDims(); }
+    : EvalFunctions<ArgType>(functions,variables), nsd(0) { this->setNoDims(); }
 
   //! \brief Empty destructor.
   virtual ~EvalMultiFunction() {}
@@ -178,7 +184,7 @@ public:
   //! \brief Returns whether the function is time-independent or not.
   bool isConstant() const override
   {
-    for (const std::unique_ptr<EvalFunction>& func : p)
+    for (const std::unique_ptr<FuncType>& func : this->p)
       if (!func->isConstant())
         return false;
     return true;
@@ -187,42 +193,36 @@ public:
   //! \brief Returns the function type flag.
   unsigned char getType() const override { return 2; }
 
-  //! \brief Returns first-derivative of the function.
-  Ret deriv(const Vec3& X, int dir) const override;
-  //! \brief Returns second-derivative of the function.
-  Ret dderiv(const Vec3& X, int dir1, int dir2) const override;
-
   //! \brief Set an additional parameter in the function.
-  void setParam(const std::string& name, double value)
+  void setParam(const std::string& name, ArgType value)
   {
-    for (std::unique_ptr<EvalFunction>& func : p)
+    for (std::unique_ptr<FuncType>& func : this->p)
       func->setParam(name, value);
   }
 
 protected:
-  //! \brief Sets the number of spatial dimensions (default implementation).
+  //! \brief Sets the number of spatial dimensions.
   void setNoDims();
 
   //! \brief Evaluates the function expressions.
   Ret evaluate(const Vec3& X) const override;
+  //! \brief Evaluates first derivatives of the function.
+  std::vector<Real> evalGradient(const Vec3& X) const override;
+  //! \brief Evaluates time derivatives of the function.
+  std::vector<Real> evalTGradient(const Vec3& X) const override;
+  //! \brief Evaluates second derivatives of the function.
+  std::vector<Real> evalHessian(const Vec3& X) const override;
 };
 
+//! Scalar-valued function expression
+using EvalFunc = EvalFuncImpl<Real>;
+//! Scalar-valued spatial function expression
+using EvalFunction = EvalFunctionImpl<Real>;
 //! Vector-valued function expression
-using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3>;
+using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3,Real>;
 //! Tensor-valued function expression
-using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor>;
+using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor,Real>;
 //! Symmetric tensor-valued function expression
-using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor>;
-
-//! \brief Specialization for tensor functions.
-template<> Tensor TensorFuncExpr::deriv(const Vec3& X, int dir) const;
-//! \brief Specialization for tensor functions.
-template<> Tensor TensorFuncExpr::dderiv(const Vec3& X, int d1, int d2) const;
-
-//! \brief Specialization for symmetric tensor functions.
-template<> SymmTensor STensorFuncExpr::deriv(const Vec3& X, int dir) const;
-//! \brief Specialization for symmetric tensor functions.
-template<> SymmTensor STensorFuncExpr::dderiv(const Vec3& X,
-                                              int d1, int d2) const;
+using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor,Real>;
 
 #endif

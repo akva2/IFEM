@@ -23,6 +23,12 @@
 #include "FieldFunctions.h"
 #endif
 
+#include <autodiff/reverse/var.hpp>
+
+using EvalFunctionAd = EvalFunctionImpl<autodiff::Variable<double>>;
+using VecFuncExprAd = EvalMultiFunction<VecFunc,Vec3,autodiff::Variable<double>>;
+using TensorFuncExprAd = EvalMultiFunction<TensorFunc,Tensor,autodiff::Variable<double>>;
+using STensorFuncExprAd = EvalMultiFunction<STensorFunc,SymmTensor,autodiff::Variable<double>>;
 
 AnaSol::AnaSol (RealFunc* s1, VecFunc* s2,
                 VecFunc* v1, TensorFunc* v2, STensorFunc* v3)
@@ -61,9 +67,9 @@ AnaSol::AnaSol (std::istream& is, const int nlines, bool scalarSol)
       std::string primary = function.substr(pos+8);
       IFEM::cout <<"\tPrimary="<< primary << std::endl;
       if (scalarSol)
-        scalSol.push_back(new EvalFunction((variables+primary).c_str()));
+        scalSol.push_back(new EvalFunctionAd((variables+primary).c_str()));
       else
-        vecSol = new VecFuncExpr(primary,variables);
+        vecSol = new VecFuncExprAd(primary,variables);
     }
 
     if ((pos = function.find("Secondary=")) != std::string::npos)
@@ -71,16 +77,16 @@ AnaSol::AnaSol (std::istream& is, const int nlines, bool scalarSol)
       std::string secondary = function.substr(pos+10);
       IFEM::cout <<"\tSecondary="<< secondary << std::endl;
       if (scalarSol)
-        scalSecSol.push_back(new VecFuncExpr(secondary,variables));
+        scalSecSol.push_back(new VecFuncExprAd(secondary,variables));
       else
-        vecSecSol = new TensorFuncExpr(secondary,variables);
+        vecSecSol = new TensorFuncExprAd(secondary,variables);
     }
 
     if ((pos = function.find("Stress=")) != std::string::npos)
     {
       std::string stress = function.substr(pos+7);
       IFEM::cout <<"\tStress="<< stress << std::endl;
-      stressSol = new STensorFuncExpr(stress,variables);
+      stressSol = new STensorFuncExprAd(stress,variables);
     }
   }
 }
@@ -168,16 +174,16 @@ void AnaSol::parseExpressionFunctions (const TiXmlElement* elem, bool scalarSol)
     if (scalarSol)
     {
       if (type == "expression") {
-        scalSol.push_back(new EvalFunction((variables+primary).c_str()));
-        parseDerivatives(static_cast<EvalFunction*>(scalSol.back()),prim);
+        scalSol.push_back(new EvalFunctionAd((variables+primary).c_str()));
+        parseDerivatives(static_cast<EvalFunctionAd*>(scalSol.back()),prim);
       } else
         scalSol.push_back(utl::parseRealFunc(primary,type,false));
     }
     else
     {
       if (type == "expression") {
-        vecSol = new VecFuncExpr(primary,variables);
-        parseDerivatives(static_cast<VecFuncExpr*>(vecSol),prim);
+        vecSol = new VecFuncExprAd(primary,variables);
+        parseDerivatives(static_cast<VecFuncExprAd*>(vecSol),prim);
       } else
         vecSol = utl::parseVecFunc(primary, type);
     }
@@ -188,11 +194,11 @@ void AnaSol::parseExpressionFunctions (const TiXmlElement* elem, bool scalarSol)
   {
     std::string type = "expression";
     utl::getAttribute(prim, "type", type);
-    std::string prType = (type == "expression" ? "" : "("+type+") ");
+    std::string prType = (type == "expression" ? "" : " ("+type+")");
     std::string primary = prim->FirstChild()->Value();
-    IFEM::cout <<"\tScalar Primary " << prType << "=" << primary << std::endl;
+    IFEM::cout <<"\tScalar Primary " << prType << " = " << primary << std::endl;
     if (type == "expression")
-      scalSol.push_back(new EvalFunction((variables+primary).c_str()));
+      scalSol.push_back(new EvalFunctionAd((variables+primary).c_str()));
     else
       scalSol.push_back(utl::parseRealFunc(primary, type, false));
     prim = prim->NextSiblingElement("scalarprimary");
@@ -203,24 +209,24 @@ void AnaSol::parseExpressionFunctions (const TiXmlElement* elem, bool scalarSol)
   {
     std::string type = "expression";
     utl::getAttribute(sec, "type", type);
-    std::string prType = (type == "expression" ? "" : "("+type+") ");
+    std::string prType = (type == "expression" ? "" : " ("+type+")");
     std::string secondary = sec->FirstChild()->Value();
-    IFEM::cout <<"\tSecondary" << prType << "=" << secondary << std::endl;
+    IFEM::cout <<"\tSecondary" << prType << " = " << secondary << std::endl;
     if (scalarSol)
     {
       if (type == "expression") {
-        scalSecSol.push_back(new VecFuncExpr(secondary,variables));
-        parseDerivatives(static_cast<VecFuncExpr*>(scalSecSol.back()),sec);
+        scalSecSol.push_back(new VecFuncExprAd(secondary,variables));
+        parseDerivatives(static_cast<VecFuncExprAd*>(scalSecSol.back()),sec);
       } else
         scalSecSol.push_back(utl::parseVecFunc(secondary, type));
     }
     else
     {
-      if (type == "expression")
-        vecSecSol = new TensorFuncExpr(secondary,variables);
-      else
+      if (type == "expression") {
+        vecSecSol = new TensorFuncExprAd(secondary,variables);
+        parseDerivatives(static_cast<TensorFuncExprAd*>(vecSecSol),sec);
+      } else
         vecSecSol = utl::parseTensorFunc(secondary, type);
-      parseDerivatives(static_cast<TensorFuncExpr*>(vecSecSol),sec);
     }
   }
 
@@ -232,7 +238,7 @@ void AnaSol::parseExpressionFunctions (const TiXmlElement* elem, bool scalarSol)
     std::string secondary = sec->FirstChild()->Value();
     IFEM::cout <<"\tScalar Secondary="<< secondary << std::endl;
     if (type == "expression")
-      scalSecSol.push_back(new VecFuncExpr(secondary,variables));
+      scalSecSol.push_back(new VecFuncExprAd(secondary,variables));
     else
       scalSecSol.push_back(utl::parseVecFunc(secondary, type));
     sec = sec->NextSiblingElement("scalarsecondary");
@@ -243,8 +249,8 @@ void AnaSol::parseExpressionFunctions (const TiXmlElement* elem, bool scalarSol)
   {
     std::string sigma = stress->FirstChild()->Value();
     IFEM::cout <<"\tStress="<< sigma << std::endl;
-    stressSol = new STensorFuncExpr(sigma,variables);
-    parseDerivatives(static_cast<STensorFuncExpr*>(stressSol),stress);
+    stressSol = new STensorFuncExprAd(sigma,variables);
+    parseDerivatives(static_cast<STensorFuncExprAd*>(stressSol),stress);
   }
 }
 

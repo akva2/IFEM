@@ -14,6 +14,8 @@
 #ifndef _ANA_SOL_H
 #define _ANA_SOL_H
 
+#include <autodiff/reverse/var.hpp>
+
 #include <iostream>
 #include <vector>
 

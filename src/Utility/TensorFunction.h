@@ -49,6 +49,49 @@ public:
   {
     return this->evaluate(X).trace();
   }
+
+  utl::matrix3d<Real> gradient(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    utl::matrix3d<Real> result(nsd, nsd, nsd);
+    result.fill(this->evalGradient(X).data());
+
+    return result;
+  }
+
+  Tensor tgradient(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    Tensor result(nsd);
+    result = this->evalTGradient(X);
+
+    return result;
+  }
+
+  utl::matrix4d<Real> hessian(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    utl::matrix4d<Real> result(nsd, nsd, nsd, nsd);
+    result.fill(this->evalHessian(X).data());
+
+    return result;
+  }
+
+protected:
+  virtual std::vector<Real> evalGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp*this->dim()*this->dim());
+  }
+
+  virtual std::vector<Real> evalTGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(this->dim()*this->dim());
+  }
+
+  virtual std::vector<Real> evalHessian(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp*this->dim()*this->dim()*this->dim());
+  }
 };
 
 
@@ -84,6 +127,45 @@ public:
   virtual Real getScalarValue(const Vec3& X) const
   {
     return this->evaluate(X).trace();
+  }
+
+  utl::matrix3d<Real> gradient(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    utl::matrix3d<Real> result(nsd, nsd, nsd);
+    result.fill(this->evalGradient(X).data());
+
+    return result;
+  }
+
+  SymmTensor tgradient(const Vec3& X) const
+  {
+    return SymmTensor(this->evalTGradient(X));
+  }
+
+  utl::matrix4d<Real> hessian(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    utl::matrix4d<Real> result(nsd, nsd, nsd, nsd);
+    result.fill(this->evalHessian(X).data());
+
+    return result;
+  }
+
+protected:
+  virtual std::vector<Real> evalGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp*this->dim()*this->dim());
+  }
+
+  virtual std::vector<Real> evalTGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(this->dim()*this->dim());
+  }
+
+  virtual std::vector<Real> evalHessian(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp*this->dim()*this->dim()*this->dim());
   }
 };
 
