@@ -41,12 +41,12 @@ Vec3 TractionField::evaluate (const Vec3& x, const Vec3& n) const
 }
 
 
-Vec3 TractionField::deriv (const Vec3& x, const Vec3& n) const
+Vec3 TractionField::timeDerivative (const Vec3& x, const Vec3& n) const
 {
   if (sigma) // symmetric tensor field
-    return sigma->deriv(x,4) * n;
+    return sigma->timeDerivative(x) * n;
   else if (sigmaN) // non-symmetric tensor field
-    return sigmaN->deriv(x,4) * n;
+    return sigmaN->timeDerivative(x) * n;
   else // zero tensor field
     return Vec3();
 }

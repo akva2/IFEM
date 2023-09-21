@@ -50,7 +50,7 @@ public:
   //! \brief Returns the time-derivative of the function.
   //! \param[in] x Global coordinates of evaluation point
   //! \param[in] n Outward-directed unit normal vector at evaluation point
-  virtual Vec3 deriv(const Vec3& x, const Vec3& n) const;
+  virtual Vec3 timeDerivative(const Vec3& x, const Vec3& n) const;
 
 protected:
   //! \brief Evaluates the traction field function at the specified point.

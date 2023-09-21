@@ -23,13 +23,13 @@
   \brief Tensor-valued unary function of a spatial point.
 */
 
-class TensorFunc : public utl::SpatialFunction<Tensor>, public FunctionBase
+class TensorFunc : public utl::Function<Vec3,Tensor>, public FunctionBase
 {
 protected:
   //! \brief The constructor is protected to allow sub-class instances only.
-  explicit TensorFunc(size_t n = 0) : utl::SpatialFunction<Tensor>(Tensor(n))
+  explicit TensorFunc(size_t n = 0)
   {
-    ncmp = zero.size();
+    ncmp = n*n;
   }
 
 public:
@@ -70,11 +70,27 @@ public:
     return result;
   }
 
+  //! \brief Evaluates second derivatives of the function.
+  utl::matrix4d<Real> hessian(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    utl::matrix4d<Real> result(nsd, nsd, nsd, nsd);
+    result.fill(this->evalHessian(X).data());
+
+    return result;
+  }
+
 protected:
   //! \brief Returns the gradient of the function as a 1D array.
   virtual std::vector<Real> evalGradient(const Vec3& X) const
   {
     return std::vector<Real>(ncmp);
+  }
+
+  //! \brief Returns the second derivatives of the function as a 1D array.
+  virtual std::vector<Real> evalHessian(const Vec3& X) const
+  {
+    return {};
   }
 
   //! \brief Returns the time derivatives of the function as a 1D array.
@@ -89,15 +105,26 @@ protected:
   \brief Symmetric tensor-valued unary function of a spatial point.
 */
 
-class STensorFunc : public utl::SpatialFunction<SymmTensor>,
+class STensorFunc : public utl::Function<Vec3,SymmTensor>,
                     public FunctionBase
 {
+  size_t index (size_t nsd, size_t i, size_t j) const
+  {
+    if (i == j)
+      return i-1; // diagonal term
+    else if (nsd == 2)
+      return ncmp-1; // off-diagonal term (2D)
+
+    if (i == j+1 || i+2 == j)
+      std::swap(i,j);
+    return i+2; // upper triangular term (3D)
+  }
+
 protected:
   //! \brief The constructor is protected to allow sub-class instances only.
   STensorFunc(size_t n = 0, bool with33 = false)
-    : utl::SpatialFunction<SymmTensor>(SymmTensor(n,with33))
   {
-    ncmp = zero.size();
+    ncmp = SymmTensor(n,with33).size();
   }
 
 public:

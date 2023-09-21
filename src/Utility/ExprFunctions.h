@@ -190,11 +190,6 @@ public:
   //! \brief Returns the function type flag.
   unsigned char getType() const override { return 2; }
 
-  //! \brief Returns first-derivative of the function.
-  Ret deriv(const Vec3& X, int dir) const override;
-  //! \brief Returns second-derivative of the function.
-  Ret dderiv(const Vec3& X, int dir1, int dir2) const override;
-
   //! \brief Set an additional parameter in the function.
   void setParam(const std::string& name, double value)
   {
@@ -212,6 +207,9 @@ protected:
   //! \brief Returns the gradient of the function as a 1D array.
   std::vector<Real> evalGradient(const Vec3& X) const override;
 
+  //! \brief Returns the second derivatives of the function as a 1D array.
+  std::vector<Real> evalHessian(const Vec3& X) const override;
+
   //! \brief Returns the time derivatives of the function as a 1D array.
   std::vector<Real> evalTimeDerivative(const Vec3& X) const override;
 };
@@ -222,16 +220,5 @@ using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3>;
 using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor>;
 //! Symmetric tensor-valued function expression
 using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor>;
-
-//! \brief Specialization for tensor functions.
-template<> Tensor TensorFuncExpr::deriv(const Vec3& X, int dir) const;
-//! \brief Specialization for tensor functions.
-template<> Tensor TensorFuncExpr::dderiv(const Vec3& X, int d1, int d2) const;
-
-//! \brief Specialization for symmetric tensor functions.
-template<> SymmTensor STensorFuncExpr::deriv(const Vec3& X, int dir) const;
-//! \brief Specialization for symmetric tensor functions.
-template<> SymmTensor STensorFuncExpr::dderiv(const Vec3& X,
-                                              int d1, int d2) const;
 
 #endif

@@ -61,7 +61,27 @@ TEST(TestAnaSol, ParseDerivatives)
   VecFunc* v2 = mySol.getScalarSecSol();
   ASSERT_TRUE(v2 != nullptr);
   EXPECT_TRUE((*v2)(X) == Vec3(3.0,4.0,1.0));
-  EXPECT_TRUE(v2->deriv(X,1) == Vec3(6.0,0.0,0.0));
-  EXPECT_TRUE(v2->deriv(X,2) == Vec3(0.0,2.0,0.0));
-  EXPECT_TRUE(v2->dderiv(X,1,1) == Vec3(6.0,0.0,0.0));
+  const Tensor grad = v2->gradient(X);
+  const Tensor r({6.0, 0.0, 0.0,
+                  0.0, 2.0, 0.0,
+                  0.0, 0.0, 0.0});
+  for (size_t i = 1; i <= 3; ++i)
+    for (size_t j = 1; j <= 3; ++j)
+      EXPECT_DOUBLE_EQ(grad(i,j), r(i,j));
+  const utl::matrix3d<Real> hess = v2->hessian(X);
+  utl::matrix3d<Real> rhess(3,3,3);
+  rhess.fill(std::array{6.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0}.data());
+
+  for (size_t d = 1; d <= 3; ++d)
+    for (size_t j = 1; j <= 3; ++j)
+      for (size_t i = 1; i <= 3; ++i)
+        EXPECT_DOUBLE_EQ(hess(i,j,d), rhess(i,j,d));
 }
