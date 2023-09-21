@@ -205,6 +205,17 @@ public:
     return result;
   }
 
+  //! \brief Evaluates second derivatives of the function.
+  virtual SymmTensor hessian(const Vec3& X) const
+  {
+    SymmTensor result(3);
+    for (size_t d1 = 1; d1 <= 3; ++d1)
+      for (size_t d2 = d1; d2 <= 3; ++d2)
+        result(d1,d2) = this->dderiv(X, d1, d2);
+
+    return result;
+  }
+
   //! \brief Returns a representative scalar equivalent of the function value.
   virtual Real getScalarValue(const Vec3& X) const { return this->evaluate(X); }
 
