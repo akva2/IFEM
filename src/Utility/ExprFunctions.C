@@ -502,6 +502,25 @@ EvalMultiFunction<ParentFunc, Ret>::evalGradient (const Vec3& X) const
 
 template <class ParentFunc, class Ret>
 std::vector<Real>
+EvalMultiFunction<ParentFunc,Ret>::evalHessian (const Vec3& X) const
+{
+  std::vector<Real> result(this->p.size()*this->nsd*this->nsd);
+  std::vector<SymmTensor> dx;
+  for (const auto& f : this->p)
+    dx.push_back(f->hessian(X));
+
+  size_t k = 0;
+  for (size_t d2 = 1; d2 <= this->nsd; ++d2)
+    for (size_t d1 = 1; d1 <= this->nsd; ++d1)
+      for (size_t i = 0; i < this->p.size(); ++i)
+        result[k++] = dx[i](d1,d2);
+
+  return result;
+}
+
+
+template <class ParentFunc, class Ret>
+std::vector<Real>
 EvalMultiFunction<ParentFunc, Ret>::evalTimeDerivative (const Vec3& X) const
 {
   std::vector<Real> result(this->ncmp);

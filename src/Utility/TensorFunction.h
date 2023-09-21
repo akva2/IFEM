@@ -70,9 +70,25 @@ public:
     return result;
   }
 
+  //! \brief Evaluates second derivatives of the function.
+  utl::matrix4d<Real> hessian(const Vec3& X) const
+  {
+    const size_t nsd = sqrt(this->dim());
+    utl::matrix4d<Real> result(nsd, nsd, nsd, nsd);
+    result.fill(this->evalHessian(X).data());
+
+    return result;
+  }
+
 protected:
   //! \brief Returns the gradient of the function as a 1D array.
   virtual std::vector<Real> evalGradient(const Vec3& X) const
+  {
+    return {};
+  }
+
+  //! \brief Returns the second derivatives of the function as a 1D array.
+  virtual std::vector<Real> evalHessian(const Vec3& X) const
   {
     return {};
   }
@@ -156,13 +172,12 @@ public:
     const std::vector<Real> temp = this->evalHessian(X);
 
     // de-voigt the blocks
-    auto it_out = result.begin();
-    for (size_t j = 1; j <= nsd; ++j)
-      for (size_t i = 1; i <= nsd; ++i, it_out += nsd*nsd) {
-        const size_t idx = index(nsd,i,j);
-        std::copy(temp.begin() + idx*nsd*nsd,
-                  temp.begin() + (idx+1)*nsd*nsd, it_out);
-      }
+    size_t d = 1;
+    for (size_t d2 = 1; d2 <= nsd; ++d2)
+      for (size_t d1 = 1; d1 <= nsd; ++d1, ++d)
+        for (size_t j = 1; j <= nsd; ++j)
+          for (size_t i = 1; i <= nsd; ++i)
+            result(i,j,d1,d2) = temp[index(nsd,i,j) + (d-1)*ncmp];
 
     return result;
   }
