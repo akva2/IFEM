@@ -106,6 +106,56 @@ TEST(TestRealFunc, Gradient)
 }
 
 
+TEST(TestRealFunc, Hessian)
+{
+  const char* f1 = "sin(x)*sin(y)*sin(z)";
+  const char* d11 = "-sin(x)*sin(y)*sin(z)";
+  const char* d22 = "-sin(x)*sin(y)*sin(z)";
+  const char* d33 = "-sin(x)*sin(y)*sin(z)";
+  const char* d12 = "cos(x)*cos(y)*sin(z)";
+  const char* d13 = "cos(x)*sin(y)*cos(z)";
+  const char* d23 = "sin(x)*cos(y)*cos(z)";
+
+  EvalFunction f(f1);
+  f.addDerivative(d11,"",1,1);
+  f.addDerivative(d12,"",1,2);
+  f.addDerivative(d13,"",1,3);
+  f.addDerivative(d22,"",2,2);
+  f.addDerivative(d23,"",2,3);
+  f.addDerivative(d33,"",3,3);
+
+  EXPECT_TRUE(f.isConstant());
+
+  for (double x : {0.1})//, 0.2, 0.3})
+    for (double y : {0.1})//, 0.6, 0.7})
+      for (double z : {0.1}){//, 0.9, 1.0}) {
+        const Vec3 X(x,y,z);
+        const std::array<double,6> r{-sin(x)*sin(y)*sin(z),
+                                      -sin(x)*sin(y)*sin(z)
+                                      -sin(x)*sin(y)*sin(z),
+                                      cos(x)*cos(y)*sin(z),
+                                      cos(x)*sin(y)*cos(z),
+                                      sin(x)*cos(y)*cos(z)};
+        EXPECT_DOUBLE_EQ(f.dderiv(X,1,1), r[0]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,2,2), r[1]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,3,3), r[2]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,1,2), r[3]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,2,1), r[3]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,1,3), r[4]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,3,1), r[4]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,2,3), r[5]);
+        EXPECT_DOUBLE_EQ(f.dderiv(X,3,2), r[5]);
+        const SymmTensor grad = f.hessian(X);
+        EXPECT_DOUBLE_EQ(grad(1,1), r[0]);
+        EXPECT_DOUBLE_EQ(grad(2,2), r[1]);
+        EXPECT_DOUBLE_EQ(grad(3,3), r[2]);
+        EXPECT_DOUBLE_EQ(grad(1,2), r[3]);
+        EXPECT_DOUBLE_EQ(grad(1,3), r[4]);
+        EXPECT_DOUBLE_EQ(grad(2,3), r[5]);
+      }
+}
+
+
 TEST(TestEvalFunction, ExtraParam)
 {
   EvalFunction f("x*foo");
