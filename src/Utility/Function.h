@@ -217,6 +217,11 @@ public:
 
   //! \brief Returns a representative scalar equivalent of the function value.
   virtual Real getScalarValue(const Vec3& X) const { return this->evaluate(X); }
+
+  Real timeDerivative(const Vec3& X) const
+  {
+    return this->deriv(X,4);
+  }
 };
 
 
@@ -260,11 +265,23 @@ public:
     return result;
   }
 
+  //! \brief Evaluates time derivatives of the function.
+  Vec3 timeDerivative(const Vec3& X) const
+  {
+    return this->evalTimeDerivative(X);
+  }
+
 protected:
   //! \brief Returns the gradient of the function as a 1D array.
   virtual std::vector<Real> evalGradient(const Vec3& X) const
   {
     return {};
+  }
+
+  //! \brief Returns the time derivatives of the function as a 1D array.
+  virtual std::vector<Real> evalTimeDerivative(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp);
   }
 };
 
@@ -280,7 +297,7 @@ public:
   virtual bool isNormalPressure() const { return false; }
 
   //! \brief Returns the time-derivative of the function.
-  virtual Vec3 deriv(const Vec3&, const Vec3&) const { return Vec3(); }
+  virtual Vec3 timeDerivative(const Vec3&, const Vec3&) const { return Vec3(); }
 };
 
 #endif
