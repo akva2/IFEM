@@ -486,9 +486,9 @@ Tensor TensorFuncExpr::deriv (const Vec3& X, int dir) const
 {
   Tensor sigma(nsd);
 
-  size_t i, j, k = 0;
-  for (i = 1; i <= nsd; ++i)
-    for (j = 1; j <= nsd; ++j)
+  size_t k = 0;
+  for (size_t j = 1; j <= nsd; ++j)
+    for (size_t i = 1; i <= nsd; ++i)
       sigma(i,j) = p[k++]->deriv(X,dir);
 
   return sigma;
@@ -500,9 +500,9 @@ Tensor TensorFuncExpr::dderiv (const Vec3& X, int d1, int d2) const
 {
   Tensor sigma(nsd);
 
-  size_t i, j, k = 0;
-  for (i = 1; i <= nsd; ++i)
-    for (j = 1; j <= nsd; ++j)
+  size_t k = 0;
+  for (size_t i = 1; i <= nsd; ++i)
+    for (size_t j = 1; j <= nsd; ++j)
       sigma(i,j) = p[k++]->dderiv(X,d1,d2);
 
   return sigma;
