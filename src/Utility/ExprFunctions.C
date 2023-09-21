@@ -466,6 +466,20 @@ void EvalMultiFunction<ParentFunc,Ret>::setNoDims ()
 }
 
 
+template <class ParentFunc, class Ret>
+std::vector<Real>
+EvalMultiFunction<ParentFunc, Ret>::evalGradient (const Vec3& X) const
+{
+  std::vector<Real> result(this->ncmp*this->nsd);
+  size_t k = 0;
+  for (size_t d = 1; d <= this->nsd; ++d)
+    for (size_t i = 1; i <= this->ncmp; ++i)
+      result[k++] = this->p[i-1]->deriv(X,d);
+
+  return result;
+}
+
+
 template<>
 Vec3 VecFuncExpr::deriv (const Vec3& X, int dir) const
 {
@@ -546,7 +560,10 @@ SymmTensor STensorFuncExpr::dderiv (const Vec3& X, int d1, int d2) const
 
 template Vec3 VecFuncExpr::evaluate(const Vec3&) const;
 template void VecFuncExpr::setNoDims();
+template std::vector<Real> VecFuncExpr::evalGradient(const Vec3&) const;
 template Tensor TensorFuncExpr::evaluate(const Vec3&) const;
 template void TensorFuncExpr::setNoDims();
+template std::vector<Real> TensorFuncExpr::evalGradient(const Vec3&) const;
 template SymmTensor STensorFuncExpr::evaluate(const Vec3&) const;
 template void STensorFuncExpr::setNoDims();
+template std::vector<Real> STensorFuncExpr::evalGradient(const Vec3&) const;
