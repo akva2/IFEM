@@ -100,7 +100,7 @@ class EvalFunction : public RealFunc
 
   std::vector<Arg> arg; //!< Function argument values
 
-  std::array<std::unique_ptr<EvalFunction>,3> gradient;  //!< First derivative expressions
+  std::array<std::unique_ptr<EvalFunction>,4> fgradient; //!< First derivative expressions
   std::array<std::unique_ptr<EvalFunction>,6> dgradient; //!< Second derivative expressions
 
   bool IAmConstant; //!< Indicates whether the time coordinate is given or not
