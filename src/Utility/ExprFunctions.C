@@ -399,19 +399,10 @@ Real EvalFunction::deriv (const Vec3& X, int dir) const
 
 Real EvalFunction::dderiv (const Vec3& X, int d1, int d2) const
 {
-  if (d1 > d2)
-    std::swap(d1,d2); // Assuming symmetry
+  d1 = voigtIdx(d1,d2);
 
-  if (d1 < 1 || d2 > 3)
+  if (d1 < 0)
     return Real(0);
-
-  // Assuming Voigt notation ordering; 11, 22, 33, 12, 23, 13
-  if (d2-d1 == 0) // diagoal term, 11, 22 and 33
-    --d1;
-  else if (d2-d1 == 1) // off-diagonal term, 12 and 23
-    d1 = d2+1;
-  else // off-diagonal term, 13
-    d1 = 5;
 
   return dgradient[d1] ? dgradient[d1]->evaluate(X) : Real(0);
 }
