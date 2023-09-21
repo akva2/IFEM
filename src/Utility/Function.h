@@ -260,9 +260,21 @@ public:
     return result;
   }
 
+  //! \brief Evaluates time derivatives of the function.
+  Vec3 timeDerivative(const Vec3& X) const
+  {
+    return this->evalTimeDerivative(X);
+  }
+
 protected:
   //! \brief Returns the gradient of the function as a 1D array.
   virtual std::vector<Real> evalGradient(const Vec3& X) const
+  {
+    return std::vector<Real>(ncmp);
+  }
+
+  //! \brief Returns the time derivatives of the function as a 1D array.
+  virtual std::vector<Real> evalTimeDerivative(const Vec3& X) const
   {
     return std::vector<Real>(ncmp);
   }

@@ -298,7 +298,7 @@ TEST(TestVecFunction, TimeDerivative)
           const Vec3 r(sin(x)*sin(y)*sin(z)*cos(t),
                        x*x*y*y*z*2*t,
                        -2*exp(-2*t));
-          const Vec3 dt = f.deriv(X,4);
+          const Vec3 dt = f.timeDerivative(X);
           EXPECT_DOUBLE_EQ(dt[0], r[0]);
           EXPECT_DOUBLE_EQ(dt[1], r[1]);
           EXPECT_DOUBLE_EQ(dt[2], r[2]);
@@ -326,7 +326,7 @@ TEST(TestVecFunction, TimeDerivativeFD)
                  x*x*y*y*z*(Xp.t*Xp.t - Xm.t*Xm.t),
                  exp(-2*Xp.t) - exp(-2*Xm.t));
           r *= 1.0 / eps;
-          const Vec3 dt = f.deriv(X,4);
+          const Vec3 dt = f.timeDerivative(X);
           EXPECT_NEAR(dt[0], r[0], 1e-8);
           EXPECT_NEAR(dt[1], r[1], 1e-8);
           EXPECT_NEAR(dt[2], r[2], 1e-8);
@@ -537,7 +537,7 @@ TEST(TestTensorFunction, TimeDerivative)
                           exp(-2*x)*exp(y)*z*cos(t),   x*y*z*2*t,     x*y*z*z,
                           x*cos(t),                    y*2*t,         z});
 
-          const Tensor dt = f.deriv(X,4);
+          const Tensor dt = f.timeDerivative(X);
           for (size_t i = 1; i <= 3; ++i)
             for (size_t j = 1; j <= 3; ++j)
               EXPECT_DOUBLE_EQ(dt(i,j), r(i,j));
@@ -574,7 +574,7 @@ TEST(TestTensorFunction, TimeDerivativeFD)
                     z*(Xp.t - Xm.t)});
           r *= 1.0 / eps;
 
-          const Tensor dt = f.deriv(X,4);
+          const Tensor dt = f.timeDerivative(X);
           for (size_t i = 1; i <= 3; ++i)
             for (size_t j = 1; j <= 3; ++j)
               EXPECT_NEAR(dt(i,j), r(i,j), 1e-8);
@@ -795,7 +795,7 @@ TEST(TestSTensorFunction, TimeDerivative)
         const Vec4 X(x,y,0,t);
         const SymmTensor r({sin(x)*sin(y)*cos(t), exp(x)*exp(2*y)*-4*exp(-4*t), x*x*y*y*2*t});
 
-        const SymmTensor dt = f.deriv(X,4);
+        const SymmTensor dt = f.timeDerivative(X);
         for (size_t i = 1; i <= 2; ++i)
           for (size_t j = 1; j <= 2; ++j)
             EXPECT_DOUBLE_EQ(dt(i,j), r(i,j));
@@ -823,7 +823,7 @@ TEST(TestSTensorFunction, TimeDerivativeFD)
                       x*x*y*y*(Xp.t*Xp.t - Xm.t*Xm.t)});
         r *= 1.0 / eps;
 
-        const SymmTensor dt = f.deriv(X,4);
+        const SymmTensor dt = f.timeDerivative(X);
         for (size_t i = 1; i <= 2; ++i)
           for (size_t j = 1; j <= 2; ++j)
             EXPECT_NEAR(dt(i,j), r(i,j), 1e-8);
