@@ -251,6 +251,21 @@ public:
   {
     return this->evaluate(X).length();
   }
+
+  //! \brief Evaluates first derivatives of the function.
+  Tensor gradient(const Vec3& X) const
+  {
+    Tensor result(ncmp);
+    result = this->evalGradient(X);
+    return result;
+  }
+
+protected:
+  //! \brief Returns the gradient of the function as a 1D array.
+  virtual std::vector<Real> evalGradient(const Vec3& X) const
+  {
+    return {};
+  }
 };
 
 
