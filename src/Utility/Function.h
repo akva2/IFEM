@@ -14,6 +14,7 @@
 #ifndef UTL_FUNCTION_H
 #define UTL_FUNCTION_H
 
+#include "matrixnd.h"
 #include "Tensor.h"
 #include "Vec3.h"
 #include <functional>
@@ -244,6 +245,14 @@ public:
     return result;
   }
 
+  //! \brief Evaluates second derivatives of the function.
+  utl::matrix3d<Real> hessian(const Vec3& X) const
+  {
+    utl::matrix3d<Real> result(ncmp,ncmp,ncmp);
+    result.fill(this->evalHessian(X).data());
+    return result;
+  }
+
   //! \brief Evaluates time derivatives of the function.
   Vec3 timeDerivative(const Vec3& X) const
   {
@@ -255,6 +264,12 @@ protected:
   virtual std::vector<Real> evalGradient(const Vec3& X) const
   {
     return std::vector<Real>(ncmp);
+  }
+
+  //! \brief Returns the hessian of the function as a 1D array.
+  virtual std::vector<Real> evalHessian(const Vec3& X) const
+  {
+    return {};
   }
 
   //! \brief Returns the time derivatives of the function as a 1D array.

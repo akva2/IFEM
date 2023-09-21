@@ -485,6 +485,21 @@ EvalMultiFunction<ParentFunc, Ret>::evalGradient (const Vec3& X) const
 
 template <class ParentFunc, class Ret>
 std::vector<Real>
+EvalMultiFunction<ParentFunc,Ret>::evalHessian (const Vec3& X) const
+{
+  std::vector<Real> result(this->nsd*this->nsd*this->nsd*this->nsd);
+  size_t k = 0;
+    for (size_t d2 = 1; d2 <= this->nsd; ++d2)
+      for (size_t d1 = 1; d1 <= this->nsd; ++d1)
+        for (size_t i = 0; i < this->p.size(); ++i)
+          result[k++] = this->p[i]->dderiv(X, d1, d2);
+
+  return result;
+}
+
+
+template <class ParentFunc, class Ret>
+std::vector<Real>
 EvalMultiFunction<ParentFunc, Ret>::evalTimeDerivative (const Vec3& X) const
 {
   std::vector<Real> result(this->ncmp);
@@ -576,12 +591,15 @@ SymmTensor STensorFuncExpr::dderiv (const Vec3& X, int d1, int d2) const
 template Vec3 VecFuncExpr::evaluate(const Vec3&) const;
 template void VecFuncExpr::setNoDims();
 template std::vector<Real> VecFuncExpr::evalGradient(const Vec3&) const;
+template std::vector<Real> VecFuncExpr::evalHessian(const Vec3&) const;
 template std::vector<Real> VecFuncExpr::evalTimeDerivative(const Vec3&) const;
 template Tensor TensorFuncExpr::evaluate(const Vec3&) const;
 template void TensorFuncExpr::setNoDims();
 template std::vector<Real> TensorFuncExpr::evalGradient(const Vec3&) const;
+template std::vector<Real> TensorFuncExpr::evalHessian(const Vec3&) const;
 template std::vector<Real> TensorFuncExpr::evalTimeDerivative(const Vec3&) const;
 template SymmTensor STensorFuncExpr::evaluate(const Vec3&) const;
 template void STensorFuncExpr::setNoDims();
 template std::vector<Real> STensorFuncExpr::evalGradient(const Vec3&) const;
+template std::vector<Real> STensorFuncExpr::evalHessian(const Vec3&) const;
 template std::vector<Real> STensorFuncExpr::evalTimeDerivative(const Vec3&) const;
