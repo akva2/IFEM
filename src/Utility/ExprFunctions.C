@@ -233,7 +233,7 @@ EvalFunc::EvalFunc (const char* function, const char* x, Real eps)
 EvalFunc::~EvalFunc () = default;
 
 
-void EvalFunc::derivative (const std::string& function, const char* x)
+void EvalFunc::addDerivative (const std::string& function, const char* x)
 {
   if (!gradient)
     gradient = std::make_unique<EvalFunc>(function.c_str(),x);
