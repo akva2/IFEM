@@ -169,6 +169,60 @@ TEST(TestRealFunc, Hessian)
 }
 
 
+TEST(TestEvalFunctionAd, Gradient)
+{
+  const char* f1 = "sin(x)*sin(y)*sin(z)";
+
+  EvalFunctionImpl<autodiff::var> f(f1);
+
+  EXPECT_TRUE(f.isConstant());
+
+  for (double x : {0.1, 0.2, 0.3})
+    for (double y : {0.5, 0.6, 0.7})
+      for (double z : {0.8, 0.9, 1.0}) {
+        const Vec3 X(x,y,z);
+        const Vec3 r(cos(x)*sin(y)*sin(z),
+                     sin(x)*cos(y)*sin(z),
+                     sin(x)*sin(y)*cos(z));
+
+        const Vec3 grad = f.gradient(X);
+        for (size_t i = 1; i <= 3; ++i) {
+          EXPECT_DOUBLE_EQ(f.deriv(X, i), r[i-1]);
+          EXPECT_DOUBLE_EQ(grad[i-1], r[i-1]);
+        }
+      }
+}
+
+
+TEST(TestEvalFunctionAd, Hessian)
+{
+  const char* f1 = "sin(x)*sin(y)*sin(z)";
+
+  EvalFunctionImpl<autodiff::var> f(f1);
+
+  EXPECT_TRUE(f.isConstant());
+
+  for (double x : {0.1, 0.2, 0.3})
+    for (double y : {0.5, 0.6, 0.7})
+      for (double z : {0.8, 0.9, 1.0}) {
+        const Vec3 X(x,y,z);
+        const SymmTensor r({-sin(x)*sin(y)*sin(z),
+                            -sin(x)*sin(y)*sin(z),
+                            -sin(x)*sin(y)*sin(z),
+                             cos(x)*cos(y)*sin(z),
+                             sin(x)*cos(y)*cos(z),
+                             cos(x)*sin(y)*cos(z)});
+
+        const SymmTensor hess = f.hessian(X);
+        for (size_t i = 1; i <= 3; ++i)
+          for (size_t j = 1; j <= 3; ++j) {
+            EXPECT_DOUBLE_EQ(f.dderiv(X,i,j), r(i,j));
+            EXPECT_DOUBLE_EQ(hess(i,j), r(i,j));
+          }
+      }
+}
+
+
 TEST(TestVecFunc, Evaluate)
 {
   const char* func = "sin(x) | cos (y) | exp(z)";
