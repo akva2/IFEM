@@ -17,6 +17,8 @@
 
 #include "gtest/gtest.h"
 
+#include <autodiff/reverse/var.hpp>
+
 #include <cstdlib>
 #include <cmath>
 
@@ -45,6 +47,24 @@ TEST(TestScalarFunc, ParseDerivative)
     EXPECT_FLOAT_EQ((*f2)(t),sin(1.5*t)*t);
     EXPECT_FLOAT_EQ(f1->deriv(t),1.5*cos(1.5*t)*t+sin(1.5*t));
     EXPECT_FLOAT_EQ(f2->deriv(t),1.5*cos(1.5*t)*t+sin(1.5*t));
+  }
+}
+
+
+TEST(TestEvalFuncAd, Derivative)
+{
+  const char* func1 = "sin(1.5*t)*t";
+
+  EvalFuncImpl<autodiff::var> f1(func1, "t");
+
+  EXPECT_FALSE(f1.isConstant());
+
+  double t = 0.0;
+  for (int i = 0; i < 20; i++)
+  {
+    t += 0.314*(double)random()/(double)RAND_MAX;
+    EXPECT_FLOAT_EQ(f1(t),sin(1.5*t)*t);
+    EXPECT_FLOAT_EQ(f1.deriv(t),1.5*cos(1.5*t)*t+sin(1.5*t));
   }
 }
 

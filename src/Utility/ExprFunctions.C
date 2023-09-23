@@ -19,8 +19,10 @@
 #include <omp.h>
 #endif
 
+#include <autodiff/reverse/var.hpp>
 
-int EvalFunc::numError = 0;
+
+template<> int EvalFunc::numError = 0;
 
 
 namespace {
@@ -197,7 +199,8 @@ std::pair<size_t,size_t> getNoDims<SymmTensor>(size_t psize)
 }
 
 
-EvalFunc::EvalFunc (const char* function, const char* x, Real eps)
+template<class Scalar>
+EvalFuncImpl<Scalar>::EvalFuncImpl (const char* function, const char* x, Real eps)
   : dx(eps)
 {
   try {
@@ -230,18 +233,20 @@ EvalFunc::EvalFunc (const char* function, const char* x, Real eps)
 }
 
 
-EvalFunc::~EvalFunc () = default;
+template<class Scalar>
+EvalFuncImpl<Scalar>::~EvalFuncImpl () = default;
 
 
 template<class Scalar>
-void EvalFunc::addDerivative (const std::string& function, const char* x)
+void EvalFuncImpl<Scalar>::addDerivative (const std::string& function, const char* x)
 {
   if (!gradient)
-    gradient = std::make_unique<EvalFunc>(function.c_str(),x);
+    gradient = std::make_unique<FuncType>(function.c_str(),x);
 }
 
 
-Real EvalFunc::evaluate (const Real& x) const
+template<class Scalar>
+Real EvalFuncImpl<Scalar>::evaluate (const Real& x) const
 {
   Real result = Real(0);
   size_t i = 0;
@@ -252,7 +257,10 @@ Real EvalFunc::evaluate (const Real& x) const
     return result;
   try {
     *arg[i] = x;
-    result = expr[i]->Evaluate();
+    if constexpr (std::is_same_v<Scalar,Real>)
+      result = expr[i]->Evaluate();
+    else
+      result = expr[i]->Evaluate().expr->val;
   }
   catch (ExprEval::Exception& e) {
     ExprException(e,"evaluating expression");
@@ -262,6 +270,7 @@ Real EvalFunc::evaluate (const Real& x) const
 }
 
 
+template<>
 Real EvalFunc::deriv (Real x) const
 {
   if (gradient)
@@ -269,6 +278,29 @@ Real EvalFunc::deriv (Real x) const
 
   // Evaluate derivative using central difference
   return (this->evaluate(x+0.5*dx) - this->evaluate(x-0.5*dx)) / dx;
+}
+
+
+template<>
+Real EvalFuncImpl<autodiff::var>::deriv (Real x) const
+{
+  if (gradient)
+    return gradient->evaluate(x);
+
+  size_t i = 0;
+#ifdef USE_OPENMP
+  i = omp_get_thread_num();
+#endif
+  try {
+    *arg[i] = x;
+    return derivativesx(expr[i]->Evaluate(),
+                        autodiff::wrt(*this->arg[i]))[0].expr->val;
+  }
+  catch (ExprEval::Exception& e) {
+    ExprException(e,"evaluating expression");
+  }
+
+  return 0.0;
 }
 
 
@@ -589,6 +621,8 @@ SymmTensor STensorFuncExpr::dderiv (const Vec3& X, int d1, int d2) const
 }
 
 
+template class EvalFuncImpl<Real>;
+template class EvalFuncImpl<autodiff::var>;
 template Vec3 VecFuncExpr::evaluate(const Vec3&) const;
 template void VecFuncExpr::setNoDims();
 template std::vector<Real> VecFuncExpr::evalGradient(const Vec3&) const;
