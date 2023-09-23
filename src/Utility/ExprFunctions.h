@@ -78,11 +78,13 @@ protected:
   \brief A scalar-valued spatial function, general function expression.
 */
 
-class EvalFunction : public RealFunc
+template<class Scalar>
+class EvalFunctionImpl : public RealFunc
 {
-  using Expression = ExprEval::Expression<Real>;     //!< Type alias for expression tree
-  using FunctionList = ExprEval::FunctionList<Real>; //!< Type alias for function list
-  using ValueList = ExprEval::ValueList<Real>;       //!< Type alias for value list
+  using Expression = ExprEval::Expression<Scalar>;     //!< Type alias for expression tree
+  using FunctionList = ExprEval::FunctionList<Scalar>; //!< Type alias for function list
+  using ValueList = ExprEval::ValueList<Scalar>;       //!< Type alias for value list
+  using FuncType = EvalFunctionImpl<Scalar>;           //!< Type alias for function
   std::vector<std::unique_ptr<Expression>> expr; //!< Roots of the expression tree
   std::vector<std::unique_ptr<FunctionList>>  f; //!< Lists of functions
   std::vector<std::unique_ptr<ValueList>>     v; //!< Lists of variables and constants
@@ -90,16 +92,27 @@ class EvalFunction : public RealFunc
   //! \brief A struct representing a spatial function argument.
   struct Arg
   {
-    Real* x; //!< X-coordinate
-    Real* y; //!< Y-coordinate
-    Real* z; //!< Z-coordinate
-    Real* t; //!< Time
+    Scalar* x; //!< X-coordinate
+    Scalar* y; //!< Y-coordinate
+    Scalar* z; //!< Z-coordinate
+    Scalar* t; //!< Time
+
+    const Scalar& get(int dir) const
+    {
+      switch (dir) {
+        default:
+        case 1: return *x;
+        case 2: return *y;
+        case 3: return *z;
+        case 4: return *t;
+      }
+    }
   };
 
   std::vector<Arg> arg; //!< Function argument values
 
-  std::array<std::unique_ptr<EvalFunction>,4> fgradient; //!< First derivative expressions
-  std::array<std::unique_ptr<EvalFunction>,6> dgradient; //!< Second derivative expressions
+  std::array<std::unique_ptr<FuncType>,4> fgradient; //!< First derivative expressions
+  std::array<std::unique_ptr<FuncType>,6> dgradient; //!< Second derivative expressions
 
   bool IAmConstant; //!< Indicates whether the time coordinate is given or not
 
@@ -108,10 +121,10 @@ class EvalFunction : public RealFunc
 
 public:
   //! \brief The constructor parses the expression string.
-  explicit EvalFunction(const char* function,
-                        Real epsX = Real(1.0e-8), Real epsT = Real(1.0e-12));
+  explicit EvalFunctionImpl(const char* function,
+                            Real epsX = Real(1.0e-8), Real epsT = Real(1.0e-12));
   //! \brief The destructor frees the dynamically allocated objects.
-  virtual ~EvalFunction();
+  virtual ~EvalFunctionImpl();
 
   //! \brief Adds an expression function for a first or second derivative.
   void addDerivative(const std::string& function, const std::string& variables,
@@ -128,11 +141,19 @@ public:
   //! \brief Set an additional parameter in the function.
   void setParam(const std::string& name, double value);
 
+  //! \brief Evaluates first derivatives of the function.
+  Vec3 gradient(const Vec3& X) const override
+  {
+    return this->RealFunc::gradient(X);
+  }
+
+  //! \brief Evaluates first derivatives of the function.
+  SymmTensor hessian(const Vec3& X) const override
+  {
+    return this->RealFunc::hessian(X);
+  }
+
 protected:
-  //! \brief Non-implemented copy constructor to disallow copying.
-  EvalFunction(const EvalFunction&) = delete;
-  //! \brief Non-implemented assignment operator to disallow copying.
-  EvalFunction& operator=(const EvalFunction&) = delete;
   //! \brief Evaluates the function expression.
   Real evaluate(const Vec3& X) const override;
 };
@@ -145,6 +166,8 @@ protected:
 class EvalFunctions
 {
 protected:
+  using FuncType = EvalFunctionImpl<Real>; //!< Type alias for function
+
   //! \brief The constructor parses the expression string for each component.
   EvalFunctions(const std::string& functions, const std::string& variables,
                 const Real epsX, const Real epsT);
@@ -157,7 +180,7 @@ public:
                      const std::string& variables, int d1, int d2 = 0);
 
 protected:
-  std::vector<std::unique_ptr<EvalFunction>> p; //!< Array of component expressions
+  std::vector<std::unique_ptr<FuncType>> p; //!< Array of component expressions
 };
 
 
@@ -185,7 +208,7 @@ public:
   //! \brief Returns whether the function is time-independent or not.
   bool isConstant() const override
   {
-    for (const std::unique_ptr<EvalFunction>& func : p)
+    for (const std::unique_ptr<FuncType>& func : p)
       if (!func->isConstant())
         return false;
     return true;
@@ -202,7 +225,7 @@ public:
   //! \brief Set an additional parameter in the function.
   void setParam(const std::string& name, double value)
   {
-    for (std::unique_ptr<EvalFunction>& func : p)
+    for (std::unique_ptr<FuncType>& func : p)
       func->setParam(name, value);
   }
 
@@ -228,6 +251,8 @@ protected:
 
 //! Scalar-valued function expression
 using EvalFunc = EvalFuncImpl<Real>;
+//! Scalar-valued spatial function expression
+using EvalFunction = EvalFunctionImpl<Real>;
 //! Vector-valued function expression
 using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3>;
 //! Tensor-valued function expression
