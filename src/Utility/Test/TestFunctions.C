@@ -56,17 +56,20 @@ TEST(TestScalarFunc, ParseDerivative)
 
 TEST(TestRealFunc, Gradient)
 {
-  const char* f1 = "sin(x)*sin(y)*sin(z)";
-  const char* d1 = "cos(x)*sin(y)*sin(z)";
-  const char* d2 = "sin(x)*cos(y)*sin(z)";
-  const char* d3 = "sin(x)*sin(y)*cos(z)";
+  const char* g   = "sin(x)*sin(y)*sin(z)";
+  const char* g_x = "cos(x)*sin(y)*sin(z)";
+  const char* g_y = "sin(x)*cos(y)*sin(z)";
+  const char* g_z = "sin(x)*sin(y)*cos(z)";
 
-  EvalFunction f(f1);
-  f.addDerivative(d1, "", 1);
-  f.addDerivative(d2, "", 2);
-  f.addDerivative(d3, "", 3);
+  EvalFunction f1(g);
+  f1.addDerivative(g_x, "", 1);
+  f1.addDerivative(g_y, "", 2);
+  f1.addDerivative(g_z, "", 3);
 
-  EXPECT_TRUE(f.isConstant());
+  EvalFunctionImpl<autodiff::var> f2(g);
+
+  EXPECT_TRUE(f1.isConstant());
+  EXPECT_TRUE(f2.isConstant());
 
   for (double x : {0.1, 0.2, 0.3})
     for (double y : {0.5, 0.6, 0.7})
@@ -76,10 +79,13 @@ TEST(TestRealFunc, Gradient)
                      sin(x)*cos(y)*sin(z),
                      sin(x)*sin(y)*cos(z));
 
-        const Vec3 grad = f.gradient(X);
-        for (size_t i = 1; i <= 3; ++i) {
-          EXPECT_DOUBLE_EQ(f.deriv(X, i), r[i-1]);
-          EXPECT_DOUBLE_EQ(grad[i-1], r[i-1]);
+        for (const RealFunc* fp : {static_cast<const RealFunc*>(&f1),
+                                   static_cast<const RealFunc*>(&f2)}) {
+          const Vec3 grad = fp->gradient(X);
+          for (size_t i = 1; i <= 3; ++i) {
+            EXPECT_DOUBLE_EQ(fp->deriv(X, i), r[i-1]);
+            EXPECT_DOUBLE_EQ(grad[i-1], r[i-1]);
+          }
         }
       }
 }
@@ -116,23 +122,26 @@ TEST(TestRealFunc, GradientFD)
 
 TEST(TestRealFunc, Hessian)
 {
-  const char* f1 = "sin(x)*sin(y)*sin(z)";
-  const char* d11 = "-sin(x)*sin(y)*sin(z)";
-  const char* d22 = "-sin(x)*sin(y)*sin(z)";
-  const char* d33 = "-sin(x)*sin(y)*sin(z)";
-  const char* d12 = "cos(x)*cos(y)*sin(z)";
-  const char* d13 = "cos(x)*sin(y)*cos(z)";
-  const char* d23 = "sin(x)*cos(y)*cos(z)";
+  const char* g    = "sin(x)*sin(y)*sin(z)";
+  const char* g_xx = "-sin(x)*sin(y)*sin(z)";
+  const char* g_xy = "cos(x)*cos(y)*sin(z)";
+  const char* g_xz = "cos(x)*sin(y)*cos(z)";
+  const char* g_yy = "-sin(x)*sin(y)*sin(z)";
+  const char* g_zz = "-sin(x)*sin(y)*sin(z)";
+  const char* g_yz = "sin(x)*cos(y)*cos(z)";
 
-  EvalFunction f(f1);
-  f.addDerivative(d11,"",1,1);
-  f.addDerivative(d12,"",1,2);
-  f.addDerivative(d13,"",1,3);
-  f.addDerivative(d22,"",2,2);
-  f.addDerivative(d23,"",2,3);
-  f.addDerivative(d33,"",3,3);
+  EvalFunction f1(g);
+  f1.addDerivative(g_xx,"",1,1);
+  f1.addDerivative(g_xy,"",1,2);
+  f1.addDerivative(g_xz,"",1,3);
+  f1.addDerivative(g_yy,"",2,2);
+  f1.addDerivative(g_yz,"",2,3);
+  f1.addDerivative(g_zz,"",3,3);
 
-  EXPECT_TRUE(f.isConstant());
+  EvalFunctionImpl<autodiff::var> f2(g);
+
+  EXPECT_TRUE(f1.isConstant());
+  EXPECT_TRUE(f2.isConstant());
 
   for (double x : {0.1, 0.2, 0.3})
     for (double y : {0.5, 0.6, 0.7})
@@ -145,11 +154,14 @@ TEST(TestRealFunc, Hessian)
                              sin(x)*cos(y)*cos(z),
                              cos(x)*sin(y)*cos(z)});
 
-        const SymmTensor hess = f.hessian(X);
-        for (size_t i = 1; i <= 3; ++i)
-          for (size_t j = 1; j <= 3; ++j) {
-            EXPECT_DOUBLE_EQ(f.dderiv(X,i,j), r(i,j));
-            EXPECT_DOUBLE_EQ(hess(i,j), r(i,j));
+        for (const RealFunc* fp : {static_cast<const RealFunc*>(&f1),
+                                   static_cast<const RealFunc*>(&f2)}) {
+          const SymmTensor hess = fp->hessian(X);
+          for (size_t i = 1; i <= 3; ++i)
+            for (size_t j = 1; j <= 3; ++j) {
+              EXPECT_DOUBLE_EQ(fp->dderiv(X,i,j), r(i,j));
+              EXPECT_DOUBLE_EQ(hess(i,j), r(i,j));
+            }
           }
       }
 }
@@ -1402,5 +1414,5 @@ TEST(TestEvalFunction, Derivatives)
             EXPECT_DOUBLE_EQ(f.dderiv(X,3,1), cos(x)*sin(y)*cos(z)*sin(t));
             EXPECT_DOUBLE_EQ(f.dderiv(X,3,2), sin(x)*cos(y)*cos(z)*sin(t));
             EXPECT_DOUBLE_EQ(f.dderiv(X,3,3), -sin(x)*sin(y)*sin(z)*sin(t));
-        }
+          }
 }
