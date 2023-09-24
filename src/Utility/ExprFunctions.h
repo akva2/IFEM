@@ -163,10 +163,11 @@ protected:
   \brief A base class for multi-component expression functions.
 */
 
+template<class Scalar>
 class EvalFunctions
 {
 protected:
-  using FuncType = EvalFunctionImpl<Real>; //!< Type alias for function
+  using FuncType = EvalFunctionImpl<Scalar>; //!< Type alias for function
 
   //! \brief The constructor parses the expression string for each component.
   EvalFunctions(const std::string& functions, const std::string& variables,
@@ -189,10 +190,11 @@ protected:
   \details The function is implemented as an array of EvalFunction objects.
 */
 
-template <class ParentFunc, class Ret>
-class EvalMultiFunction : public ParentFunc, public EvalFunctions
+template <class ParentFunc, class Ret, class Scalar>
+class EvalMultiFunction : public ParentFunc, public EvalFunctions<Scalar>
 {
   size_t nsd; //!< Number of spatial dimensions
+  using FuncType = typename EvalFunctions<Scalar>::FuncType; //!< Type alias for function
 
 public:
   //! \brief The constructor parses the expression string for each component.
@@ -200,7 +202,7 @@ public:
                     const std::string& variables = "",
                     const Real epsX = 1e-8,
                     const Real epsT = 1e-12)
-    : EvalFunctions(functions,variables,epsX,epsT), nsd(0) { this->setNoDims(); }
+    : EvalFunctions<Scalar>(functions,variables,epsX,epsT), nsd(0) { this->setNoDims(); }
 
   //! \brief Empty destructor.
   virtual ~EvalMultiFunction() {}
@@ -208,7 +210,7 @@ public:
   //! \brief Returns whether the function is time-independent or not.
   bool isConstant() const override
   {
-    for (const std::unique_ptr<FuncType>& func : p)
+    for (const std::unique_ptr<FuncType>& func : this->p)
       if (!func->isConstant())
         return false;
     return true;
@@ -225,7 +227,7 @@ public:
   //! \brief Set an additional parameter in the function.
   void setParam(const std::string& name, double value)
   {
-    for (std::unique_ptr<FuncType>& func : p)
+    for (std::unique_ptr<FuncType>& func : this->p)
       func->setParam(name, value);
   }
 
@@ -254,11 +256,11 @@ using EvalFunc = EvalFuncImpl<Real>;
 //! Scalar-valued spatial function expression
 using EvalFunction = EvalFunctionImpl<Real>;
 //! Vector-valued function expression
-using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3>;
+using VecFuncExpr = EvalMultiFunction<VecFunc,Vec3,Real>;
 //! Tensor-valued function expression
-using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor>;
+using TensorFuncExpr = EvalMultiFunction<TensorFunc,Tensor,Real>;
 //! Symmetric tensor-valued function expression
-using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor>;
+using STensorFuncExpr = EvalMultiFunction<STensorFunc,SymmTensor,Real>;
 
 //! \brief Specialization for tensor functions.
 template<> Tensor TensorFuncExpr::deriv(const Vec3& X, int dir) const;
