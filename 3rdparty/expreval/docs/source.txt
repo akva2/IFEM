@@ -1,0 +1,1 @@
+Source of the library can be found at https://expreval.sourceforge.net
