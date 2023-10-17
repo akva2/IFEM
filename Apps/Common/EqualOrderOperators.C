@@ -176,16 +176,26 @@ void EqualOrderOperators::Weak::Laplacian (Matrix& EM, const FiniteElement& fe,
 {
   size_t cmp = EM.rows() / fe.basis(basis).size();
   Matrix A;
-  A.multiply(fe.grad(basis),fe.grad(basis),false,true);
-  A *= scale*fe.detJxW;
+  A.multiply(fe.grad(basis),fe.grad(basis),false,true, false, scale*fe.detJxW);
   addComponents(EM, A, cmp, cmp, 0);
   if (stress)
-    for (size_t i = 1; i <= fe.basis(basis).size(); i++)
-      for (size_t j = 1; j <= fe.basis(basis).size(); j++)
-        for (size_t k = 1; k <= cmp; k++)
-          for (size_t l = 1; l <= cmp; l++)
-            EM(cmp*(j-1)+k,cmp*(i-1)+l) += scale * fe.grad(basis)(i,k)
-                                                 * fe.grad(basis)(j,l) * fe.detJxW;
+    Stress(EM, fe, scale, basis);
+}
+
+
+void EqualOrderOperators::Weak::Stress (Matrix& EM, const FiniteElement& fe, double scale, int basis)
+{
+  Matrix A;
+  size_t cmp = EM.rows() / fe.basis(basis).size();
+  size_t nbf = fe.basis(basis).size();
+  for (size_t k = 1; k <= cmp; k++)
+    for (size_t l = 1; l <= cmp; l++) {
+      A.outer_product(fe.grad(basis).getColumn(k), fe.grad(basis).getColumn(l),
+                      false, scale * fe.detJxW);
+      for (size_t i = 1; i <= nbf; i++)
+        for (size_t j = 1; j <= nbf; j++)
+          EM(cmp*(i-1)+k,cmp*(j-1)+l) += A(i,j);
+    }
 }
 
 
