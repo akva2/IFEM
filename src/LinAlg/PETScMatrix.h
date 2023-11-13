@@ -173,6 +173,8 @@ public:
   //! \return True on success
   bool setParameters(PETScMatrix* P = nullptr, PETScVector* Pb = nullptr);
 
+  void forceResetKSP() { force_reset = true; }
+
 protected:
   //! \brief Solve a linear system
   bool solve(const Vec& b, Vec& x, bool knoll);
@@ -221,6 +223,7 @@ protected:
   ISMat               dirIndexSet;     //!< Direction ordering
   int                 nLinSolves;      //!< Number of linear solves
   bool                assembled;       //!< True if PETSc matrix has been assembled
+  bool                force_reset = false; //!< Force reset of KSP
 
   IS glob2LocEq = nullptr; //!< Index set for global-to-local equations.
   std::vector<Mat> matvec; //!< Blocks for block matrices.

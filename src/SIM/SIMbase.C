@@ -1705,6 +1705,9 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
     norm->setLocalIntegrals(&elementNorms);
   }
 
+  if (adm.dd.isPartitioned())
+    globalNorm.forceThreadGroups();
+
   // Loop over the different material regions, integrating solution norm terms
   // for the patch domain associated with each material
   bool ok = true;
@@ -1785,9 +1788,8 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
 
   delete norm;
 
-  if (!adm.dd.isPartitioned())
-    for (Vector& glbNorm : gNorm)
-      adm.allReduceAsSum(glbNorm);
+  for (Vector& glbNorm : gNorm)
+    adm.allReduceAsSum(glbNorm);
 
   return ok && this->postProcessNorms(gNorm,eNorm);
 }

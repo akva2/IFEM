@@ -41,9 +41,12 @@ public:
   virtual bool assemble(const LocalIntegral* elmObj, int elmId = 0);
 
   //! \brief Returns \e true if all elements can be assembled in parallel.
-  virtual bool threadSafe() const { return delAss; }
+  virtual bool threadSafe() const { return delAss && !forceGroups; }
   //! \brief Flags that the element values are assembled in the final stage.
   void delayAssembly() { delAss = true; }
+
+  //! \brief Force the use of thread groups.
+  void forceThreadGroups() { forceGroups = true; }
 
 private:
   //! \brief Applies the operation \a myOp on the given \a value.
@@ -52,6 +55,7 @@ private:
   Vectors&         myVals; //!< Reference to a vector of global norm values
   ASM::FinalNormOp myOp;   //!< Operation to be performed on summed values
   bool             delAss; //!< If \e true, element assembly is delayed
+  bool             forceGroups; //!< If \e true, force thread groups usage
 };
 
 #endif

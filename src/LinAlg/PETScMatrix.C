@@ -706,11 +706,13 @@ bool PETScMatrix::solve (const SystemVector& b, SystemVector& x)
 bool PETScMatrix::solve (const Vec& b, Vec& x, bool knoll)
 {
   // Reset linear solver
-  if (nLinSolves && solParams.getIntValue("reset_solves"))
-    if (nLinSolves%solParams.getIntValue("reset_solves") == 0) {
+  if (force_reset || (nLinSolves && solParams.getIntValue("reset_solves") &&
+                      nLinSolves%solParams.getIntValue("reset_solves") == 0)) {
       KSPDestroy(&ksp);
       KSPCreate(*adm.getCommunicator(),&ksp);
       setParams = true;
+      force_reset = false;
+      factored = false;
     }
 
   if (setParams) {

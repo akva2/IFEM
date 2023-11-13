@@ -202,10 +202,14 @@ void EqualOrderOperators::Weak::Mass (Matrix& EM, const FiniteElement& fe,
                                       double scale, int basis)
 {
   size_t ncmp = EM.rows()/fe.basis(basis).size();
-  Matrix A;
-  A.outer_product(fe.basis(basis),fe.basis(basis),false);
-  A *= scale*fe.detJxW;
-  addComponents(EM, A, ncmp, ncmp, 0);
+  if (ncmp == 1)
+    EM.outer_product(fe.basis(basis),fe.basis(basis),true,scale*fe.detJxW);
+  else {
+    Matrix A;
+    A.outer_product(fe.basis(basis),fe.basis(basis),false);
+    A *= scale*fe.detJxW;
+    addComponents(EM, A, ncmp, ncmp, 0);
+  }
 }
 
 
