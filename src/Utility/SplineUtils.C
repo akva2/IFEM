@@ -333,6 +333,24 @@ Go::BsplineBasis SplineUtils::adjustBasis (const Go::BsplineBasis& basis,
 }
 
 
+Go::BsplineBasis SplineUtils::C0basis (const Go::BsplineBasis& basis)
+{
+  std::vector<double> knots;
+  basis.knotsSimple(knots);
+  std::vector<int> mult;
+  basis.knotMultiplicities(mult);
+  std::vector<int> cont(knots.size());
+  cont.front() = cont.back() = -1;
+  int order = basis.order();
+  int new_order = order + 1;
+  for (size_t i = 1; i < knots.size()-1; ++i)
+    cont[i] = 0;
+
+  std::vector<double> newknot = SplineUtils::buildKnotVector(new_order-1, knots, cont);
+  return Go::BsplineBasis(new_order, newknot.begin(), newknot.end());
+}
+
+
 std::vector<double> SplineUtils::buildKnotVector(int p,
                                                  const std::vector<double>& knots,
                                                  const std::vector<int>& cont)

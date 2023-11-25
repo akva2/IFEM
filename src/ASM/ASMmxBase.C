@@ -23,6 +23,8 @@
 
 char ASMmxBase::itgBasis             = 2;
 ASMmxBase::MixedType ASMmxBase::Type = ASMmxBase::FULL_CONT_RAISE_BASIS1;
+bool ASMmxBase::THprojBasis1         = false;
+bool ASMmxBase::THprojC0             = false;
 
 
 void ASMmxBase::initMx (const std::vector<int>& MLGN, const int* sysMadof)
@@ -266,6 +268,24 @@ Go::SplineSurface* ASMmxBase::adjustBasis (const Go::SplineSurface& surf,
     SplineUtils::adjustBasis(surf.basis(1),ops[1])
   };
 
+  return ASMmxBase::projectBasis(surf, basis);
+}
+
+Go::SplineSurface* ASMmxBase::C0basis (const Go::SplineSurface& surf)
+{
+  // Create a surface with adjusted basis from surf
+  // while keeping lines of reduced continuity
+  std::array<Go::BsplineBasis,2> basis{
+    SplineUtils::C0basis(surf.basis(0)),
+    SplineUtils::C0basis(surf.basis(1))
+  };
+
+  return ASMmxBase::projectBasis(surf, basis);
+}
+
+Go::SplineSurface* ASMmxBase::projectBasis (const Go::SplineSurface& surf,
+                                            const std::array<Go::BsplineBasis,2>& basis)
+{
   // Compute parameter values of the Greville points
   std::array<RealArray,2> ug;
   for (size_t idx = 0; idx < 2; ++idx) {

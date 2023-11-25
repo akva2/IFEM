@@ -223,9 +223,17 @@ bool ASMu2Dmx::generateFEMTopology ()
     // we need to project on something that is not one of our bases
     if (!projB) {
       if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
-          ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2)
-        projB = createLR(*otherBasis);
-      else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
+          ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
+        if (ASMmxBase::THprojBasis1)
+          projB = m_basis.front();
+        else if (ASMmxBase::THprojC0) {
+          std::unique_ptr<Go::SplineSurface> otherC0;
+          otherC0.reset(ASMmxBase::C0basis(*tensorspline));
+          std::cout << *otherC0 << std::endl;
+          projB = createLR(*otherC0);
+        } else
+          projB = createLR(*otherBasis);
+      } else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
         projB = m_basis.front();
       else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
         projB = createLR(*tensorspline);
@@ -239,7 +247,10 @@ bool ASMu2Dmx::generateFEMTopology ()
     } else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
       geomB = refB = projB;
     else {
-      refB = projB;
+      if (ASMmxBase::THprojBasis1 || ASMmxBase::THprojC0)
+        refB = createLR(*otherBasis);
+      else
+        refB = projB;
       geomB = m_basis[itgBasis-1];
     }
 

@@ -217,10 +217,13 @@ bool ASMs2Dmx::generateFEMTopology ()
     // we need to project on something that is not one of our bases
     if (!projB) {
       if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
-          ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2)
-        projB = ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Raise,
-                                              SplineUtils::AdjustOp::Raise});
-      else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
+          ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2) {
+        if (ASMmxBase::THprojBasis1)
+          projB = m_basis.front().get();
+        else
+          projB = ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Raise,
+                                                SplineUtils::AdjustOp::Raise});
+      } else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
         projB = m_basis.front().get();
       else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
         projB = new Go::SplineSurface(*surf);

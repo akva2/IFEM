@@ -18,6 +18,7 @@
 #include <memory>
 
 namespace Go {
+  class BsplineBasis;
   class SplineSurface;
   class SplineVolume;
 }
@@ -78,6 +79,8 @@ public:
 
   static MixedType Type; //!< Type of mixed formulation used
   static char  itgBasis; //!< 1-based index of basis representing the integration elements
+  static bool  THprojBasis1; //!< Project on basis1 for TH
+  static bool  THprojC0; //!< Project on C0 continuous basis for TH
 
 protected:
   typedef std::vector<std::shared_ptr<Go::SplineSurface>> SurfaceVec; //!< Convenience type
@@ -98,6 +101,11 @@ protected:
   //! \brief Returns a C^p-1 basis of one degree higher than \a *surf.
   static Go::SplineSurface* adjustBasis(const Go::SplineSurface& surf,
                                         const std::array<SplineUtils::AdjustOp,2>& ops);
+  //! \brief Returns a C^0 basis of one degree higher than \a *surf.
+  static Go::SplineSurface* C0basis(const Go::SplineSurface& surf);
+  //! \brief Returns \a *surf interpolated onto bases.
+  static Go::SplineSurface* projectBasis(const Go::SplineSurface& surf,
+                                         const std::array<Go::BsplineBasis,2>& basis);
   //! \brief Returns a C^p-1 basis of one degree higher than \a *svol.
   static Go::SplineVolume* adjustBasis(const Go::SplineVolume& svol,
                                        const std::array<SplineUtils::AdjustOp,3>& ops);
