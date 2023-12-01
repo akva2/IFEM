@@ -930,18 +930,38 @@ bool ASMs3DLag::evalSolution (Matrix& sField, const Vector& locSol,
 int ASMs3DLag::findElement(double u, double v, double w,
                            double* xi, double* eta, double* zeta) const
 {
-  int elmx = std::min(nx-2.0, floor(u*(nx-1)));
-  int elmy = std::min(ny-2.0, floor(v*(ny-1)));
-  int elmz = std::min(nz-2.0, floor(w*(nz-1)));
+  const std::array<std::pair<double,int>,3> knot {{
+    {u, svol->basis(0).knotInterval(u)},
+    {v, svol->basis(1).knotInterval(v)},
+    {w, svol->basis(2).knotInterval(w)}
+  }};
+
+  const std::array<int,3> elm {
+    std::get<1>(knot[0]) - (p1 - 1),
+    std::get<1>(knot[1]) - (p2 - 1),
+    std::get<1>(knot[2]) - (p3 - 1)
+  };
+
+  const std::array<int,2> nel {
+    svol->numCoefs(0) - svol->order(0) + 1,
+    svol->numCoefs(1) - svol->order(1) + 1
+  };
+
+  auto getParam = [this](int dir, const auto& p)
+  {
+    const double knot_1 = *(svol->basis(dir).begin() + std::get<1>(p[dir]));
+    const double knot_2 = *(svol->basis(dir).begin() + std::get<1>(p[dir]) + 1);
+    return -1.0 + (std::get<0>(p[dir]) - knot_1) / (knot_2 - knot_1) * 2.0;
+  };
 
   if (xi)
-    *xi   = -1.0 + (u*(nx-1) - elmx)*2.0;
+    *xi = getParam(0, knot);
   if (eta)
-    *eta  = -1.0 + (v*(ny-1) - elmy)*2.0;
+    *eta = getParam(1, knot);
   if (zeta)
-    *zeta = -1.0 + (w*(nz-1) - elmz)*2.0;
+    *zeta = getParam(2, knot);
 
-  return 1 + elmx + elmy*(nx-1) + elmz*(ny-1)*(nx-1);
+  return 1 + elm[0] + (elm[1] + elm[2]*nel[1])*nel[0];
 }
 
 
