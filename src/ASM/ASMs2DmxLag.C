@@ -486,7 +486,7 @@ bool ASMs2DmxLag::evalSolution (Matrix& sField, const Vector& locSol,
 
 
 bool ASMs2DmxLag::evalSolution (Matrix& sField, const IntegrandBase& integrand,
-				const RealArray*, bool) const
+                                const int*, char) const
 {
   sField.resize(0,0);
 
@@ -551,6 +551,52 @@ bool ASMs2DmxLag::evalSolution (Matrix& sField, const IntegrandBase& integrand,
   return true;
 }
 
+
+bool ASMs2DmxLag::evalSolution (Matrix& sField, const IntegrandBase& integrand,
+                                const RealArray* gpar, bool) const
+{
+  sField.resize(0,0);
+
+  size_t nPoints = gpar[0].size();
+
+  MxFiniteElement fe(elem_size);
+  Vector        solPt;
+  Vectors       globSolPt(nPoints);
+  Matrix        Xnod, Jac;
+  BasisValues   bfs(nxx.size());
+
+  // Evaluate the secondary solution field at each point
+  for (size_t i = 0; i < gpar[0].size(); ++i) {
+    const int iel = this->findElement(gpar[0][i], gpar[1][i], &fe.xi, &fe.eta);
+
+    const IntVec& mnpc = MNPC[iel-1];
+    this->getElementCoordinates(Xnod,iel);
+
+    for (size_t b = 0; b < nxx.size(); ++b)
+      if (!Lagrange::computeBasis(fe.basis(b+1),bfs[b].dNdu,
+                                  elem_sizes[b][0],fe.xi,
+                                  elem_sizes[b][1],fe.eta))
+        return false;
+
+    fe.iel = MLGE[iel-1];
+    fe.u = gpar[0][i];
+    fe.v = gpar[1][i];
+
+    // Compute the Jacobian inverse
+    if (!fe.Jacobian(Jac,Xnod,itgBasis,bfs))
+      continue; // skip singular points
+
+    // Now evaluate the solution field
+    if (!integrand.evalSol(solPt,fe,Xnod*fe.basis(itgBasis),mnpc,elem_size,nb))
+      return false;
+    else if (sField.empty())
+      sField.resize(solPt.size(),nPoints,true);
+
+    sField.fillColumn(1+i, solPt);
+  }
+
+  return true;
+}
 
 ASMs2DmxLag::BasisFunctionCache::BasisFunctionCache (const ASMs2DLag& pch,
                                                      ASM::CachePolicy plcy,
