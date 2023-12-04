@@ -1264,8 +1264,8 @@ void ASMs3DLag::constrainFace (int dir, bool open, int dof,
 }
 
 
-void ASMs3DLag::constrainEdge(int lEdge, bool open, int dof,
-                             int code, char basis)
+void ASMs3DLag::constrainEdge (int lEdge, bool open, int dof,
+                               int code, char basis)
 {
   this->ASMs3D::constrainEdge(lEdge, open, dof, code > 0 ? -code : code, basis);
 }

@@ -46,7 +46,7 @@ void ASMs3DmxLag::clear (bool retainGeometry)
 
 size_t ASMs3DmxLag::getNoNodes (int basis) const
 {
-  if (basis < 1 && basis > (int)nb.size())
+  if (basis < 1 || basis > (int)nb.size())
     return this->ASMbase::getNoNodes(basis);
 
   return nb[basis-1];
@@ -93,14 +93,14 @@ void ASMs3DmxLag::initMADOF (const int* sysMadof)
 
 
 void ASMs3DmxLag::extractNodeVec (const RealArray& globRes, RealArray& nodeVec,
-				  unsigned char, int basis) const
+                                  unsigned char, int basis) const
 {
   this->extractNodeVecMx(globRes,nodeVec,basis);
 }
 
 
 bool ASMs3DmxLag::getSolution (Matrix& sField, const Vector& locSol,
-			       const IntVec& nodes) const
+                               const IntVec& nodes) const
 {
   return this->getSolutionMx(sField,locSol,nodes);
 }
@@ -169,7 +169,7 @@ bool ASMs3DmxLag::generateFEMTopology ()
   for (size_t i3 = 0; i3 < nzx[1]; i3++)
     for (size_t i2 = 0; i2 < nyx[1]; i2++)
       for (size_t i1 = 0; i1 < nxx[1]; i1++)
-	myMLGN.push_back(++gNod);
+        myMLGN.push_back(++gNod);
 
   // Number of elements in each direction
   const int nelx = (nxx[1]-1)/(q1-1);
@@ -182,27 +182,27 @@ bool ASMs3DmxLag::generateFEMTopology ()
     for (j = 0; j < nely; j++)
       for (i = 0; i < nelx; i++, iel++)
       {
-	size_t nen1 = myMNPC[iel].size();
-	myMNPC[iel].resize(nen1+q1*q2*q3);
+        size_t nen1 = myMNPC[iel].size();
+        myMNPC[iel].resize(nen1+q1*q2*q3);
 
-	// First node in current element
-	int corner = nb[0] + (q3-1)*nxx[1]*nyx[1]*k + (q2-1)*nxx[1]*j + q1*i-i;
+        // First node in current element
+        int corner = nb[0] + (q3-1)*nxx[1]*nyx[1]*k + (q2-1)*nxx[1]*j + q1*i-i;
 
-	for (size_t c = 0; c < q3; c++)
-	{
-	  int cornod = nen1 + q1*q2*c;
-	  myMNPC[iel][cornod] = corner + nxx[1]*nyx[1]*c;
-	  for (size_t b = 1; b < q2; b++)
-	  {
-	    int facenod = cornod + q1*b;
-	    myMNPC[iel][facenod] = myMNPC[iel][cornod] + nxx[1]*b;
-	    for (size_t a = 1; a < q1; a++)
-	    {
-	      myMNPC[iel][facenod+a] = myMNPC[iel][facenod] + a;
-	      myMNPC[iel][cornod+a]  = myMNPC[iel][cornod] + a;
-	    }
-	  }
-	}
+        for (size_t c = 0; c < q3; c++)
+        {
+          int cornod = nen1 + q1*q2*c;
+          myMNPC[iel][cornod] = corner + nxx[1]*nyx[1]*c;
+          for (size_t b = 1; b < q2; b++)
+          {
+            int facenod = cornod + q1*b;
+            myMNPC[iel][facenod] = myMNPC[iel][cornod] + nxx[1]*b;
+            for (size_t a = 1; a < q1; a++)
+            {
+              myMNPC[iel][facenod+a] = myMNPC[iel][facenod] + a;
+              myMNPC[iel][cornod+a]  = myMNPC[iel][cornod] + a;
+            }
+          }
+        }
       }
 
   return true;
@@ -260,8 +260,8 @@ bool ASMs3DmxLag::getSize (int& n1, int& n2, int& n3, int basis) const
 
 
 bool ASMs3DmxLag::integrate (Integrand& integrand,
-			     GlobalIntegral& glInt,
-			     const TimeDomain& time)
+                             GlobalIntegral& glInt,
+                             const TimeDomain& time)
 {
   if (this->empty()) return true; // silently ignore empty patches
 
@@ -384,8 +384,8 @@ bool ASMs3DmxLag::integrate (Integrand& integrand,
 
 
 bool ASMs3DmxLag::integrate (Integrand& integrand, int lIndex,
-			     GlobalIntegral& glInt,
-			     const TimeDomain& time)
+                             GlobalIntegral& glInt,
+                             const TimeDomain& time)
 {
   if (this->empty()) return true; // silently ignore empty patches
 
@@ -551,7 +551,7 @@ bool ASMs3DmxLag::evalSolution (Matrix& sField, const Vector& locSol,
 
 
 bool ASMs3DmxLag::evalSolution (Matrix& sField, const IntegrandBase& integrand,
-				const RealArray*, bool) const
+                                const int*, char) const
 {
   sField.resize(0,0);
 
@@ -616,6 +616,56 @@ bool ASMs3DmxLag::evalSolution (Matrix& sField, const IntegrandBase& integrand,
 
   for (size_t i = 0; i < nPoints; i++)
     sField.fillColumn(1+i,globSolPt[i] /= check[i]);
+
+  return true;
+}
+
+
+bool ASMs3DmxLag::evalSolution (Matrix& sField, const IntegrandBase& integrand,
+                                const RealArray* gpar, bool) const
+{
+  sField.resize(0,0);
+
+  size_t nPoints = gpar[0].size();
+
+  MxFiniteElement fe(elem_size);
+  Vector        solPt;
+  Vectors       globSolPt(nPoints);
+  Matrix        Xnod, Jac;
+  BasisValues   bfs(nxx.size());
+
+  // Evaluate the secondary solution field at each point
+  for (size_t i = 0; i < gpar[0].size(); ++i) {
+    const int iel = this->findElement(gpar[0][i], gpar[1][i], gpar[2][i],
+                                      &fe.xi, &fe.eta, &fe.zeta);
+
+    const IntVec& mnpc = MNPC[iel-1];
+    this->getElementCoordinates(Xnod,iel);
+
+    for (size_t b = 0; b < nxx.size(); ++b)
+      if (!Lagrange::computeBasis(fe.basis(b+1),bfs[b].dNdu,
+                                  elem_sizes[b][0],fe.xi,
+                                  elem_sizes[b][1],fe.eta,
+                                  elem_sizes[b][2],fe.zeta))
+        return false;
+
+    fe.iel = MLGE[iel-1];
+    fe.u = gpar[0][i];
+    fe.v = gpar[1][i];
+    fe.w = gpar[2][i];
+
+    // Compute the Jacobian inverse
+    if (!fe.Jacobian(Jac,Xnod,itgBasis,bfs))
+      continue; // skip singular points
+
+    // Now evaluate the solution field
+    if (!integrand.evalSol(solPt,fe,Xnod*fe.basis(itgBasis),mnpc,elem_size,nb))
+      return false;
+    else if (sField.empty())
+      sField.resize(solPt.size(),nPoints,true);
+
+    sField.fillColumn(1+i, solPt);
+  }
 
   return true;
 }
