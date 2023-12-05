@@ -161,6 +161,8 @@ bool ASMs3DmxLag::generateFEMTopology ()
   nb[0] = MLGN.size();
   nb[1] = nxx[1]*nyx[1]*nzx[1];
 
+  std::cout << nb[0] << " " << nb[1] << std::endl;
+
   if (shareFE == 'F') return true;
 
   // Add nodes for second basis (coordinates are not needed)
@@ -186,7 +188,7 @@ bool ASMs3DmxLag::generateFEMTopology ()
         myMNPC[iel].resize(nen1+q1*q2*q3);
 
         // First node in current element
-        int corner = nb[0] + (q3-1)*nxx[1]*nyx[1]*k + (q2-1)*nxx[1]*j + q1*i-i;
+        int corner = nb[0] + (q3-1)*nxx[1]*nyx[1]*k + (q2-1)*nxx[1]*j + (q1-1)*i;
 
         for (size_t c = 0; c < q3; c++)
         {
@@ -203,6 +205,9 @@ bool ASMs3DmxLag::generateFEMTopology ()
             }
           }
         }
+        for (const auto& bf : myMNPC[iel])
+            std::cout << bf << " ";
+        std::cout << std::endl;
       }
 
   return true;
