@@ -1518,8 +1518,8 @@ bool ASMu3D::evalSolution (Matrix& sField, const Vector& locSol,
 {
   PROFILE2("ASMu3D::evalSol(P)");
 
-  size_t nComp = locSol.size() / this->getNoNodes();
-  if (nComp*this->getNoNodes() != locSol.size())
+  size_t nComp = locSol.size() / this->getNoNodes(-1);
+  if (nComp*this->getNoNodes(-1) > locSol.size())
     return false;
 
   size_t nPoints = gpar[0].size();
@@ -1542,12 +1542,14 @@ bool ASMu3D::evalSolution (Matrix& sField, const Vector& locSol,
     // Fetch element containing evaluation point.
     // Sadly, points are not always ordered in the same way as the elements.
     int iel = lrspline->getElementContaining(gpar[0][i],gpar[1][i],gpar[2][i]);
+    const LR::Element* el = lrspline->getElement(iel);
     if (iel < 0) {
       std::cerr <<" *** ASMu3D::evalSolution: Element at point ("<< gpar[0][i] <<", "
                 << gpar[1][i] <<", "<< gpar[2][i] <<") not found."<< std::endl;
       return false;
     }
-    utl::gather(MNPC[iel],nComp,locSol,eSol);
+    utl::gather({MNPC[iel].begin(),MNPC[iel].begin()+el->nBasisFunctions()},
+                nComp,locSol,eSol);
 
     if (iel != lel && deriv > 0)
     {
