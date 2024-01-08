@@ -101,6 +101,11 @@ public:
   //! \brief Creates a copy of the system matrix and returns a pointer to it.
   virtual SystemMatrix* copy() const { return new ISTLMatrix(*this); }
 
+  //! \brief Initializes the element sparsity pattern based on node connections.
+  //! \param[in] MMNPC Matrix of matrices of nodal point correspondances
+  //! \param[in] nel Number of elements
+  virtual void preAssemble(const std::vector<IntVec>& MMNPC, size_t nel);
+
   //! \brief Initializes the element assembly process.
   //! \details Must be called once before the element assembly loop.
   //! The PETSc data structures are initialized and the all symbolic operations
@@ -133,6 +138,14 @@ public:
   virtual const ISTL::Mat& getMatrix() const { return iA; }
 
 protected:
+  //! \brief Setup sparsity pattern from a dof set.
+  void setupSparsity (const std::vector<std::set<int>>& dofc);
+  //! \brief Direct assembly of elem map.
+  bool assembleDirect();
+
+  //! \brief Directly solve system possibly with multiple rhs.
+  bool solveDirect(ISTLVector& B);
+
   std::unique_ptr<ISTL::Operator> op; //!< The matrix adapter
   std::unique_ptr<ISTL::InverseOperator> solver; //!< Solver to use
   std::unique_ptr<ISTL::Preconditioner> pre; //!< Preconditioner to use
@@ -140,6 +153,7 @@ protected:
   ISTL::Mat         iA;        //!< The actual ISTL matrix
   const ProcessAdm& adm;       //!< Process administrator
   ISTLSolParams     solParams; //!< Linear solver parameters
+  bool assembled = false;      //!< True if matrix has been assembled
 };
 
 #endif

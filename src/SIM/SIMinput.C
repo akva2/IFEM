@@ -829,6 +829,8 @@ bool SIMinput::parse (const tinyxml2::XMLElement* elem)
     {
       if (solver == "petsc")
         GlbL2::MatrixType = LinAlg::PETSC;
+      if (solver == "istl")
+        GlbL2::MatrixType = LinAlg::ISTL;
       else if (solver == "umfpack")
         GlbL2::MatrixType = LinAlg::UMFPACK;
     }
@@ -879,7 +881,7 @@ bool SIMinput::parse (const tinyxml2::XMLElement* elem)
         mySolParams = new LinSolParams();
     }
     result &= mySolParams->read(elem);
-    if (GlbL2::MatrixType == LinAlg::PETSC)
+    if (GlbL2::MatrixType == LinAlg::PETSC || GlbL2::MatrixType == LinAlg::ISTL)
     {
       const tinyxml2::XMLElement* l2 = elem->FirstChildElement("l2params");
       if (l2)

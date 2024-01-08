@@ -28,6 +28,9 @@
 #include "LinSolParams.h"
 #include "ProcessAdm.h"
 #endif
+#ifdef HAS_ISTL
+#include "ISTLMatrix.h"
+#endif
 
 
 LinAlg::MatrixType GlbL2::MatrixType   = LinAlg::SPARSE;
@@ -523,6 +526,9 @@ bool ASMbase::globalL2projection (Matrix& sField,
   size_t j, ncomp = integrand.dim();
   SparseMatrix* A;
   StdVector* B;
+#if defined(HAS_PETSC) || defined(HAS_ISTL)
+  ProcessAdm locAdm;
+#endif
   switch (GlbL2::MatrixType) {
   case LinAlg::UMFPACK:
     A = new SparseMatrix(SparseMatrix::UMFPACK);
@@ -532,8 +538,17 @@ bool ASMbase::globalL2projection (Matrix& sField,
   case LinAlg::PETSC:
     if (GlbL2::SolverParams)
     {
-      A = new PETScMatrix(ProcessAdm(), *GlbL2::SolverParams);
-      B = new PETScVector(ProcessAdm(), nnod*ncomp);
+      A = new PETScMatrix(locAdm, *GlbL2::SolverParams);
+      B = new PETScVector(locAdm, nnod*ncomp);
+      break;
+    }
+#endif
+#ifdef HAS_ISTL
+  case LinAlg::ISTL:
+    if (GlbL2::SolverParams)
+    {
+      A = new ISTLMatrix(locAdm, *GlbL2::SolverParams);
+      B = new ISTLVector(locAdm, nnod*ncomp);
       break;
     }
 #endif

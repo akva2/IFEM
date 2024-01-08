@@ -258,17 +258,34 @@ static ISTL::Preconditioner* setupAMG(const LinSolParams& params,
   args.relaxationFactor = 1.0;
   args.iterations = std::max(1, params.getBlock(block).getIntValue("multigrid_no_smooth"));
 
-  if (params.getBlock(block).hasValue("multigrid_max_coarse_size"))
-    crit.setCoarsenTarget(params.getBlock(block).getIntValue("multigrid_max_coarse_size"));
+  const LinSolParams::BlockParams& blk = params.getBlock(block);
 
-  if (params.getBlock(block).hasValue("multigrid_no_smooth")) {
-    int val = params.getBlock(block).getIntValue("multigrid_no_smooth");
+  if (blk.hasValue("multigrid_max_coarse_size"))
+    crit.setCoarsenTarget(blk.getIntValue("multigrid_max_coarse_size"));
+
+  if (blk.hasValue("multigrid_no_smooth")) {
+    int val = blk.getIntValue("multigrid_no_smooth");
     crit.setNoPreSmoothSteps(val);
     crit.setNoPostSmoothSteps(val);
   }
 
-  if (params.getBlock(block).hasValue("multigrid_max_coarse_size"))
-    crit.setCoarsenTarget(params.getBlock(block).getIntValue("multigrid_max_coarse_size"));
+  if (blk.hasValue("multigrid_max_coarse_size"))
+    crit.setCoarsenTarget(blk.getIntValue("multigrid_max_coarse_size"));
+
+  if (blk.hasValue("multigrid_min_coarsen_target"))
+    crit.setMinCoarsenRate(blk.getIntValue("multigrid_min_coarsen_target"));
+
+  if (blk.hasValue("multigrid_aggregate_dim")) {
+    size_t dim = blk.getIntValue("multigrid_aggregate_dim");
+    size_t diam = blk.getIntValue("multigrid_aggregate_diameter");
+    crit.setDefaultValuesIsotropic(dim, diam);
+  }
+
+  if (blk.hasValue("multigrid_aggregate_min_size"))
+    crit.setMinAggregateSize(blk.getIntValue("multigrid_aggregate_min_size"));
+
+  if (blk.hasValue("multigrid_aggregate_max_size"))
+    crit.setMaxAggregateSize(blk.getIntValue("multigrid_aggregate_max_size"));
 
   auto result = new AMG(op, crit, args);
   if (solver)

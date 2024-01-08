@@ -112,6 +112,16 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
         this->addValue("multigrid_coarse_solver", v);
       if (utl::getAttribute(child, "max_coarse_size", v))
         this->addValue("multigrid_max_coarse_size", v);
+      if (utl::getAttribute(child, "min_coarsen_target", v))
+        this->addValue("multigrid_min_coarsen_target", v);
+      if (utl::getAttribute(child, "aggregate_dim", v))
+        this->addValue("multigrid_aggregate_dim", v);
+      if (utl::getAttribute(child, "aggregate_diameter", v))
+        this->addValue("multigrid_aggregate_diameter", v);
+      if (utl::getAttribute(child, "aggregate_min_size", v))
+        this->addValue("multigrid_aggregate_min_size", v);
+      if (utl::getAttribute(child, "aggregate_max_size", v))
+        this->addValue("multigrid_aggregate_max_size", v);
     } else if (!strcasecmp(child->Value(),"dirsmoother")) {
       int order;
       std::string type;
@@ -148,7 +158,7 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
   if (!this->hasValue("multigrid_finesmoother") && this->hasValue("multigrid_smoother"))
     this->addValue("multigrid_finesmoother", this->getStringValue("multigrid_smoother"));
 
-  if (!this->hasValue("multigrid_no_smooth") || this->getIntValue("multgrid_no_smooth") < 1)
+  if (!this->hasValue("multigrid_no_smooth") || this->getIntValue("multigrid_no_smooth") < 1)
     this->addValue("multigrid_no_smooth", "1");
 
   return true;
