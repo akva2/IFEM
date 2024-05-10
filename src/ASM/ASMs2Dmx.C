@@ -1054,14 +1054,15 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
   std::vector<std::vector<Go::BasisPtsSf>> splinex(m_basis.size());
   std::vector<Go::BasisDerivsSf> splineg;
 
-  if (std::any_of(nfx.begin(), nfx.end(),
+  if (std::any_of(nfx.begin(), nfx.begin() + nsd,
                   [](const unsigned char in) { return in > 1; })) {
     std::cerr << "*** ASMs2Dmx::evalSolution: Piola mapping requires "
-              << "a single field on each basis" << std::endl;
+              << "a single field on mapped basis" << std::endl;
     return false;
   }
 
-  size_t len = std::accumulate(nb.begin(),nb.end(),0u);
+  const size_t len = std::inner_product(nb.begin(), nb.end(),
+                                        nfx.begin(), 0u);
   if (len != locSol.size() && locSol.size() != nb[0] + nb[1]) {
     std::cerr << "*** ASMs2Dmx::evalSolution: Unexpected solution size ("
               << locSol.size() << "), expected " << len << std::endl;
@@ -1092,11 +1093,12 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
     return false;
 
   Vector Ytmp;
-  std::vector<Vector> coefs(3);
+  Matrix Xtmp;
+  std::vector<Vector> coefs(2);
 
   // Evaluate the primary solution field at each point
   size_t nPoints = splinex.front().size();
-  sField.resize(withPressure ? 3 : 2, nPoints);
+  sField.resize(withPressure ? nfx[2]+ 2 : 2, nPoints);
   for (size_t i = 0; i < nPoints; i++)
   {
     size_t comp = 0;
@@ -1107,8 +1109,11 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
                  m_basis[b]->order_u(),m_basis[b]->order_v(),
                  splinex[b][i].left_idx,ip);
 
-      utl::gather(ip,1,locSol,coefs[b],comp);
-      comp += nb[b];
+      if (b < 2)
+        utl::gather(ip,nfx[b],locSol,coefs[b],comp);
+      else
+        utl::gather(ip,nfx[b],locSol,Xtmp,comp);
+      comp += nb[b] * nfx[b];
     }
 
     BasisFunctionVals bf;
@@ -1125,8 +1130,11 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
     fe.piolaBasis(detJ, J);
     coefs[0].insert(coefs[0].end(), coefs[1].begin(), coefs[1].end());
     fe.P.multiply(coefs[0], Ytmp);
-    if (withPressure)
-      Ytmp.push_back(coefs[2].dot(splinex[2][i].basisValues));
+    if (withPressure) {
+      Vector Ztmp;
+      Xtmp.multiply(splinex[2][i].basisValues,Ztmp);
+      Ytmp.insert(Ytmp.end(),Ztmp.begin(),Ztmp.end());
+    }
     sField.fillColumn(1+i,Ytmp);
   }
 
