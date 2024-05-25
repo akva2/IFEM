@@ -12,6 +12,7 @@
 //==============================================================================
 
 #include "ExprFunctions.h"
+#include "Functions.h"
 #include "Vec3.h"
 #include "Tensor.h"
 #include "expreval.h"
@@ -698,3 +699,16 @@ template class EvalMultiFunction<TensorFunc,Tensor,Real>;
 template class EvalMultiFunction<TensorFunc,Tensor,autodiff::var>;
 template class EvalMultiFunction<STensorFunc,SymmTensor,Real>;
 template class EvalMultiFunction<STensorFunc,SymmTensor,autodiff::var>;
+
+
+namespace utl {
+
+RealFunc* parseExprRealFunc(const std::string& function, bool autodiff)
+{
+  if (autodiff)
+    return new EvalFuncSpatial<autodiff::var>(function.c_str());
+  else
+    return new EvalFunction(function.c_str());
+}
+
+}
