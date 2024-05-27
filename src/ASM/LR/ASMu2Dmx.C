@@ -205,7 +205,8 @@ bool ASMu2Dmx::generateFEMTopology ()
   }
 
   if (m_basis.empty()) {
-    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE &&
+    if ((ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE  ||
+         ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM) &&
         (tensorspline->order_u() < 3 || tensorspline->order_v() < 3)) {
       std::cerr << "*** RT basis cannot use a linear geometry." << std::endl;
       return false;
@@ -216,7 +217,8 @@ bool ASMu2Dmx::generateFEMTopology ()
       m_basis.push_back(createLR(*svec[b]));
 
     std::unique_ptr<Go::SplineSurface> otherBasis;
-    if (ASMmxBase::Type != ASMmxBase::DIV_COMPATIBLE)
+    if (ASMmxBase::Type != ASMmxBase::DIV_COMPATIBLE &&
+        ASMmxBase::Type != ASMmxBase::DIV_COMPATIBLE_GEOM)
       otherBasis.reset(ASMmxBase::adjustBasis(*tensorspline,{SplineUtils::AdjustOp::Raise,
                                                              SplineUtils::AdjustOp::Raise}));
 
@@ -227,7 +229,8 @@ bool ASMu2Dmx::generateFEMTopology ()
         projB = createLR(*otherBasis);
       else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
         projB = m_basis.front();
-      else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+      else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+               ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
         projB = createLR(*tensorspline);
       else // FULL_CONT_RAISE_BASISx
         projB = m_basis[2-ASMmxBase::itgBasis];
@@ -236,7 +239,8 @@ bool ASMu2Dmx::generateFEMTopology ()
     if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
       projB2 = refB = createLR(*otherBasis);
       geomB = m_basis[1];
-    } else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+    } else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+               ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
       geomB = refB = projB;
     else {
       refB = projB;
@@ -659,11 +663,11 @@ bool ASMu2Dmx::integrate (Integrand& integrand,
   if (!(integrand.getIntegrandType() & Integrand::INTERFACE_TERMS))
     return true; // No interface terms
 
-  if (this->getBasis(ASM::GEOMETRY_BASIS) != lrspline.get()) {
+/*  if (this->getBasis(ASM::GEOMETRY_BASIS) != lrspline.get()) {
     std::cerr <<" *** Jump integration not implemented for a separate geometry basis."
               << std::endl;
     return false;
-  }
+  }*/
 
   PROFILE2("ASMu2Dmx::integrate(J)");
 
@@ -1167,7 +1171,8 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
                                      bool ignoreGlobalLM)
 {
   int p1 = 0;
-  if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+  if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+      ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
     threadBasis = this->getBasis(3);
   else
     for (size_t i = 1; i <= m_basis.size(); ++i)
@@ -1184,6 +1189,8 @@ void ASMu2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
     secConstraint = {this->getBasis(1)};
   if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
     secConstraint = {this->getBasis(1), this->getBasis(2)};
+  if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
+    secConstraint = {this->getBasis(1), this->getBasis(2), this->getBasis(4)};
 
   LR::generateThreadGroups(threadGroups,threadBasis,secConstraint);
   LR::generateThreadGroups(projThreadGroups,projB.get());
