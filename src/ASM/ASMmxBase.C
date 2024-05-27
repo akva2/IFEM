@@ -147,7 +147,8 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases (Go::SplineSurface* surf,
     result[1].reset(new Go::SplineSurface(*surf));
     itgBasis = 2;
   }
-  else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+  else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+           ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
   {
     result.resize(3);
     result[0].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Original,
@@ -156,6 +157,8 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases (Go::SplineSurface* surf,
                                                   SplineUtils::AdjustOp::Original}));
     result[2].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Lower,
                                                   SplineUtils::AdjustOp::Lower}));
+    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
+      result.push_back(std::make_shared<Go::SplineSurface>(*surf));
     itgBasis = 3;
   } else if (type == SUBGRID) {
     // basis1 should be one degree higher than basis2 and C^p-1 continuous
@@ -211,7 +214,8 @@ ASMmxBase::VolumeVec ASMmxBase::establishBases (Go::SplineVolume* svol,
     result[1].reset(new Go::SplineVolume(*svol));
     itgBasis = 2;
   }
-  else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+  else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+           ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
   {
     result.resize(4);
     result[0].reset(ASMmxBase::adjustBasis(*svol,{SplineUtils::AdjustOp::Original,
@@ -226,6 +230,8 @@ ASMmxBase::VolumeVec ASMmxBase::establishBases (Go::SplineVolume* svol,
     result[3].reset(ASMmxBase::adjustBasis(*svol,{SplineUtils::AdjustOp::Lower,
                                                   SplineUtils::AdjustOp::Lower,
                                                   SplineUtils::AdjustOp::Lower}));
+    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
+      result.push_back(std::make_shared<Go::SplineVolume>(*svol));
     itgBasis = 4;
   } else if (type == SUBGRID) {
     // basis1 should be one degree higher than basis2 and C^p-1 continuous

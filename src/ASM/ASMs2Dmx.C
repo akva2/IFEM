@@ -206,7 +206,8 @@ bool ASMs2Dmx::generateFEMTopology ()
   if (!surf) return false;
 
   if (m_basis.empty()) {
-    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE &&
+      if ((ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+           ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM) &&
         (surf->order_u() < 3 || surf->order_v() < 3)) {
       std::cerr << "*** RT basis cannot use a linear geometry." << std::endl;
       return false;
@@ -222,7 +223,8 @@ bool ASMs2Dmx::generateFEMTopology ()
                                               SplineUtils::AdjustOp::Raise});
       else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
         projB = m_basis.front().get();
-      else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+      else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+               ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
         projB = new Go::SplineSurface(*surf);
       else // FULL_CONT_RAISE_BASISx
         projB = m_basis[2-itgBasis].get();
@@ -232,7 +234,8 @@ bool ASMs2Dmx::generateFEMTopology ()
       projB2 = ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Raise,
                                              SplineUtils::AdjustOp::Raise});
       geomB = m_basis[1].get();
-    } else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
+    } else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
+               ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
       geomB = projB;
     else
       geomB = m_basis[itgBasis-1].get();
