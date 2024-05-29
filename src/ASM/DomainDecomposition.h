@@ -14,6 +14,7 @@
 #ifndef _DOMAIN_DECOMPOSITION_H
 #define _DOMAIN_DECOMPOSITION_H
 
+#include "BlockEntry.h"
 #include "Interface.h"
 #include <map>
 #include <set>
@@ -263,8 +264,7 @@ private:
 
   //! \brief Struct with information per matrix block.
   struct BlockInfo {
-    int basis;      //!< Bases for block
-    int components; //!< Components in block
+    std::vector<LinAlg::BlockEntry> entries;
     std::vector<int> MLGEQ; //!< Process-local-to-global equation numbers for block.
     int minEq; //!< First equation we own in block.
     int maxEq; //!< Last equation we own in block.

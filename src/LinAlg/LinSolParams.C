@@ -59,7 +59,7 @@ bool SettingMap::hasValue(const std::string& key) const
 }
 
 
-LinSolParams::BlockParams::BlockParams () : basis(1), comps(0)
+LinSolParams::BlockParams::BlockParams ()
 {
   this->addValue("pc", "default");
   this->addValue("multigrid_ksp", "defrichardson");
@@ -86,8 +86,25 @@ LinSolParams::LinSolParams (const LinSolParams& p, LinAlg::LinearSystemType ls)
 bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
                                       const std::string& prefix)
 {
-  utl::getAttribute(elem, "basis", basis);
-  utl::getAttribute(elem, "components", comps);
+  int basis = 1;
+  size_t comps = 0;
+  if (utl::getAttribute(elem, "basis", basis) |
+      utl::getAttribute(elem, "components", comps)) {
+    if (comps == 0) {
+      const std::set<int> bases = utl::getDigits(basis);
+      for (const int b : bases)
+        entries.emplace_back(b, 0);
+    } else
+      entries.emplace_back(basis, comps);
+  } else {
+    const tinyxml2::XMLElement* child = elem->FirstChildElement("basis");
+    for (; child; child = child->NextSiblingElement("basis")) {
+      utl::getAttribute(child,"index",basis);
+      const char* c = utl::getValue(child,"basis");
+      comps = c ? std::atoi(c) : 0;
+      entries.emplace_back(basis,comps);
+    }
+  }
 
   const char* value;
   const tinyxml2::XMLElement* child = elem->FirstChildElement();

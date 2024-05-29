@@ -16,6 +16,7 @@
 #ifndef _LIN_SOL_PARAMS_H
 #define _LIN_SOL_PARAMS_H
 
+#include "BlockEntry.h"
 #include "LinAlgenums.h"
 #include <map>
 #include <string>
@@ -94,8 +95,7 @@ public:
     //! \param[in] prefix Prefix to add to read data
     bool read(const tinyxml2::XMLElement* child, const std::string& prefix = "");
 
-    size_t basis; //!< Basis for block
-    size_t comps; //!< Components from basis (1, 2, 3, 12, 13, 23, 123, ..., 0 = all)
+    std::vector<LinAlg::BlockEntry> entries; //!< Basis entries describing block
     std::vector<DirSmoother> dirSmoother; //!< Directional smoother data
   };
 

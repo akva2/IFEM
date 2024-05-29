@@ -297,16 +297,18 @@ std::vector<std::set<int>> DomainDecomposition::getSubdomains(int nx, int ny, in
         } else {
           IntVec nodes;
           getSAM()->getElmNodes(nodes, it->getElmID(iEl+1));
-          int basis = blocks[block+1].basis;
-          for (auto& node : nodes) {
-            char type = getSAM()->getNodeType(node);
-            if (type == (basis == 1 ? 'D' : 'P'+basis-2) || (type == ' ' && basis < 2)) {
-              IntVec eqns;
-              getSAM()->getNodeEqns(eqns, node);
-              for (int eqn : eqns) {
-                if (eqn > 0) {
-                  auto geq = blocks[block+1].G2LEQ.find(eqn);
-                  result[d].insert(geq->second);
+          for (const auto& e : blocks[block+1].entries) {
+            int basis = e.basis;
+            for (auto& node : nodes) {
+              char type = getSAM()->getNodeType(node);
+              if (type == (basis == 1 ? 'D' : 'P'+basis-2) || (type == ' ' && basis < 2)) {
+                IntVec eqns;
+                getSAM()->getNodeEqns(eqns, node);
+                for (int eqn : eqns) {
+                  if (eqn > 0) {
+                    auto geq = blocks[block+1].G2LEQ.find(eqn);
+                    result[d].insert(geq->second);
+                  }
                 }
               }
             }
@@ -1135,22 +1137,17 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
 
     // Find local equations for each block
     for (size_t i = 0; i < solParams.getNoBlocks(); ++i) {
-      // grab DOFs of given type(s)
-      blocks[i+1].basis = solParams.getBlock(i).basis;
-      blocks[i+1].components = solParams.getBlock(i).comps;
-      char dofType = blocks[i+1].basis == 1 ? 'D' : 'P'+blocks[i+1].basis-2;
-      if (solParams.getBlock(i).comps != 0) {
-        std::set<int> comps = utl::getDigits(solParams.getBlock(i).comps);
-        for (auto& c : comps) {
-          std::set<int> tmp = sam->getEquations(dofType, c);
-          blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
-        }
-      } else {
-        std::set<int> bases = utl::getDigits(blocks[i+1].basis);
-        for (auto& b : bases) {
-          int cb = b;
-          dofType = cb == 1 ? 'D' : 'P'+cb-2;
-          std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
+      blocks[i+1].entries = solParams.getBlock(i).entries;
+      for (const LinAlg::BlockEntry& e : blocks[i+1].entries) {
+        char dofType = e.basis == 1 ? 'D' : 'P'+e.basis-2;
+        if (e.comps != 0) {
+          std::set<int> comps = utl::getDigits(e.comps);
+          for (auto& c : comps) {
+            std::set<int> tmp = sam->getEquations(dofType, c);
+            blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
+          }
+        } else {
+          std::set<int> tmp = sam->getEquations(dofType);
           blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
         }
       }
@@ -1170,7 +1167,8 @@ bool DomainDecomposition::setup(const ProcessAdm& adm, const SIMbase& sim)
       size_t idx = 1;
       for (auto& it : blocks[i+1].localEqs)
         blocks[i+1].G2LEQ[it] = idx++;
-      IFEM::cout << "  Block " << i+1 << "             " << blocks[i+1].localEqs.size() << std::endl;
+      IFEM::cout << "  Block " << i+1 << "             "
+                 << blocks[i+1].localEqs.size() << std::endl;
     }
   }
 

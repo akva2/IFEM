@@ -1057,23 +1057,27 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
   std::vector<std::vector<Go::BasisPtsSf>> splinex(m_basis.size());
   std::vector<Go::BasisDerivsSf> splineg;
 
-  if (std::any_of(nfx.begin(), nfx.end(),
+  if (std::any_of(nfx.begin(), nfx.begin() + 2,
                   [](const unsigned char in) { return in > 1; })) {
     std::cerr << "*** ASMs2Dmx::evalSolution: Piola mapping requires "
-              << "a single field on each basis" << std::endl;
+              << "a single field on each Piola mapped basis" << std::endl;
     return false;
   }
 
-  size_t len = std::accumulate(nb.begin(),nb.end(),0u);
+  size_t len = std::inner_product(nb.begin(), nb.end(), nfx.begin(), 0u);
   bool withPressure = len == locSol.size();
+  size_t nFields;
   if (!withPressure)
-    len = nb[0] + nb[1];
+    len = nb[0] + nb[1], nFields = 2;
+  else
+    nFields = std::accumulate(nfx.begin(), nfx.end(), 0);
+
   if (len != locSol.size()) {
     std::cerr << "*** ASMs2Dmx::evalSolution: Unexpected solution size ("
               << locSol.size() << "), expected " << len << std::endl;
     return false;
   }
-  const size_t nBasis = withPressure ? 3 : 2;
+  const size_t nBasis = withPressure ? nfx.size() : 2;
 
   const Go::SplineSurface* geo = this->getBasis(ASM::GEOMETRY_BASIS);
 
@@ -1098,11 +1102,11 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
     return false;
 
   Vector Ytmp;
-  std::vector<Vector> coefs(3);
+  std::vector<Vector> coefs(nfx.size());
 
   // Evaluate the primary solution field at each point
   size_t nPoints = splinex.front().size();
-  sField.resize(nBasis, nPoints);
+  sField.resize(nFields, nPoints);
   for (size_t i = 0; i < nPoints; i++)
   {
     size_t comp = 0;
@@ -1113,8 +1117,8 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
                  m_basis[b]->order_u(),m_basis[b]->order_v(),
                  splinex[b][i].left_idx,ip);
 
-      utl::gather(ip,1,locSol,coefs[b],comp);
-      comp += nb[b];
+      utl::gather(ip,nfx[b],locSol,coefs[b],comp);
+      comp += nb[b]*nfx[b];
     }
 
     BasisFunctionVals bf;
@@ -1131,8 +1135,11 @@ bool ASMs2Dmx::evalSolutionPiola (Matrix& sField, const Vector& locSol,
     fe.piolaBasis(detJ, J);
     coefs[0].insert(coefs[0].end(), coefs[1].begin(), coefs[1].end());
     fe.P.multiply(coefs[0], Ytmp);
-    if (withPressure)
-      Ytmp.push_back(coefs[2].dot(splinex[2][i].basisValues));
+    if (withPressure) {
+      for (size_t b = 2; b < nfx.size(); ++b)
+        for (size_t i = 0; i < nfx[b]; ++i)
+          Ytmp.push_back(coefs[b].dot(splinex[b][i].basisValues, i, nfx[b]));
+    }
     sField.fillColumn(1+i,Ytmp);
   }
 
@@ -1275,6 +1282,13 @@ void ASMs2Dmx::generateThreadGroups (const Integrand& integrand, bool silence,
       p1 = it->order_u();
     if (it->order_v() > p2)
       p2 = it->order_v();
+  }
+
+  // with subgrid we need to increase the strip size to avoid
+  // problems for basis 1 (which has half the element size)
+  if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
+    p1 += (p1 % 2 ? 2 : 1);
+    p2 += (p2 % 2 ? 2 : 1);
   }
 
   this->ASMs2D::generateThreadGroups(p1-1, p2-1, silence, ignoreGlobalLM);

@@ -23,6 +23,7 @@
 
 char ASMmxBase::itgBasis             = 2;
 ASMmxBase::MixedType ASMmxBase::Type = ASMmxBase::FULL_CONT_RAISE_BASIS1;
+bool ASMmxBase::includeExtra         = false;
 
 
 void ASMmxBase::initMx (const std::vector<int>& MLGN, const int* sysMadof)
@@ -128,7 +129,7 @@ bool ASMmxBase::getSolutionMx (Matrix& sField, const Vector& locSol,
 ASMmxBase::SurfaceVec ASMmxBase::establishBases (Go::SplineSurface* surf,
                                                  MixedType type)
 {
-  SurfaceVec result(2);
+  SurfaceVec result(2 + includeExtra);
   // With mixed methods we need two separate spline spaces
   if (type == FULL_CONT_RAISE_BASIS1 || type == FULL_CONT_RAISE_BASIS2)
   {
@@ -146,25 +147,31 @@ ASMmxBase::SurfaceVec ASMmxBase::establishBases (Go::SplineSurface* surf,
     result[0]->raiseOrder(1,1);
     result[1].reset(new Go::SplineSurface(*surf));
     itgBasis = 2;
+    if (includeExtra) {
+      result[2].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Raise,
+                                             SplineUtils::AdjustOp::Raise}));
+    }
   }
   else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE ||
            ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
   {
-    result.resize(3);
+    result.resize(includeExtra ? 4 : 3);
     result[0].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Original,
                                                   SplineUtils::AdjustOp::Lower}));
     result[1].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Lower,
                                                   SplineUtils::AdjustOp::Original}));
     result[2].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Lower,
                                                   SplineUtils::AdjustOp::Lower}));
-    if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE_GEOM)
-      result.push_back(std::make_shared<Go::SplineSurface>(*surf));
+    if (includeExtra)
+      result[3] = std::make_shared<Go::SplineSurface>(*surf);
     itgBasis = 3;
   } else if (type == SUBGRID) {
     // basis1 should be one degree higher than basis2 and C^p-1 continuous
     result[1].reset(new Go::SplineSurface(*surf));
     result[0].reset(ASMmxBase::adjustBasis(*surf,{SplineUtils::AdjustOp::Raise,
                                                   SplineUtils::AdjustOp::Raise}));
+    if (includeExtra)
+      result[2] = std::make_shared<Go::SplineSurface>(*result[0]);
     for (size_t i = 0; i < 2; ++i) {
       RealArray extraKnots;
       RealArray::const_iterator uit = result[0]->basis(i).begin();

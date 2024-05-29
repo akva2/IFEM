@@ -33,13 +33,13 @@ TEST(TestLinSolParams, ParseBlocks)
   ASSERT_EQ(params.getIntValue("maxits"), 123);
 
   // first block
-  ASSERT_EQ(params.getBlock(0).basis, 1u);
-  ASSERT_EQ(params.getBlock(0).comps, 12u);
+  ASSERT_EQ(params.getBlock(0).entries[0].basis, 1u);
+  ASSERT_EQ(params.getBlock(0).entries[0].comps, 12u);
   ASSERT_EQ(params.getBlock(0).getStringValue("pc"), "sor");
 
   // second block
-  ASSERT_EQ(params.getBlock(1).basis, 2u);
-  ASSERT_EQ(params.getBlock(1).comps, 3u);
+  ASSERT_EQ(params.getBlock(1).entries[0].basis, 2u);
+  ASSERT_EQ(params.getBlock(1).entries[0].comps, 3u);
   ASSERT_EQ(params.getBlock(1).getStringValue("pc"), "ilu");
   ASSERT_EQ(params.getBlock(1).getIntValue("ilu_fill_level"), 1);
 }
