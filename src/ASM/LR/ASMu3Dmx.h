@@ -36,7 +36,7 @@ public:
   //! \brief Copy constructor.
   ASMu3Dmx(const ASMu3Dmx& patch, const CharVec& n_f = CharVec(3,0));
   //! \brief Empty destructor.
-  virtual ~ASMu3Dmx() {}
+  virtual ~ASMu3Dmx() = default;
 
   //! \brief Returns the spline volume representing a basis of this patch.
   virtual const LR::LRSplineVolume* getBasis(int basis = 1) const;
