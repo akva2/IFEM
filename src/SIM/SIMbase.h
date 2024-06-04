@@ -699,6 +699,8 @@ public:
 
   //! \brief Returns a const reference to our global-to-local node mapping.
   const std::map<int,int>& getGlob2LocMap() const { return myGlb2Loc; }
+  //! \brief Returns a const reference to our global-to-local node mapping.
+  const std::vector<int>& getLoc2Glob() const { return myLoc2Glb; }
 
   //! \brief Returns the beginning of the property array.
   PropertyVec::const_iterator begin_prop() const { return myProps.begin(); }

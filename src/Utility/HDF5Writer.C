@@ -683,6 +683,20 @@ void HDF5Writer::writeBasis (const SIMbase* sim, const std::string& name,
     this->writeArray(group, "basis", idx, alen , str.str().c_str(),
                      H5T_NATIVE_CHAR);
 
+    bool need_mapping = false;
+    if (!sim->getLoc2Glob().empty()) {
+      int pos = 0;
+      for (const int n : sim->getLoc2Glob())
+        if (n != ++pos) {
+          need_mapping = true;
+          break;
+        }
+    }
+
+    if (need_mapping)
+      this->writeArray(group, "node_mapping", idx, sim->getLoc2Glob().size(),
+                       sim->getLoc2Glob().data(), H5T_NATIVE_INT);
+
     if (l2g) {
       std::vector<int> nodeNumsLoc;
       const std::vector<int>* nodeNums = &nodeNumsLoc;
