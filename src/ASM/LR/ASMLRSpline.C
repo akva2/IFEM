@@ -22,6 +22,7 @@
 #include "Utilities.h"
 #include "Profiler.h"
 #include "IFEM.h"
+#include <numeric>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -211,6 +212,54 @@ void LR::copyRefinement (const LR::LRSplineVolume* from,
 
     to->insert_line(newRect);
   }
+}
+
+
+std::vector<std::shared_ptr<LR::LRSplineSurface>>
+LR::establishBases (const LR::LRSplineSurface& surf,
+                    ASMmxBase::MixedType type)
+{
+  std::vector<std::shared_ptr<LR::LRSplineSurface>> result(2);
+  // With mixed methods we need two separate spline spaces
+  if (type == ASMmxBase::FULL_CONT_RAISE_BASIS1 ||
+      type == ASMmxBase::FULL_CONT_RAISE_BASIS2)
+  {
+    // basis1 should be one degree higher than basis2 and C^p-1 continuous
+    result[0].reset(surf.getRaiseOrderSpace(1,1));
+    result[1].reset(surf.copy());
+    ASMmxBase::itgBasis = 2;
+  }
+  else if (type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
+           type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2)
+  {
+    // Order-elevate basis1 such that it is of one degree higher than basis2
+    // but only C^p-2 continuous
+    result[0].reset(surf.getRaiseOrderSpace(1, 1));
+    result[1].reset(surf.copy());
+    ASMmxBase::itgBasis = 2;
+  }
+  else if (type == ASMmxBase::DIV_COMPATIBLE)
+  {
+    result.resize(3);
+    result[0].reset(surf.getDerivedBasis(0,-1,0,1));
+    result[1].reset(surf.getDerivedBasis(-1,0,1,0));
+    result[2].reset(surf.getDerivedBasis(-1,-1,1,1));
+    ASMmxBase::itgBasis = 3;
+  } else if (type == ASMmxBase::SUBGRID) {
+    // basis1 should be one degree higher than basis2 and C^p-1 continuous
+    result[1].reset(surf.copy());
+    result[0].reset(surf.getRaiseOrderSpace(1,1));
+    std::vector<int> indices(result[0]->nBasisFunctions());
+    std::iota(indices.begin(), indices.end(), 0);
+    result[0]->refineBasisFunction(indices);
+    ASMmxBase::itgBasis = 1;
+  }
+
+  if (type == ASMmxBase::FULL_CONT_RAISE_BASIS2 ||
+      type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2)
+    std::swap(result[0], result[1]), ASMmxBase::itgBasis = 1;
+
+  return result;
 }
 
 

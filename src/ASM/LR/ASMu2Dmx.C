@@ -205,36 +205,57 @@ bool ASMu2Dmx::generateFEMTopology ()
   }
 
   if (m_basis.empty()) {
+    int order_u, order_v;
+    if (tensorspline) {
+      order_u = tensorspline->order_u();
+      order_v = tensorspline->order_v();
+    } else {
+      order_u = lrspline->order(0);
+      order_v = lrspline->order(1);
+    }
+
     if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE &&
-        (tensorspline->order_u() < 3 || tensorspline->order_v() < 3)) {
+        (order_u < 3 || order_v < 3)) {
       std::cerr << "*** RT basis cannot use a linear geometry." << std::endl;
       return false;
     }
 
-    SurfaceVec svec = ASMmxBase::establishBases(tensorspline, ASMmxBase::Type);
-    for (size_t b = 0; b < svec.size(); b++)
-      m_basis.push_back(createLR(*svec[b]));
+    if (tensorspline) {
+      SurfaceVec svec = ASMmxBase::establishBases(tensorspline, ASMmxBase::Type);
+      for (size_t b = 0; b < svec.size(); b++)
+        m_basis.push_back(createLR(*svec[b]));
+    } else
+      m_basis = LR::establishBases(*lrspline, ASMmxBase::Type);
 
-    std::unique_ptr<Go::SplineSurface> otherBasis;
-    if (ASMmxBase::Type != ASMmxBase::DIV_COMPATIBLE)
-      otherBasis.reset(ASMmxBase::adjustBasis(*tensorspline,{SplineUtils::AdjustOp::Raise,
-                                                             SplineUtils::AdjustOp::Raise}));
+    std::shared_ptr<LR::LRSplineSurface> otherBasis;
+    if (ASMmxBase::Type != ASMmxBase::DIV_COMPATIBLE) {
+      if (tensorspline) {
+        std::unique_ptr<Go::SplineSurface> p;
+        p.reset(ASMmxBase::adjustBasis(*tensorspline,{SplineUtils::AdjustOp::Raise,
+                                                      SplineUtils::AdjustOp::Raise}));
+        otherBasis = createLR(*p);
+      } else
+        otherBasis.reset(lrspline->getDerivedBasis(1,1, 0, 0, 2));
+    }
 
     // we need to project on something that is not one of our bases
     if (!projB) {
       if (ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS1 ||
           ASMmxBase::Type == ASMmxBase::REDUCED_CONT_RAISE_BASIS2)
-        projB = createLR(*otherBasis);
+        projB = otherBasis;
       else if (ASMmxBase::Type == ASMmxBase::SUBGRID)
         projB = m_basis.front();
-      else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
-        projB = createLR(*tensorspline);
-      else // FULL_CONT_RAISE_BASISx
+      else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE) {
+        if (tensorspline)
+          projB = createLR(*tensorspline);
+        else
+          projB = lrspline;
+      } else // FULL_CONT_RAISE_BASISx
         projB = m_basis[2-ASMmxBase::itgBasis];
     }
 
     if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
-      projB2 = refB = createLR(*otherBasis);
+      projB2 = refB = otherBasis;
       geomB = m_basis[1];
     } else if (ASMmxBase::Type == ASMmxBase::DIV_COMPATIBLE)
       geomB = refB = projB;
@@ -256,7 +277,7 @@ bool ASMu2Dmx::generateFEMTopology ()
         case NONE: break;
       }
 
-    is_rational = tensorspline->rational();
+    is_rational = tensorspline ? tensorspline->rational() : false;
     delete tensorspline;
     tensorspline = nullptr;
   }

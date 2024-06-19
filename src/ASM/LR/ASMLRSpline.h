@@ -15,6 +15,7 @@
 #define _ASM_LR_SPLINE_H
 
 #include "ASMbase.h"
+#include "ASMmxBase.h"
 #include "ASMunstruct.h"
 #include "ThreadGroups.h"
 
@@ -77,6 +78,14 @@ namespace LR //! Utilities for LR-splines.
   void copyRefinement(const LR::LRSplineVolume* from,
                       LR::LRSplineVolume* to,
                       int multiplicity);
+
+  //! \brief Establish mixed bases in 2D.
+  //! \param[in] surf The base basis to use
+  //! \param[in] type The type of bases to establish
+  //! \return Vector with bases
+  std::vector<std::shared_ptr<LR::LRSplineSurface>>
+  establishBases(const LR::LRSplineSurface& surf,
+                 ASMmxBase::MixedType type);
 }
 
 

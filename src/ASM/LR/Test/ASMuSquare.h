@@ -36,10 +36,17 @@ public:
     "0 [2] : (0, 0) x (1, 1)    {0, 1, 2, 3}\n";
   explicit ASMuSquare(unsigned char n_f = 2) : ASMu2D(2,n_f)
   {
-    std::stringstream geo("200 1 0 0\n2 0\n2 2\n0 0 1 1\n2 2\n0 0 1 1\n0 0\n1 0\n0 1\n1 1\n");
+    std::stringstream geo;
+    geo << "200 1 0 0\n2 0\n2 2\n0 0 1 1\n2 2\n0 0 1 1\n0 0\n1 0\n0 1\n1 1\n";
     this->read(geo);
   }
+
   virtual ~ASMuSquare() {}
+
+  void convertToLR()
+  {
+    this->createLRfromTensor();
+  }
 };
 
 
@@ -48,10 +55,16 @@ class ASMmxuSquare : public ASMu2Dmx
 public:
   explicit ASMmxuSquare(const CharVec& n_f) : ASMu2Dmx(2,n_f)
   {
-    std::stringstream geo("200 1 0 0\n2 0\n2 2\n0 0 1 1\n2 2\n0 0 1 1\n0 0\n1 0\n0 1\n1 1\n");
+    std::stringstream geo;
+    geo << "200 1 0 0\n2 0\n2 2\n0 0 1 1\n2 2\n0 0 1 1\n0 0\n1 0\n0 1\n1 1\n";
     this->read(geo);
   }
   virtual ~ASMmxuSquare() {}
+
+  void convertToLR()
+  {
+    this->createLRfromTensor();
+  }
 };
 
 #endif
