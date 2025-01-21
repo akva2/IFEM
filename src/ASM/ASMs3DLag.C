@@ -1045,7 +1045,7 @@ bool ASMs3DLag::evalSolution (Matrix& sField, const Vector& locSol,
 
         size_t idx = 1;
         for (int inod : MNPC[iel-1])
-          elmSol.fillColumn(idx++,locSol.data()+inod*nCmp);
+          elmSol.fillColumn(idx++,locSol.ptr()+inod*nCmp);
 
         Vector val;
         elmSol.multiply(N,val);
