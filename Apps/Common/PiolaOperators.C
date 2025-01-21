@@ -189,7 +189,7 @@ void PiolaOperators::Copy (Matrices& EM,
 {
   const size_t nsd = fe.dNdX.cols();
   if (nsd < 1 || nsd > 3)
-      return;
+    return;
   size_t ofs = 1;
   for (size_t b = 1; b <= nsd; ++b) {
     size_t ofs2 = ofs;
@@ -204,8 +204,7 @@ void PiolaOperators::Copy (Matrices& EM,
 
 
 void PiolaOperators::Copy (Vectors& EV,
-                           const FiniteElement& fe,
-                           const Vector& V)
+                           const FiniteElement& fe, const RealArray& V)
 {
   size_t ofs = 0;
   const size_t nsd = fe.dNdX.cols();
