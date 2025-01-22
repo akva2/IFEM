@@ -105,6 +105,16 @@ namespace utl //! General utility classes and functions.
       memcpy(this->data(),values,this->size()*sizeof(T));
     }
 
+    //! \brief Append a range of values increasing its size by \a i2-i1.
+    void append(typename std::vector<T>::const_iterator i1,
+                typename std::vector<T>::const_iterator i2)
+    {
+      this->insert(this->end(),i1,i2);
+    }
+
+    //! \brief Append a range of values increasing its size by \a p2-p1.
+    void append(const T* p1, const T* p2) { this->insert(this->end(),p1,p2); }
+
     //! \brief Multiplication with a scalar.
     vector<T>& operator*=(T c);
     //! \brief Division by a scalar.
