@@ -51,69 +51,106 @@
 
 namespace utl //! General utility classes and functions.
 {
+  //! \brief Flag for vector::resize() method telling it to retain its content.
+  const char RETAIN = 2;
+
   /*!
-    \brief Sub-class of std::vector with some added algebraic operations.
+    \brief A vector class with some added algebraic operations.
     \details The class type \a T has to be of a numerical type, i.e.,
     \a float or \a double.
   */
 
-  template<class T> class vector : public std::vector<T>
+  template<class T> class vector
   {
   public:
     //! \brief Constructor creating an empty vector.
     vector() {}
     //! \brief Constructor creating a vector of length \a n.
     explicit vector(size_t n) { this->resize(n); }
-    //! \brief Constructor creating a vector from an array.
+    //! \brief Constructor creating a vector from a C-array.
     vector(const T* values, size_t n) { this->fill(values,n); }
     //! \brief Overloaded copy constructor.
-    vector(const std::vector<T>& X) { *this = X; }
+    vector(const std::vector<T>& X) : myVec(X) {}
 
     //! \brief Overloaded assignment operator.
     vector<T>& operator=(const std::vector<T>& X)
     {
-      if (&X != this)
-        this->std::vector<T>::operator=(X);
+      myVec = X;
       return *this;
     }
 
     //! \brief Access through pointer.
-    T* ptr() { return this->empty() ? nullptr : this->data(); }
+    T* ptr() { return myVec.empty() ? nullptr : myVec.data(); }
     //! \brief Reference through pointer.
-    const T* ptr() const { return this->empty() ? nullptr : this->data(); }
+    const T* ptr() const { return myVec.empty() ? nullptr : myVec.data(); }
+
+    //! \brief Size of the vector.
+    size_t size() const { return myVec.size(); }
+    //! \brief Is the vector empty (zero size)?
+    bool empty() const { return myVec.empty(); }
+
+    //! \brief Convenience alias for const iterators.
+    using ConstVecIter = typename std::vector<T>::const_iterator;
+    //! \brief Convenience alias for non-const iterators.
+    using VecIter      = typename std::vector<T>::iterator;
+
+    //! \brief Start of the vector container, for access.
+    ConstVecIter begin() const { return myVec.begin(); }
+    //! \brief End of the vector container, for access.
+    ConstVecIter end() const { return myVec.end(); }
+    //! \brief Start of the vector container, for update.
+    VecIter begin(){ return myVec.begin(); }
+    //! \brief End of the vector container, for update.
+    VecIter end() { return myVec.end(); }
+
+    //! \brief Type casting operator, for access.
+    operator const std::vector<T>&() const { return myVec; }
+    //! \brief Type casting operator, for update
+    operator std::vector<T>&() { return myVec; }
+
+    //! \brief Index-0 based element access.
+    T& operator[](size_t i) { return myVec[i]; }
+    //! \brief Index-0 based element reference.
+    const T& operator[](size_t i) const { return myVec[i]; }
 
     //! \brief Index-1 based element access.
     T& operator()(size_t i)
     {
-      CHECK_INDEX("vector::operator(): Index ",i,this->size());
-      return this->operator[](i-1);
+      CHECK_INDEX("vector::operator(): Index ",i,myVec.size());
+      return myVec[i-1];
     }
 
     //! \brief Index-1 based element reference.
     const T& operator()(size_t i) const
     {
-      CHECK_INDEX("vector::operator(): Index ",i,this->size());
-      return this->operator[](i-1);
+      CHECK_INDEX("vector::operator(): Index ",i,myVec.size());
+      return myVec[i-1];
     }
 
     //! \brief Fill the vector with a scalar value.
-    void fill(T s) { std::fill(this->begin(),this->end(),s); }
+    void fill(T s) { std::fill(myVec.begin(),myVec.end(),s); }
     //! \brief Fill the vector with data from an array.
     void fill(const T* values, size_t n = 0)
     {
-      if (n > this->size()) this->std::vector<T>::resize(n);
-      memcpy(this->data(),values,this->size()*sizeof(T));
+      if (n > myVec.size())
+        myVec.resize(n);
+      memcpy(myVec.data(),values,myVec.size()*sizeof(T));
     }
 
+    //! \brief Append a scalar value to the vector, increasing its size by one.
+    void push_back(T c) { myVec.push_back(c); }
+
     //! \brief Append a range of values increasing its size by \a i2-i1.
-    void append(typename std::vector<T>::const_iterator i1,
-                typename std::vector<T>::const_iterator i2)
+    void append(ConstVecIter i1, ConstVecIter i2)
     {
-      this->insert(this->end(),i1,i2);
+      myVec.insert(myVec.end(),i1,i2);
     }
 
     //! \brief Append a range of values increasing its size by \a p2-p1.
-    void append(const T* p1, const T* p2) { this->insert(this->end(),p1,p2); }
+    void append(const T* p1, const T* p2) { myVec.insert(myVec.end(),p1,p2); }
+
+    //! \brief Swap the content with another vector.
+    void swap(vector<T>& vec) { myVec.swap(vec.myVec); }
 
     //! \brief Multiplication with a scalar.
     vector<T>& operator*=(T c);
@@ -123,15 +160,15 @@ namespace utl //! General utility classes and functions.
     //! \brief Component-wise multiplication with a vector.
     vector<T>& operator*=(const std::vector<T>& X)
     {
-      for (size_t i = 0; i < this->size() && i < X.size(); i++)
-        this->operator[](i) *= X[i];
+      for (size_t i = 0; i < myVec.size() && i < X.size(); i++)
+        myVec[i] *= X[i];
       return *this;
     }
     //! \brief Component-wise division with a vector.
     vector<T>& operator/=(const std::vector<T>& X)
     {
-      for (size_t i = 0; i < this->size() && i < X.size(); i++)
-        this->operator[](i) *= (X[i] == T(0) ? T(0) : T(1)/X[i]);
+      for (size_t i = 0; i < myVec.size() && i < X.size(); i++)
+        myVec[i] *= (X[i] == T(0) ? T(0) : T(1)/X[i]);
       return *this;
     }
 
@@ -201,9 +238,9 @@ namespace utl //! General utility classes and functions.
     T normInf(int inc = 1) const { size_t o = 0; return this->normInf(o,inc); }
 
     //! \brief Return the largest element of the vector.
-    T max() const { return *std::max_element(this->begin(),this->end()); }
+    T max() const { return *std::max_element(myVec.begin(),myVec.end()); }
     //! \brief Return the smallest element of the vector.
-    T min() const { return *std::min_element(this->begin(),this->end()); }
+    T min() const { return *std::min_element(myVec.begin(),myVec.end()); }
 
     //! \brief Return the sum of the absolute value of the vector elements.
     //! \param[in] off Index offset relative to the first vector component
@@ -216,35 +253,41 @@ namespace utl //! General utility classes and functions.
     T sum(size_t off = 0, int inc = 1) const
     {
       T xsum = T(0);
-      if (inc < 1 || this->empty())
+      if (inc < 1 || myVec.empty())
         return xsum;
 
-      const T* v = this->data();
-      for (size_t i = off; i < this->size(); i += inc)
+      const T* v = myVec.data();
+      for (size_t i = off; i < myVec.size(); i += inc)
         xsum += v[i];
       return xsum;
     }
 
     //! \brief Resize the vector to length \a n.
     //! \details Will erase the previous content, but only if the size changed,
-    //! unless \a forceClear is \e true.
-    void resize(size_t n, bool forceClear = false)
+    //! unless \a forceClear equals 1. If \a forceClear is larger than 1, the
+    //! \a n first previous vector elements are retained.
+    bool resize(size_t n, char forceClear = 0)
     {
-      if (forceClear)
+      if (n == myVec.size())
       {
-        // Erase previous content
-        if (n == this->size())
-          this->fill(T(0));
-        else
-          this->clear();
+        if (forceClear == 1)
+          this->fill(T(0)); // Erase previous content
+        return false; // Size is not changed
       }
 
-      if (n == this->size()) return; // nothing to do
-
-      if (!forceClear) this->clear();
-
-      this->std::vector<T>::resize(n,T(0));
+      if (forceClear < RETAIN)
+        myVec.clear();
+      myVec.resize(n,T(0));
+      return true;
     }
+
+    //! \brief Pre-allocation of vector length to \a n.
+    void reserve(size_t n) { myVec.reserve(n); }
+    //! \brief Clear the vector, setting its size to zero.
+    void clear() { myVec.clear(); }
+
+  private:
+    std::vector<T> myVec; //!< Internal vector storage
   };
 
 
@@ -306,13 +349,15 @@ namespace utl //! General utility classes and functions.
       n[1] = n_2;
       n[2] = n_3;
       n[3] = n_4;
-      if (this->size() == oldSize) return; // no more to do, size is unchanged
+      if (this->size() == oldSize)
+        return; // no more to do, size is unchanged
 
       // If the size in any of the matrix dimensions, except for the last one,
       // are changed the previous matrix content must be cleared
-      if (!forceClear) this->clearIfNrowChanged(oldn1,oldn2,oldn3);
+      if (!forceClear)
+        this->clearIfNrowChanged(oldn1,oldn2,oldn3);
 
-      elem.std::template vector<T>::resize(n[0]*n[1]*n[2]*n[3],T(0));
+      elem.resize(n[0]*n[1]*n[2]*n[3],RETAIN);
     }
 
     //! \brief Clears the matrix content if the first dimension(s) changed.
@@ -336,12 +381,12 @@ namespace utl //! General utility classes and functions.
     //! \brief Access through pointer.
     T* ptr(size_t c = 0)
     {
-      return n[0]*c < elem.size() ? elem.data() + n[0]*c : nullptr;
+      return n[0]*c < elem.size() ? elem.ptr() + n[0]*c : nullptr;
     }
     //! \brief Reference through pointer.
     const T* ptr(size_t c = 0) const
     {
-      return n[0]*c < elem.size() ? elem.data() + n[0]*c : nullptr;
+      return n[0]*c < elem.size() ? elem.ptr() + n[0]*c : nullptr;
     }
 
     //! \brief Iterator to the start of the matrix elements.
@@ -410,7 +455,7 @@ namespace utl //! General utility classes and functions.
           for (size_t c = 0; c < nrow; c++)
             this->elem[c+nrow*r] = mat.elem[r+ncol*c];
       else if (!mat.elem.empty())
-        this->elem.fill(mat.elem.data());
+        this->elem.fill(mat.elem.ptr());
     }
     //! \brief Empty destructor.
     virtual ~matrix() {}
@@ -440,14 +485,14 @@ namespace utl //! General utility classes and functions.
         for (size_t c = 1; c < ncol; c++, newMat += newRows)
           memmove(newMat,this->ptr(c),newRows*sizeof(T));
         nrow = newRows;
-        this->elem.std::template vector<T>::resize(nrow*ncol);
+        this->elem.resize(nrow*ncol,RETAIN);
       }
       else if (incRows > 0)
       {
         // The matrix size is increased
         size_t oldRows = nrow;
         nrow = newRows;
-        this->elem.std::template vector<T>::resize(nrow*ncol,T(0));
+        this->elem.resize(nrow*ncol,RETAIN);
         T* oldMat = this->ptr() + oldRows*(ncol-1);
         for (size_t c = ncol-1; c > 0; c--, oldMat -= oldRows)
         {
@@ -467,7 +512,7 @@ namespace utl //! General utility classes and functions.
 
       size_t oldRows = nrow;
       nrow += B.nrow;
-      this->elem.std::template vector<T>::resize(nrow*ncol,T(0));
+      this->elem.resize(nrow*ncol,RETAIN);
       T* oldMat = this->ptr() + oldRows*(ncol-1);
       for (size_t c = ncol; c > 0; c--, oldMat -= oldRows)
       {
@@ -485,7 +530,7 @@ namespace utl //! General utility classes and functions.
       if (B.nrow != nrow)
         return false;
 
-      this->elem.insert(this->elem.end(),B.elem.begin(),B.elem.end());
+      this->elem.append(B.elem.begin(),B.elem.end());
       ncol += B.ncol;
       return true;
     }
@@ -546,11 +591,11 @@ namespace utl //! General utility classes and functions.
     }
 
     //! \brief Extract a column from the matrix.
-    vector<T> getColumn(size_t c) const
+    std::vector<T> getColumn(size_t c) const
     {
       CHECK_INDEX("matrix::getColumn: Column-index ",c,ncol);
       if (ncol < 2) return this->elem;
-      vector<T> col(nrow);
+      std::vector<T> col(nrow);
       memcpy(col.data(),this->ptr(c-1),nrow*sizeof(T));
       return col;
     }
@@ -941,14 +986,14 @@ namespace utl //! General utility classes and functions.
   template<> inline
   vector<float>& vector<float>::operator*=(float c)
   {
-    cblas_sscal(this->size(),c,this->data(),1);
+    cblas_sscal(myVec.size(),c,myVec.data(),1);
     return *this;
   }
 
   template<> inline
   vector<double>& vector<double>::operator*=(double c)
   {
-    cblas_dscal(this->size(),c,this->data(),1);
+    cblas_dscal(myVec.size(),c,myVec.data(),1);
     return *this;
   }
 
@@ -956,70 +1001,70 @@ namespace utl //! General utility classes and functions.
   float vector<float>::dot(const float* v, size_t nv,
                            size_t o1, int i1, size_t o2, int i2) const
   {
-    int n1 = i1 > 1 || i1 < -1 ? this->size()/abs(i1) : this->size()-o1;
+    int n1 = i1 > 1 || i1 < -1 ? myVec.size()/abs(i1) : myVec.size()-o1;
     int n2 = i2 > 1 || i2 < -1 ? nv/abs(i2) : nv-o2;
     int n  = n1 < n2 ? n1 : n2;
-    return cblas_sdot(n,this->data()+o1,i1,v+o2,i2);
+    return cblas_sdot(n,myVec.data()+o1,i1,v+o2,i2);
   }
 
   template<> inline
   double vector<double>::dot(const double* v, size_t nv,
                              size_t o1, int i1, size_t o2, int i2) const
   {
-    int n1 = i1 > 1 || i1 < -1 ? this->size()/abs(i1) : this->size()-o1;
+    int n1 = i1 > 1 || i1 < -1 ? myVec.size()/abs(i1) : myVec.size()-o1;
     int n2 = i2 > 1 || i2 < -1 ? nv/abs(i2) : nv-o2;
     int n  = n1 < n2 ? n1 : n2;
-    return cblas_ddot(n,this->data()+o1,i1,v+o2,i2);
+    return cblas_ddot(n,myVec.data()+o1,i1,v+o2,i2);
   }
 
   template<> inline
   float vector<float>::norm2(size_t off, int inc) const
   {
-    int n = inc > 1 || inc < -1 ? this->size()/abs(inc) : this->size()-off;
-    return cblas_snrm2(n,this->data()+off,inc);
+    int n = inc > 1 || inc < -1 ? myVec.size()/abs(inc) : myVec.size()-off;
+    return cblas_snrm2(n,myVec.data()+off,inc);
   }
 
   template<> inline
   double vector<double>::norm2(size_t off, int inc) const
   {
-    int n = inc > 1 || inc < -1 ? this->size()/abs(inc) : this->size()-off;
-    return cblas_dnrm2(n,this->data()+off,inc);
+    int n = inc > 1 || inc < -1 ? myVec.size()/abs(inc) : myVec.size()-off;
+    return cblas_dnrm2(n,myVec.data()+off,inc);
   }
 
   template<> inline
   float vector<float>::normInf(size_t& off, int inc, bool sign) const
   {
-    if (inc < 1 || this->empty())
+    if (inc < 1 || myVec.empty())
       return 0.0f;
 
-    const float* v = this->data() + off;
-    off = 1 + cblas_isamax(this->size()/inc,v,inc);
+    const float* v = myVec.data() + off;
+    off = 1 + cblas_isamax(myVec.size()/inc,v,inc);
     return sign ? v[(off-1)*inc] : fabsf(v[(off-1)*inc]);
   }
 
   template<> inline
   double vector<double>::normInf(size_t& off, int inc, bool sign) const
   {
-    if (inc < 1 || this->empty())
+    if (inc < 1 || myVec.empty())
       return 0.0;
 
-    const double* v = this->data() + off;
-    off = 1 + cblas_idamax(this->size()/inc,v,inc);
+    const double* v = myVec.data() + off;
+    off = 1 + cblas_idamax(myVec.size()/inc,v,inc);
     return sign ? v[(off-1)*inc] : fabs(v[(off-1)*inc]);
   }
 
   template<> inline
   float vector<float>::asum(size_t off, int inc) const
   {
-    int n = inc > 1 || inc < -1 ? this->size()/abs(inc) : this->size()-off;
-    return cblas_sasum(n,this->data()+off,inc);
+    int n = inc > 1 || inc < -1 ? myVec.size()/abs(inc) : myVec.size()-off;
+    return cblas_sasum(n,myVec.data()+off,inc);
   }
 
   template<> inline
   double vector<double>::asum(size_t off, int inc) const
   {
-    int n = inc > 1 || inc < -1 ? this->size()/abs(inc) : this->size()-off;
-    return cblas_dasum(n,this->data()+off,inc);
+    int n = inc > 1 || inc < -1 ? myVec.size()/abs(inc) : myVec.size()-off;
+    return cblas_dasum(n,myVec.data()+off,inc);
   }
 
   template<> inline
@@ -1028,9 +1073,9 @@ namespace utl //! General utility classes and functions.
                                     unsigned int ofsx, int stridex,
                                     unsigned int ofsy, int stridey)
   {
-    size_t n = this->size() < X.size() ? this->size() : X.size();
+    size_t n = myVec.size() < X.size() ? myVec.size() : X.size();
     if (n > 0)
-      cblas_saxpy(n,alfa,X.data()+ofsx,stridex,this->data()+ofsy,stridey);
+      cblas_saxpy(n,alfa,X.data()+ofsx,stridex,myVec.data()+ofsy,stridey);
     return *this;
   }
 
@@ -1040,9 +1085,9 @@ namespace utl //! General utility classes and functions.
                                       unsigned int ofsx, int stridex,
                                       unsigned int ofsy, int stridey)
   {
-    size_t n = this->size() < X.size() ? this->size() : X.size();
+    size_t n = myVec.size() < X.size() ? myVec.size() : X.size();
     if (n > 0)
-      cblas_daxpy(n,alfa,X.data()+ofsx,stridex,this->data()+ofsy,stridey);
+      cblas_daxpy(n,alfa,X.data()+ofsx,stridex,myVec.data()+ofsy,stridey);
     return *this;
   }
 
@@ -1609,7 +1654,7 @@ namespace utl //! General utility classes and functions.
   {
     size_t n = 0;
     s >> n;
-    X.resize(n);
+    X.resize(n,true);
     for (T& val : X)
       s >> val;
     return s;
