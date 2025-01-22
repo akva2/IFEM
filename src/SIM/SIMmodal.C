@@ -266,7 +266,7 @@ bool SIMmodal::saveModes (std::map<std::string,std::string>& data) const
     {
       archive(mode.eigNo);
       archive(mode.eigVal);
-      archive(mode.eigVec);
+      archive(static_cast<const RealArray&>(mode.eigVec));
     }
   }
   data["ModalSIM"] = str.str();
@@ -292,7 +292,7 @@ bool SIMmodal::restoreModes (const std::map<std::string,std::string>& data)
     {
       archive(mode.eigNo);
       archive(mode.eigVal);
-      archive(mode.eigVec);
+      archive(static_cast<RealArray&>(mode.eigVec));
     }
     return true;
   }

@@ -49,7 +49,7 @@ bool SIMsolution::saveSolution (SerializeMap& data,
   {
     cereal::BinaryOutputArchive archive(str);
     for (const Vector& sol : this->getSolutions())
-      archive(sol);
+      archive(static_cast<const RealArray&>(sol));
   }
   data.insert(std::make_pair(name,str.str()));
   return true;
@@ -69,7 +69,7 @@ bool SIMsolution::restoreSolution (const SerializeMap& data,
     std::stringstream str(sit->second);
     cereal::BinaryInputArchive archive(str);
     for (Vector& sol : this->theSolutions())
-      archive(sol);
+      archive(static_cast<RealArray&>(sol));
     return true;
   }
 #endif
