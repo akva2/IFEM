@@ -369,7 +369,7 @@ int utl::gather (const std::vector<int>& index, size_t nr,
 
 
 int utl::gather (const std::vector<int>& index, size_t nr,
-                 const utl::vector<Real>& in, utl::matrix<Real>& out,
+                 const std::vector<Real>& in, utl::matrix<Real>& out,
                  size_t offset_in)
 {
   int outside = 0;
