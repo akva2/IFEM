@@ -1,44 +1,76 @@
 //==============================================================================
 //!
-//! \file TestMatrix.C
+//! \file MatrixTests.h
 //!
 //! \date Apr 11 2016
 //!
 //! \author Eivind Fonn / SINTEF
 //!
-//! \brief Unit tests for matrix and matrix3d.
+//! \brief Templates implementing unit tests for matrix.
 //!
 //==============================================================================
 
-#include "matrixnd.h"
-
-#include "MatrixTests.h"
-
 #include <numeric>
-#include <iomanip>
-#include <fstream>
+
+#include "gtest/gtest.h"
 
 
-TEST(TestMatrix, AddBlock)
+namespace {
+
+template<template<class T> class Vector, template<class T> class Matrix>
+void multiplyTest()
 {
-  utl::matrix<int> a(3,3),b(2,2);
-  std::iota(a.begin(),a.end(),1);
-  std::iota(b.begin(),b.end(),1);
+  Vector<double> u(14), v(9), x, y;
+  Matrix<double> A(3,5);
 
-  a.addBlock(b, 2, 2, 2, false);
-  EXPECT_EQ(a(2,2), 7);
-  EXPECT_EQ(a(3,2), 10);
-  EXPECT_EQ(a(2,3), 14);
-  EXPECT_EQ(a(3,3), 17);
+  std::iota(u.begin(),u.end(),1.0);
+  std::iota(v.begin(),v.end(),1.0);
+  std::iota(A.begin(),A.end(),1.0);
 
-  a.addBlock(b, 1, 1, 1, true);
-  EXPECT_EQ(a(1,1), 2);
-  EXPECT_EQ(a(2,1), 5);
-  EXPECT_EQ(a(1,2), 6);
-  EXPECT_EQ(a(2,2), 11);
+  ASSERT_TRUE(A.multiply(u,x,1.0,0.0,false,3,4,1,2));
+  ASSERT_TRUE(A.multiply(v,y,1.0,0.0,true,4,2));
+
+  EXPECT_FLOAT_EQ(x(3),370.0);
+  EXPECT_FLOAT_EQ(x(7),410.0);
+  EXPECT_FLOAT_EQ(x(11),450.0);
+  EXPECT_FLOAT_EQ(y(1),38.0);
+  EXPECT_FLOAT_EQ(y(3),83.0);
+  EXPECT_FLOAT_EQ(y(5),128.0);
+  EXPECT_FLOAT_EQ(y(7),173.0);
+  EXPECT_FLOAT_EQ(y(9),218.0);
+
+  ASSERT_TRUE(A.multiply(u,x,1.0,-1.0,false,3,4,1,2));
+  ASSERT_TRUE(A.multiply(v,y,1.0,-1.0,true,4,2));
+
+  EXPECT_FLOAT_EQ(x.sum(),0.0);
+  EXPECT_FLOAT_EQ(y.sum(),0.0);
+
+  u.resize(5,utl::RETAIN);
+  ASSERT_TRUE(A.multiply(u,v));
+  v *= 0.5;
+
+  EXPECT_FLOAT_EQ(v(1),67.5);
+  EXPECT_FLOAT_EQ(v(2),75.0);
+  EXPECT_FLOAT_EQ(v(3),82.5);
 }
 
 
+template<template<class T> class Matrix>
+void normTest()
+{
+  Matrix<double> a(4,5);
+  std::iota(a.begin(),a.end(),1.0);
+  std::cout <<"A:"<< a;
+
+  EXPECT_FLOAT_EQ(a.sum(),210.0);
+  EXPECT_FLOAT_EQ(a.sum(5),34.0);
+  EXPECT_FLOAT_EQ(a.asum(5),34.0);
+  EXPECT_FLOAT_EQ(a.trace(),34.0);
+  EXPECT_NEAR(a.norm2(5),sqrt(414.0),1.0e-15);
+}
+
+
+/*
 TEST(TestMatrix, ExtractBlock)
 {
   utl::matrix<int> a(3,3), b(2,2);
@@ -136,13 +168,52 @@ TEST(TestMatrix, SumCols)
 
 TEST(TestMatrix, Multiply)
 {
-  multiplyTest<utl::vector, utl::matrix>();
+  utl::vector<double> u(14), v(9), x, y;
+  utl::matrix<double> A(3,5);
+
+  std::iota(u.begin(),u.end(),1.0);
+  std::iota(v.begin(),v.end(),1.0);
+  std::iota(A.begin(),A.end(),1.0);
+
+  ASSERT_TRUE(A.multiply(u,x,1.0,0.0,false,3,4,1,2));
+  ASSERT_TRUE(A.multiply(v,y,1.0,0.0,true,4,2));
+
+  EXPECT_FLOAT_EQ(x(3),370.0);
+  EXPECT_FLOAT_EQ(x(7),410.0);
+  EXPECT_FLOAT_EQ(x(11),450.0);
+  EXPECT_FLOAT_EQ(y(1),38.0);
+  EXPECT_FLOAT_EQ(y(3),83.0);
+  EXPECT_FLOAT_EQ(y(5),128.0);
+  EXPECT_FLOAT_EQ(y(7),173.0);
+  EXPECT_FLOAT_EQ(y(9),218.0);
+
+  ASSERT_TRUE(A.multiply(u,x,1.0,-1.0,false,3,4,1,2));
+  ASSERT_TRUE(A.multiply(v,y,1.0,-1.0,true,4,2));
+
+  EXPECT_FLOAT_EQ(x.sum(),0.0);
+  EXPECT_FLOAT_EQ(y.sum(),0.0);
+
+  u.resize(5,utl::RETAIN);
+  ASSERT_TRUE(A.multiply(u,v));
+  v *= 0.5;
+
+  EXPECT_FLOAT_EQ(v(1),67.5);
+  EXPECT_FLOAT_EQ(v(2),75.0);
+  EXPECT_FLOAT_EQ(v(3),82.5);
 }
 
 
 TEST(TestMatrix, Norm)
 {
-  normTest<utl::matrix>();
+  utl::matrix<double> a(4,5);
+  std::iota(a.begin(),a.end(),1.0);
+  std::cout <<"A:"<< a;
+
+  EXPECT_FLOAT_EQ(a.sum(),210.0);
+  EXPECT_FLOAT_EQ(a.sum(5),34.0);
+  EXPECT_FLOAT_EQ(a.asum(5),34.0);
+  EXPECT_FLOAT_EQ(a.trace(),34.0);
+  EXPECT_NEAR(a.norm2(5),sqrt(414.0),1.0e-15);
 }
 
 
@@ -293,4 +364,7 @@ TEST(TestMatrix3D, Multiply)
   std::vector<double>::const_iterator c = C.begin();
   for (double d : D)
     EXPECT_EQ(d,*(c++));
+}
+*/
+
 }

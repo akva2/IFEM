@@ -1407,7 +1407,7 @@ namespace utl //! General utility classes and functions.
   vector<T>& vector<T>::operator*=(T c)
   {
     for (size_t i = 0; i < this->size(); i++)
-      std::vector<T>::operator[](i) *= c;
+      this->operator[](i) *= c;
     return *this;
   }
 
@@ -1430,7 +1430,7 @@ namespace utl //! General utility classes and functions.
       return xsum;
 
     // Warning: This might overflow or underflow for large/small values
-    const T* v = this->data();
+    const T* v = this->ptr();
     for (size_t i = off; i < this->size(); i += inc)
       xsum += v[i]*v[i];
     return sqrt(xsum);
@@ -1468,7 +1468,7 @@ namespace utl //! General utility classes and functions.
     if (inc < 1 || this->size() <= off)
       return xsum;
 
-    const T* v = this->data();
+    const T* v = this->ptr();
     for (size_t i = off; i < this->size(); i += inc)
       xsum += v[i] < T(0) ? -v[i] : v[i];
     return xsum;
