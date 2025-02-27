@@ -102,6 +102,7 @@ list(APPEND CHECK_SOURCES ${IFEM_SRCS})
 add_library(IFEM ${IFEM_SRCS})
 target_link_libraries(IFEM ${IFEM_DEPLIBS})
 target_include_directories(IFEM PUBLIC ${IFEM_INCLUDES})
+target_compile_definitions(IFEM PUBLIC ${IFEM_DEFINITIONS})
 set_target_properties(IFEM PROPERTIES VERSION ${IFEM_VERSION}
                            SOVERSION ${IFEM_ABI_VERSION})
 

@@ -268,7 +268,6 @@ endif()
 # Other things
 list(APPEND IFEM_DEFINITIONS -DReal=double)
 list(APPEND IFEM_DEPLIBS ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
-add_definitions(${IFEM_DEFINITIONS})
 set(IFEM_CHECKCOMMITS_SCRIPT ${IFEM_PATH}/cmake/Scripts/CheckCommits.cmake)
 if(NOT CMAKE_INSTALL_DOCDIR)
   set(CMAKE_INSTALL_DOCDIR share/doc/libifem1)
