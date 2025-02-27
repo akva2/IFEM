@@ -58,8 +58,6 @@ set(IFEM_INCLUDES
     ${PROJECT_BINARY_DIR}
 )
 
-include_directories(${IFEM_INCLUDES})
-
 set(EXECUTABLE_OUTPUT_PATH bin)
 set(LIBRARY_OUTPUT_PATH lib)
 
@@ -103,6 +101,7 @@ endif()
 list(APPEND CHECK_SOURCES ${IFEM_SRCS})
 add_library(IFEM ${IFEM_SRCS})
 target_link_libraries(IFEM ${IFEM_DEPLIBS})
+target_include_directories(IFEM PUBLIC ${IFEM_INCLUDES})
 set_target_properties(IFEM PROPERTIES VERSION ${IFEM_VERSION}
                            SOVERSION ${IFEM_ABI_VERSION})
 

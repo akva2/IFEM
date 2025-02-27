@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.5)
 
 project(IFEMAppCommon)
 
-include_directories(${PROJECT_SOURCE_DIR})
-
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
@@ -15,6 +13,7 @@ endif()
 file(GLOB AppCommon_SOURCES *.C)
 file(GLOB AppCommon_HEADERS *.h)
 add_library(IFEMAppCommon STATIC ${AppCommon_SOURCES})
+target_include_directories(IFEMAppCommon PUBLIC ${IFEM_INCLUDES} ${PROJECT_SOURCE_DIR})
 install(TARGETS IFEMAppCommon DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${AppCommon_HEADERS} DESTINATION include/IFEM)
 install(FILES scripts/regtest.sh.in
@@ -36,6 +35,8 @@ IFEM_add_test_app("${APPCOMMON_TEST_SRCS}"
                   ${PROJECT_SOURCE_DIR}/Test
                   AppCommon 0
                   IFEMAppCommon ${IFEM_LIBRARIES})
+
+target_include_directories(AppCommon-test PUBLIC ${IFEM_INCLUDES})
 if(MPI_FOUND)
   set(TEST_SRCS_MPI ${PROJECT_SOURCE_DIR}/Test/MPI/TestMultiPatchModelGenerator.C)
   ifem_add_test_app(${TEST_SRCS_MPI} ${IFEM_PATH}/Apps/Common AppCommon-MPI 4
