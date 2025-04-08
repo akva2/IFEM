@@ -177,6 +177,11 @@ else()
     install(FILES ${IFEM_LR_HEADERS} DESTINATION include/IFEM/LR)
     list(APPEND IFEM_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include/IFEM/LR)
   endif()
+  if(TRUE)
+    file(GLOB IFEM_LR_HEADERS src/ASM/GoLR/*.h)
+    install(FILES ${IFEM_LR_HEADERS} DESTINATION include/IFEM/GoLR)
+    list(APPEND IFEM_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include/IFEM/GoLR)
+  endif()
 
   # cmake modules
   string(REPLACE ";" " " IFEM_CXX_FLAGS ${IFEM_CXX_FLAGS})
