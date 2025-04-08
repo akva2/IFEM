@@ -480,7 +480,7 @@ protected:
   struct DirichletEdge
   {
     Go::LRBSpline2D*    lr;       //!< Pointer to the right object (in case of multiple bases)
-    LR::parameterEdge   edg;       //!< Which edge is this
+    // LR::parameterEdge   edg;       //!< Which edge is this
     IntVec              MLGE;      //!< Local-to-Global Element numbers
     IntVec              MLGN;      //!< Local-to-Global Nodal numbers
     IntMat              MNPC;      //!< Matrix of Nodal-Point Correpondanse
@@ -661,7 +661,7 @@ protected:
   //! \return 0 if no node (control point) matches this point
   virtual int evalPoint(int iel, const double* param, Vec3& X) const;
 
-  using ASMLRSpline::generateThreadGroups;
+  using ASMLRSplineGo::generateThreadGroups;
   //! \brief Generates element groups for multi-threading of interior integrals.
   //! \param[in] integrand Object with problem-specific data and methods
   //! \param[in] silence If \e true, suppress threading group outprint

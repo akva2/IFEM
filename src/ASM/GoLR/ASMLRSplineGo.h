@@ -11,15 +11,15 @@
 //!
 //==============================================================================
 
-#ifndef _ASM_LR_SPLINE_H
-#define _ASM_LR_SPLINE_H
+#ifndef _ASM_LR_SPLINE_GO_H
+#define _ASM_LR_SPLINE_GO_H
 
 #include "ASMbase.h"
 #include "ASMunstruct.h"
 #include "ThreadGroups.h"
 
 #include "GoTools/geometry/BsplineBasis.h"
-#include "GoTools/lrspline2D/LRBSpline2D.h"
+#include "GoTools/lrsplines2D/LRBSpline2D.h"
 
 
 namespace LR //! Utilities for LR-splines.
@@ -56,7 +56,7 @@ namespace LR //! Utilities for LR-splines.
   //! \param[in] addConstraints If given, additional constraint bases
   void generateThreadGroups(ThreadGroups& threadGroups,
                             const Go::LRBSpline2D* lr,
-                            const std::vector<LRBSpline2D*>& addConstraints = {});
+                            const std::vector<Go::LRBSpline2D*>& addConstraints = {});
 }
 
 
@@ -72,15 +72,15 @@ protected:
   //! \param[in] n_p Number of parameter dimensions
   //! \param[in] n_s Number of spatial dimensions
   //! \param[in] n_f Number of primary solution fields
-  ASMLRSpline(unsigned char n_p, unsigned char n_s, unsigned char n_f);
+  ASMLRSplineGo(unsigned char n_p, unsigned char n_s, unsigned char n_f);
   //! \brief Special copy constructor for sharing of FE data.
   //! \param[in] patch The patch to use FE data from
   //! \param[in] n_f Number of primary solution fields
-  ASMLRSpline(const ASMLRSpline& patch, unsigned char n_f);
+  ASMLRSplineGo(const ASMLRSplineGo& patch, unsigned char n_f);
 
 public:
   //! \brief Empty destructor.
-  virtual ~ASMLRSpline() {}
+  virtual ~ASMLRSplineGo() {}
 
   //! \brief Checks if the patch is empty.
   virtual bool empty() const { return geomB == nullptr; }
@@ -113,8 +113,8 @@ public:
                                bool globalId = true) const;
 
   //! \brief Sort basis functions based on local knot vectors.
-  static void Sort(int u, int v, int orient,
-                   std::vector<LR::Basisfunction*>& functions);
+  // static void Sort(int u, int v, int orient,
+  //                  std::vector<LR::Basisfunction*>& functions);
 
   //! \brief Returns all boundary functions that are covered by the given nodes.
   //! \param[in] nodes Set of (0-based) patch local node IDs
