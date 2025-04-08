@@ -52,7 +52,19 @@ IF(IFEM_WHOLE_PROG_OPTIM)
 ENDIF(IFEM_WHOLE_PROG_OPTIM)
 
 # Required dependences
-FIND_PACKAGE(GoTools REQUIRED)
+if(NOT GoTools_FOUND)
+  if(NOT TARGET GoToolsCore)
+    find_package(GoToolsCore REQUIRED)
+  endif()
+  if(NOT TARGET GoLRspline2D)
+    find_package(GoLRspline2D REQUIRED)
+  endif()
+  get_target_property(GoTools_INCLUDE_DIRS GoToolsCore INCLUDE_DIRECTORIES)
+  get_target_property(GoLR_INCLUDE_DIRS GoLRspline2D INCLUDE_DIRECTORIES)
+  set(GoTools_LIBRARIES GoToolsCore GoLRspline2D)
+  list(APPEND GoTools_INCLUDE_DIRS ${GoLR_INCLUDE_DIRS})
+  message("harr ${GoTools_INCLUDE_DIRS}")
+endif()
 FIND_PACKAGE(GoTrivariate REQUIRED)
 FIND_PACKAGE(ARPACK REQUIRED)
 find_package(TestLib REQUIRED)
@@ -62,9 +74,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Mimimum GoTools version
-IF(GoTools_VERSION_MAJOR LESS 3 OR NOT GoTools_VERSION_MAJOR)
-  MESSAGE(FATAL_ERROR "GoTools >= 3.0.0 required. bailing")
-ENDIF(GoTools_VERSION_MAJOR LESS 3 OR NOT GoTools_VERSION_MAJOR)
+#IF(GoTools_VERSION_MAJOR LESS 3 OR NOT GoTools_VERSION_MAJOR)
+#  MESSAGE(FATAL_ERROR "GoTools >= 3.0.0 required. bailing")
+#ENDIF(GoTools_VERSION_MAJOR LESS 3 OR NOT GoTools_VERSION_MAJOR)
 
 SET(IFEM_DEPLIBS ${IFEM_DEPLIBS}
                  ${GoTrivariate_LIBRARIES}
