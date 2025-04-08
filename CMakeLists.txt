@@ -23,8 +23,8 @@ set(IFEM_LIBRARY_BUILD 1)
 
 # Add local modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
-                      ${CMAKE_SOURCE_DIR}/cmake/Modules
-                      ${CMAKE_SOURCE_DIR}/cmake/Scripts)
+                      ${PROJECT_SOURCE_DIR}/cmake/Modules
+                      ${PROJECT_SOURCE_DIR}/cmake/Scripts)
 
 include(cmake/Scripts/UseMultiArch.cmake)
 
