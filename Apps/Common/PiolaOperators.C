@@ -99,12 +99,19 @@ void PiolaOperators::Weak::Gradient (Matrices& EM,
 }
 
 
-void PiolaOperators::Weak::ItgConstraint (std::vector<Matrix>&,
-                                          const FiniteElement&,
-                                          const std::array<int,3>&)
+void PiolaOperators::Weak::ItgConstraint (std::vector<Matrix>& EM,
+                                          const FiniteElement& fe,
+                                          const std::array<std::array<int,3>,3>& idx)
 {
-  std::cerr << "Integration constraint operator not implemented with piola" << std::endl;
-  exit(1);
+  const size_t nsd = fe.dNdX.cols();
+  for (size_t d = 1; d <= nsd; ++d) {
+    size_t ofs = 0;
+    for (size_t b = 1; b <= nsd; ++b) {
+      for (size_t i = 1; i <= fe.basis(b).size(); ++i)
+        EM[idx[b-1][d-1]](i,1) += fe.P(d, ofs + i) * fe.detJxW;
+      ofs += fe.basis(b).size();
+    }
+  }
 }
 
 

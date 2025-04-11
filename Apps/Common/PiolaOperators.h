@@ -78,7 +78,7 @@ public:
     //! \param[in] fe The finite element to evaluate for
     static void ItgConstraint(std::vector<Matrix>& EM,
                               const FiniteElement& fe,
-                              const std::array<int,3>& idx);
+                              const std::array<std::array<int,3>,3>& idx);
 
     //! \brief Compute a laplacian.
     //! \param[out] EM The element matrix to add contribution to
