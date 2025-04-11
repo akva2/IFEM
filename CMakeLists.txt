@@ -186,8 +186,8 @@ else()
   get_target_property(TinyXML2_INCLUDE_DIRECTORIES tinyxml2::tinyxml2 INCLUDE_DIRECTORIES)
   configure_file(cmake/Templates/IFEMConfigVersion.cmake.in IFEMConfigVersion.cmake @ONLY)
   configure_file(cmake/Templates/IFEMConfig.cmake.in IFEMConfig.cmake @ONLY)
-  install(FILES ${CMAKE_BINARY_DIR}/IFEMConfigVersion.cmake
-                ${CMAKE_BINARY_DIR}/IFEMConfig.cmake
+  install(FILES ${PROJECT_BINARY_DIR}/IFEMConfigVersion.cmake
+                ${PROJECT_BINARY_DIR}/IFEMConfig.cmake
                 cmake/Modules/FindTestLib.cmake
                 cmake/Scripts/CheckCommits.cmake
                 cmake/Scripts/DownloadGTest.cmake
