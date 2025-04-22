@@ -24,6 +24,7 @@
 #include "LR/ASMu2DC1.h"
 #include "LR/ASMu2Dmx.h"
 #endif
+#include "GoLR/ASMu2DGo.h"
 #include "Vec3Oper.h"
 
 
@@ -65,6 +66,15 @@ ASMbase* ASM2D::create (ASM::Discretization discretization,
     else
       return new ASMu2D(nd,nf.front());
 #endif
+  case ASM::GoLRSpline:
+    if (nf.size() > 2 && nf[1] == 'I') // hack for immersed boundary approach
+      return new ASMu2DIB(nd,nf[0],nf[2]);
+    else if (nf.size() > 2 && nf[1] == 'C' && nf[2] == '1') // hack for C1
+      return new ASMu2DC1(nd,nf.front());
+    else if (nf.size() > 1 || mixedFEM)
+      return new ASMu2Dmx(nd,nf);
+    else
+      return new ASMu2DGo(nd,nf.front());
 
   default:
     if (nf.size() > 2 && nf[1] == 'I') // hack for immersed boundary approach

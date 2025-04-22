@@ -52,7 +52,7 @@ IF(IFEM_WHOLE_PROG_OPTIM)
 ENDIF(IFEM_WHOLE_PROG_OPTIM)
 
 # Required dependences
-FIND_PACKAGE(GoTools REQUIRED)
+FIND_PACKAGE(GoToolsCore REQUIRED)
 FIND_PACKAGE(GoTrivariate REQUIRED)
 FIND_PACKAGE(ARPACK REQUIRED)
 find_package(TestLib REQUIRED)
@@ -61,21 +61,16 @@ find_package(TinyXML2 REQUIRED)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Mimimum GoTools version
-IF(GoTools_VERSION_MAJOR LESS 3 OR NOT GoTools_VERSION_MAJOR)
-  MESSAGE(FATAL_ERROR "GoTools >= 3.0.0 required. bailing")
-ENDIF(GoTools_VERSION_MAJOR LESS 3 OR NOT GoTools_VERSION_MAJOR)
-
 SET(IFEM_DEPLIBS ${IFEM_DEPLIBS}
                  ${GoTrivariate_LIBRARIES}
-                 ${GoTools_LIBRARIES}
+                 ${GoToolsCore_LIBRARIES}
                  ${ARPACK_LIBRARIES}
                  ${LAPACK_LIBRARIES}
                  ${CBLAS_LIBRARIES}
                  tinyxml2::tinyxml2)
 
 SET(IFEM_DEPINCLUDES ${IFEM_DEPINCLUDES}
-                     ${GoTools_INCLUDE_DIRS}
+                     ${GoToolsCore_INCLUDE_DIRS}
                      ${GoTrivariate_INCLUDE_DIRS})
 
 SET(IFEM_CXX_FLAGS "${IFEM_CXX_FLAGS} ${CMAKE_CXX_FLAGS} ${CXX_STD11_FLAGS}")
