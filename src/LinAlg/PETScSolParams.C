@@ -20,7 +20,8 @@
 void PETScSolParams::setupPC(PC& pc,
                              size_t block,
                              const std::string& prefix,
-                             const std::set<int>& blockEqs)
+                             const std::set<int>& blockEqs,
+                             bool setup)
 {
   // Set preconditioner
   std::string prec = params.getBlock(block).getStringValue("pc");
@@ -67,7 +68,6 @@ void PETScSolParams::setupPC(PC& pc,
   else if (prec == "ilu")
     PCFactorSetLevels(pc,params.getBlock(block).getIntValue("ilu_fill_level"));
 
-
   std::string package = params.getBlock(block).getStringValue("package");
   if (!package.empty()) {
 #if PETSC_VERSION_MINOR >= 9
@@ -78,7 +78,7 @@ void PETScSolParams::setupPC(PC& pc,
   }
 
   PCSetFromOptions(pc);
-  PCSetUp(pc);
+  //PCSetUp(pc);
 
   // Settings for coarse solver
   if ((prec == "ml" || prec == "gamg")) {

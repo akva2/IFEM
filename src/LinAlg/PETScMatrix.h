@@ -116,6 +116,23 @@ public:
   //! \brief Initializes the matrix to zero assuming it is properly dimensioned.
   void init() override;
 
+  //! \brief Adds an element matrix into the associated system matrix.
+  //! \param[in] eM  The element matrix
+  //! \param[in] sam Auxiliary data for FE assembly management
+  //! \param[in] e   Identifier for the element that \a eM belongs to
+  //! \return \e true on successful assembly, otherwise \e false
+  bool assemble(const Matrix& eM, const SAM& sam, int e) override;
+  //! \brief Adds an element matrix into the associated system matrix.
+  //! \param[in] eM  The element matrix
+  //! \param[in] sam Auxiliary data for FE assembly management
+  //! \param     B   The system right-hand-side vector
+  //! \param[in] e   Identifier for the element that \a eM belongs to
+  //! \return \e true on successful assembly, otherwise \e false
+  //!
+  //! \details When multi-point constraints are present, contributions from
+  //! these are also added into the system right-hand-side vector, \a B.
+  bool assemble(const Matrix& eM, const SAM& sam, SystemVector& B, int e) override;
+
   //! \brief Finalizes the system matrix assembly.
   bool endAssembly() override;
 
@@ -161,10 +178,9 @@ public:
   const std::vector<IS>& getIS() const { return isvec; }
 
   //! \brief Set the linear solver parameters (solver type, preconditioner, tolerances).
-  //! \param[in] P Preconditioner  matrix (ignored here)
-  //! \param[in] Pb Preconditioner vector (ignored here)
+  //! \param[in] setup True to setup KSP/PC
   //! \return True on success
-  bool setParameters(PETScMatrix* P = nullptr, PETScVector* Pb = nullptr);
+  bool setParameters(bool setup);
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
@@ -210,9 +226,13 @@ protected:
   void setupBlockSparsitySerial(const SAM& sam);
 
   //! \brief Calculates the global-to-block mapping for equations.
-  std::vector<std::array<int,2>> setupGlb2Blk (const SAM& sam);
+  std::vector<std::array<int,2>> setupGlb2Blk(const SAM& sam);
+  //! \brief Calculates the global-to-block mapping for equations.
+  void setupGlb2BlkNoSparse(const SAM& sam);
+  //! \brief Calculates the global-to-block mapping for equations.
+  void setupGlb2BlkNoSparsePart(const SAM& sam);
   //! \brief Calculates the global-to-block mapping for equations for a graph partitioned model.
-  void setupGlb2BlkPart (const SAM& sam);
+  void setupGlb2BlkPart(const SAM& sam);
 
   Mat                 pA;              //!< The actual PETSc matrix
   KSP                 ksp;             //!< Linear equation solver

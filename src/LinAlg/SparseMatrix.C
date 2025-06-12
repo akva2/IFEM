@@ -976,7 +976,7 @@ bool SparseMatrix::optimiseCols ()
   This method does not use the internal index-pair to value map \a elem.
 */
 
-bool SparseMatrix::optimiseCols (const std::vector<IntSet>& dofc)
+bool SparseMatrix::optimiseCols (const std::vector<IntSet>& dofc, bool allocStorage)
 {
   if (!editable) return false;
 
@@ -1012,7 +1012,8 @@ bool SparseMatrix::optimiseCols (const std::vector<IntSet>& dofc)
   IA.front() = 0;
 
   editable = false;
-  A.resize(nnz); // Allocate the non-zero matrix element storage
+  if (allocStorage)
+    A.resize(nnz); // Allocate the non-zero matrix element storage
 
   return true;
 }

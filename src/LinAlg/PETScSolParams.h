@@ -63,9 +63,11 @@ public:
   //! \param block Block this preconditioner applies to
   //! \param prefix PETsc param prefix for block
   //! \param blockEqs The local equations belonging to block
+  //! \param setup True to setup preconditioner
   void setupPC(PC& pc, size_t block,
                const std::string& prefix,
-               const std::set<int>& blockEqs);
+               const std::set<int>& blockEqs,
+               bool setup);
 
   //! \brief Obtain number of blocks
   size_t getNoBlocks() const { return params.getNoBlocks(); }
@@ -84,6 +86,13 @@ public:
 
   //! \brief Get integer setting
   bool hasValue(const std::string& key) const { return params.hasValue(key); }
+
+  //! \brief True if we should assemble to Sparse matrix and copy to PETSc matrix.
+  bool useSparseMatrix() const
+  {
+      return params.hasValue("use_sparse_matrix")
+          && params.getIntValue("use_sparse_matrix") == 1;
+  }
 
   //! \brief Returns the linear system type.
   LinAlg::LinearSystemType getLinSysType() const { return params.getLinSysType(); }

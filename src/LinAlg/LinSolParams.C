@@ -74,6 +74,7 @@ LinSolParams::LinSolParams (LinAlg::LinearSystemType ls) : blocks(1), linSys(ls)
   this->addValue("maxits", "1000");
   this->addValue("gmres_restart_iterations", "100");
   this->addValue("verbosity", "1");
+  this->addValue("use_sparse_matrix", "1");
 }
 
 LinSolParams::LinSolParams (const LinSolParams& p, LinAlg::LinearSystemType ls)
@@ -159,6 +160,9 @@ bool LinSolParams::read (const tinyxml2::XMLElement* elem)
 {
   if (elem->Attribute("verbosity"))
     this->addValue("verbosity", elem->Attribute("verbosity"));
+
+  if (elem->Attribute("use_sparse_matrix"))
+    this->addValue("use_sparse_matrix", elem->Attribute("use_sparse_matrix"));
 
   const tinyxml2::XMLElement* child = elem->FirstChildElement();
   int parseblock = 0;

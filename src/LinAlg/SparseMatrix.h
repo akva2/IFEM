@@ -240,7 +240,8 @@ protected:
 
   //! \brief Converts the matrix to an optimized column-oriented format.
   //! \param[in] dofc Set of free DOFs coupled to each free DOF
-  bool optimiseCols(const std::vector< std::set<int> >& dofc);
+  //! \param[in] allocStorage True to allocate storage for matrix values
+  bool optimiseCols(const std::vector< std::set<int> >& dofc, bool allocStorage = true);
 
   //! \brief Invokes the SAMG equation solver for a given right-hand-side.
   //! \param B Right-hand-side vector on input, solution vector on output
