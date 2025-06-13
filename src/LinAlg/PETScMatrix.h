@@ -247,7 +247,8 @@ protected:
   std::vector<Mat> matvec; //!< Blocks for block matrices.
 
   std::vector<IS> isvec; //!< Index sets for blocks.
-  std::vector<int> glb2Blk; //!< Maps equations to blocks.
+
+  std::vector<std::array<int,2>> glb2Blk; //!< Maps equations to block and block eq.
 };
 
 

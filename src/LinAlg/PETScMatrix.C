@@ -27,7 +27,7 @@ namespace {
 */
 void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
                   const DomainDecomposition& dd,
-                  const std::vector<int>& glb2Blk,
+                  const std::vector<std::array<int,2>>& glb2Blk,
                   const IntVec& meen, const int* meqn,
                   const int* mpmceq, const int* mmceq, const Real* ttcc)
 {
@@ -35,16 +35,16 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
   auto getBlk = [&glb2Blk, nBlock = dd.getNoBlocks()](const int ieq, const int jeq)
   {
     if (nBlock > 1)
-      return glb2Blk[ieq-1] * nBlock + glb2Blk[jeq-1];
+      return glb2Blk[ieq-1][0] * nBlock + glb2Blk[jeq-1][0];
     else
       return size_t{0};
   };
-  auto getEq = [&glb2Blk, &dd](const int ieq)
+  auto getEq = [&glb2Blk, &dd, isParallel = SM.getAdm().isParallel()](const int ieq)
   {
     if (dd.getNoBlocks() < 2)
       return dd.getGlobalEq(ieq) - 1;
     else
-      return dd.getGlobalEq(ieq, glb2Blk[ieq-1]+1) - 1;
+      return glb2Blk[ieq-1][1] - 1;
   };
   int i, j, ip, nedof = meen.size();
   auto A = SM.getBlockMatrices();
@@ -535,7 +535,8 @@ void PETScMatrix::setupGlb2Blk (const SAM& sam)
       if (const auto it = dd.getG2LEQ(b+1).find(ieq);
           it != dd.getG2LEQ(b+1).end())
       {
-        glb2Blk[ieq-1] = b;
+        glb2Blk[ieq-1][0] = b;
+        glb2Blk[ieq-1][1] = adm.isParallel() ? adm.dd.getGlobalEq(ieq, b+1) : it->second;
         break;
       }
     }
@@ -748,10 +749,10 @@ bool PETScMatrix::endAssembly ()
                     adm.dd.getGlobalEq(j+1) - 1,
                     A[i], ADD_VALUES);
       else {
-        const int b = glb2Blk[JA[i]] * adm.dd.getNoBlocks() + glb2Blk[j];
+        const int b = glb2Blk[JA[i]][0] * adm.dd.getNoBlocks() + glb2Blk[j][0];
         MatSetValue(matvec[b],
-                    adm.dd.getGlobalEq(JA[i]+1, glb2Blk[JA[i]]+1) - 1,
-                    adm.dd.getGlobalEq(j+1, glb2Blk[j]+1) - 1,
+                    glb2Blk[JA[i]][1] - 1,
+                    glb2Blk[j][1] - 1,
                     A[i], ADD_VALUES);
       }
   }
