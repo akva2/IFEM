@@ -225,14 +225,10 @@ protected:
   //! \brief Setup sparsity pattern for block-matrices for a serial model.
   void setupBlockSparsitySerial(const SAM& sam);
 
+  //! \brief Calculates blocks for global eqs.
+  void setupGlb2Blk(const SAM& sam);
   //! \brief Calculates the global-to-block mapping for equations.
-  std::vector<std::array<int,2>> setupGlb2Blk(const SAM& sam);
-  //! \brief Calculates the global-to-block mapping for equations.
-  void setupGlb2BlkNoSparse(const SAM& sam);
-  //! \brief Calculates the global-to-block mapping for equations.
-  void setupGlb2BlkNoSparsePart(const SAM& sam);
-  //! \brief Calculates the global-to-block mapping for equations for a graph partitioned model.
-  void setupGlb2BlkPart(const SAM& sam);
+  std::vector<std::array<int,2>> setupGlb2BlkEq(const SAM& sam);
 
   Mat                 pA;              //!< The actual PETSc matrix
   KSP                 ksp;             //!< Linear equation solver
@@ -251,7 +247,7 @@ protected:
   std::vector<Mat> matvec; //!< Blocks for block matrices.
 
   std::vector<IS> isvec; //!< Index sets for blocks.
-  std::vector<std::array<int,3>> glb2Blk; //!< Maps matrix entries in CSC order to block matrix entries.
+  std::vector<int> glb2Blk; //!< Maps equations to blocks.
 };
 
 
