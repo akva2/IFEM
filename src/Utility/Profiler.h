@@ -80,6 +80,7 @@ private:
 
   std::string myName; //!< Name of this profiler
   bool autoReport;    //!< Whether to report results on program exit
+  int myRank;         //!< Rank of process
 
   typedef std::map<std::string,Profile> ProfileMap; //!< Map of profilers
 

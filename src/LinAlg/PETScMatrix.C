@@ -16,7 +16,6 @@
 #include "ProcessAdm.h"
 #include "LinAlgInit.h"
 #include "SAM.h"
-#include <cassert>
 
 namespace {
 
@@ -39,7 +38,7 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
     else
       return size_t{0};
   };
-  auto getEq = [&glb2Blk, &dd, isParallel = SM.getAdm().isParallel()](const int ieq)
+  auto getEq = [&glb2Blk, &dd](const int ieq)
   {
     if (dd.getNoBlocks() < 2)
       return dd.getGlobalEq(ieq) - 1;
@@ -55,6 +54,7 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
     int jeq = meen[j-1];
     if (jeq < 1) continue;
 
+#pragma omp critical
     MatSetValue(A[getBlk(jeq, jeq)], getEq(jeq), getEq(jeq), eM(j,j), ADD_VALUES);
 
     for (i = 1; i < j; i++)
@@ -62,8 +62,11 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
       int ieq = meen[i-1];
       if (ieq < 1) continue;
 
-      MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq), eM(i,j), ADD_VALUES);
-      MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq), eM(j,i), ADD_VALUES);
+#pragma omp critical
+      {
+        MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq), eM(i,j), ADD_VALUES);
+        MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq), eM(j,i), ADD_VALUES);
+      }
     }
   }
 
@@ -84,12 +87,14 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
         int ieq = meen[i-1];
         int iceq = -ieq;
         if (ieq > 0)
+#pragma omp critical
           VecSetValue(*SV, dd.getGlobalEq(ieq)-1, -c0*eM(i,j), ADD_VALUES);
         else if (iceq > 0)
           for (ip = mpmceq[iceq-1]; ip < mpmceq[iceq]-1; ip++)
             if (mmceq[ip] > 0)
             {
               ieq = meqn[mmceq[ip]-1];
+#pragma omp critical
               VecSetValue(*SV, dd.getGlobalEq(ieq)-1,
                           -c0*ttcc[ip]*eM(i,j), ADD_VALUES);
             }
@@ -106,16 +111,20 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
           int iceq = -ieq;
           if (ieq > 0)
           {
-            MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq),
-                        ttcc[jp]*eM(i,j), ADD_VALUES);
-            MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq),
-                        ttcc[jp]*eM(j,i), ADD_VALUES);
+#pragma omp critical
+            {
+              MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq),
+                          ttcc[jp]*eM(i,j), ADD_VALUES);
+              MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq),
+                          ttcc[jp]*eM(j,i), ADD_VALUES);
+            }
           }
           else if (iceq > 0)
             for (ip = mpmceq[iceq-1]; ip < mpmceq[iceq]-1; ip++)
               if (mmceq[ip] > 0)
               {
                 ieq = meqn[mmceq[ip]-1];
+#pragma omp critical
                 MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq),
                             ttcc[ip]*ttcc[jp]*eM(i,j), ADD_VALUES);
               }
@@ -480,54 +489,11 @@ void PETScMatrix::setupSparsitySerial (const SAM& sam)
 }
 
 
-std::vector<std::array<int,2>>
-PETScMatrix::setupGlb2BlkEq (const SAM& sam)
-{
-  // map from sparse matrix indices to block matrix indices
-  glb2Blk.resize(A.size());
-  size_t blocks = solParams.getNoBlocks();
-  const DomainDecomposition& dd = adm.dd;
-  std::vector<std::array<int,2>> eq2b(sam.neq, {{-1, 0}}); // cache
-
-  for (size_t j = 0; j < cols(); ++j)
-    for (int i = IA[j]; i < IA[j+1]; ++i) {
-      int iblk = -1;
-      int jblk = -1;
-      if (eq2b[JA[i]][0] != -1)
-        iblk = eq2b[JA[i]][0];
-      if (eq2b[j][0] != -1)
-        jblk = eq2b[j][0];
-
-      for (size_t b = 0; b < blocks && (iblk == -1 || jblk == -1); ++b) {
-        std::map<int,int>::const_iterator it;
-        if (iblk == -1 && (it = dd.getG2LEQ(b+1).find(JA[i]+1)) != dd.getG2LEQ(b+1).end()) {
-          iblk = b;
-          eq2b[JA[i]][0] = b;
-          eq2b[JA[i]][1] = it->second-1;
-        }
-
-        if (jblk == -1 && (it = dd.getG2LEQ(b+1).find(j+1)) != dd.getG2LEQ(b+1).end()) {
-          jblk = b;
-          eq2b[j][0] = b;
-          eq2b[j][1] = it->second-1;
-        }
-      }
-      if (iblk == -1 || jblk == -1) {
-        std::cerr << "Failed to map (" << JA[i]+1 << ", " << j+1 << ") " << std::endl;
-        std::cerr << "iblk: " << iblk << ", jblk: " << jblk << std::endl;
-        assert(0);
-      }
-    }
-
-  return eq2b;
-}
-
-
 void PETScMatrix::setupGlb2Blk (const SAM& sam)
 {
   // map from sparse matrix indices to block matrix indices
   size_t blocks = solParams.getNoBlocks();
-  glb2Blk.resize(sam.neq);
+  glb2Blk.resize(sam.neq, {});
   const DomainDecomposition& dd = adm.dd;
 
   for (int ieq = 1; ieq <= sam.neq; ++ieq) {
@@ -536,7 +502,12 @@ void PETScMatrix::setupGlb2Blk (const SAM& sam)
           it != dd.getG2LEQ(b+1).end())
       {
         glb2Blk[ieq-1][0] = b;
-        glb2Blk[ieq-1][1] = adm.isParallel() ? adm.dd.getGlobalEq(ieq, b+1) : it->second;
+        if (adm.isParallel())
+          glb2Blk[ieq-1][1] = adm.dd.isPartitioned()
+                                  ? adm.dd.getGlobalEq(ieq, b+1)
+                                  : adm.dd.getGlobalEq(it->second, b+1);
+        else
+          glb2Blk[ieq-1][1] = it->second;
         break;
       }
     }
@@ -550,7 +521,7 @@ void PETScMatrix::setupBlockSparsityDD (const SAM& sam)
   const DomainDecomposition& dd = adm.dd;
   std::vector<IntSet> dofc;
   sam.getDofCouplings(dofc);
-  const auto eq2b = this->setupGlb2BlkEq(sam);
+  this->setupGlb2Blk(sam);
 
   std::vector<PetscIntVec> d_nnz(blocks*blocks);
   std::vector<IntVec> o_nnz_g(blocks*blocks);
@@ -562,15 +533,13 @@ void PETScMatrix::setupBlockSparsityDD (const SAM& sam)
     }
 
   for (int i = 0; i < sam.neq; ++i) {
-    int blk = eq2b[i][0]+1;
-    int row = eq2b[i][1]+1;
-    int grow = dd.getGlobalEq(row, blk);
+    int blk = glb2Blk[i][0]+1;
+    int grow = glb2Blk[i][1];
 
     if (grow >= dd.getMinEq(blk) && grow <= dd.getMaxEq(blk))
       for (int dof : dofc[i]) {
-        int cblk = eq2b[dof-1][0]+1;
-        int col = eq2b[dof-1][1]+1;
-        int gcol = dd.getGlobalEq(col, cblk);
+        int cblk = glb2Blk[dof-1][0]+1;
+        int gcol = glb2Blk[dof-1][1];
         if (gcol >= dd.getMinEq(cblk) && gcol <= dd.getMaxEq(cblk))
           ++d_nnz[(blk-1)*blocks + cblk-1][grow-dd.getMinEq(blk)];
         else
@@ -578,8 +547,8 @@ void PETScMatrix::setupBlockSparsityDD (const SAM& sam)
       }
     else
       for (int dof : dofc[i]) {
-        int cblk = eq2b[dof-1][0]+1;
-        ++o_nnz_g[(blk-1)*blocks+cblk-1][grow-1];
+        int cblk = glb2Blk[dof-1][0];
+        ++o_nnz_g[(blk-1)*blocks+cblk][grow-1];
       }
   }
 
@@ -745,8 +714,8 @@ bool PETScMatrix::endAssembly ()
     for (int i = IA[j]; i < IA[j+1]; ++i)
       if (matvec.empty())
         MatSetValue(pA,
-                    adm.dd.getGlobalEq(JA[i]+1) - 1,
-                    adm.dd.getGlobalEq(j+1) - 1,
+                    adm.dd.getGlobalEq(JA[i] + 1) - 1,
+                    adm.dd.getGlobalEq(j + 1) - 1,
                     A[i], ADD_VALUES);
       else {
         const int b = glb2Blk[JA[i]][0] * adm.dd.getNoBlocks() + glb2Blk[j][0];
@@ -991,7 +960,7 @@ bool PETScMatrix::solveEig (PETScMatrix& B, RealArray& val,
 
   EPSSetType(eps,EPSKRYLOVSCHUR);
   EPSSetWhichEigenpairs(eps,EPS_SMALLEST_MAGNITUDE);
-  EPSSetDimensions(eps,nv,PETSC_DETERMINE, 4*nv);
+  EPSSetDimensions(eps, nv, PETSC_DETERMINE, 4*nv);
   EPSSetFromOptions(eps);
   EPSGetST(eps,&st);
   STSetShift(st,shift);
@@ -1009,10 +978,13 @@ bool PETScMatrix::solveEig (PETScMatrix& B, RealArray& val,
   EPSGetConverged(eps,&nconv);
 
   MatGetSize(pA,&m,&n);
+  PetscInt M, N;
+  MatGetLocalSize(pA,&M,&N);
   if (m != n) return false;
+  if (M != N) return false;
 
   VecCreate(*adm.getCommunicator(),&xr);
-  VecSetSizes(xr,PETSC_DETERMINE,n);
+  VecSetSizes(xr,N,PETSC_DETERMINE);
   VecSetFromOptions(xr);
   VecDuplicate(xr,&xi);
 

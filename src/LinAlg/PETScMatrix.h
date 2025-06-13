@@ -227,8 +227,6 @@ protected:
 
   //! \brief Calculates blocks for global eqs.
   void setupGlb2Blk(const SAM& sam);
-  //! \brief Calculates the global-to-block mapping for equations.
-  std::vector<std::array<int,2>> setupGlb2BlkEq(const SAM& sam);
 
   Mat                 pA;              //!< The actual PETSc matrix
   KSP                 ksp;             //!< Linear equation solver
