@@ -3229,7 +3229,7 @@ size_t ASMs2D::getNoProjectionNodes () const
 }
 
 
-void ASMs2D::getElmConnectivities (IntMat& neigh) const
+bool ASMs2D::getElmConnectivities (IntMat& neigh) const
 {
   const int n1 = surf->numCoefs_u();
   const int n2 = surf->numCoefs_v();
@@ -3253,6 +3253,8 @@ void ASMs2D::getElmConnectivities (IntMat& neigh) const
         if (i2 < n2)
           neigh[idx][3] = MLGE[iel+N1]-1;
       }
+
+  return true;
 }
 
 

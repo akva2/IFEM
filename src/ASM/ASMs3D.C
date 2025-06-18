@@ -3758,7 +3758,7 @@ size_t ASMs3D::getNoProjectionNodes () const
 }
 
 
-void ASMs3D::getElmConnectivities (IntMat& neigh) const
+bool ASMs3D::getElmConnectivities (IntMat& neigh) const
 {
   const int n1 = svol->numCoefs(0);
   const int n2 = svol->numCoefs(1);
@@ -3790,6 +3790,8 @@ void ASMs3D::getElmConnectivities (IntMat& neigh) const
           if (i3 < n3)
             neigh[idx][5] = MLGE[iel+N1*N2]-1;
         }
+
+  return true;
 }
 
 

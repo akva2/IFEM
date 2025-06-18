@@ -2920,7 +2920,7 @@ void ASMu2D::computeBasis (double u, double v, Go::BasisDerivsSf3& bas,
 }
 
 
-void ASMu2D::getElmConnectivities (IntMat& neigh) const
+bool ASMu2D::getElmConnectivities (IntMat& neigh) const
 {
   const double epsilon = 1.0e-6;
   const LR::LRSplineSurface* lr = this->getBasis(1);
@@ -2958,6 +2958,8 @@ void ASMu2D::getElmConnectivities (IntMat& neigh) const
       }
     }
   }
+
+  return true;
 }
 
 
