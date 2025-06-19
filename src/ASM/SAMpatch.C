@@ -192,20 +192,20 @@ bool SAMpatch::initElementConn ()
     for (i = 1, eit = pch->begin_elm(); eit != pch->end_elm(); ++eit)
       if ((id = pch->getElmID(i++)) > 0)
       {
-	mpmnpc[ip] = mpmnpc[ip-1];
-	for (int inod : *eit)
-	  if (inod == -2147483648) // Hack for node 0: Using -maxint as flag
-	    mmnpc[(mpmnpc[ip]++)-1] = -pch->getNodeID(1);
-	  else if (inod < 0)
-	    mmnpc[(mpmnpc[ip]++)-1] = -pch->getNodeID(1-inod);
-	  else
-	    mmnpc[(mpmnpc[ip]++)-1] =  pch->getNodeID(1+inod);
+        mpmnpc[ip] = mpmnpc[ip-1];
+        for (int inod : *eit)
+          if (inod == -2147483648) // Hack for node 0: Using -maxint as flag
+            mmnpc[(mpmnpc[ip]++)-1] = -pch->getNodeID(1);
+          else if (inod < 0)
+            mmnpc[(mpmnpc[ip]++)-1] = -pch->getNodeID(1-inod);
+          else
+            mmnpc[(mpmnpc[ip]++)-1] =  pch->getNodeID(1+inod);
 
-	// Check that the elements are in consequtive order
-	if ((ip++) > 1 && id <= elmId.back())
-	  outOfOrder++;
+        // Check that the elements are in consequtive order
+        if ((ip++) > 1 && id <= elmId.back())
+          outOfOrder++;
 
-	elmId.push_back(id);
+        elmId.push_back(id);
       }
 
   if (outOfOrder == 0 && eMax == nel)
@@ -219,7 +219,7 @@ bool SAMpatch::initElementConn ()
     IFEM::cout <<"Detected "<< eMax-nel
                <<" holes in the element numbers, reordering..."<< std::endl;
 
-  typedef std::pair<int,int> Ipair;
+  using Ipair = std::pair<int,int>;
   std::map<int,Ipair> sortedElms;
   for (i = 0; i < elmId.size(); i++)
     if (sortedElms.find(elmId[i]) == sortedElms.end())
