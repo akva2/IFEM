@@ -18,6 +18,7 @@
 #include "SparseMatrix.h"
 #include "TimeDomain.h"
 #include "FiniteElement.h"
+#include "IFEM.h"
 #include "GlbL2projector.h"
 #include "GlobalIntegral.h"
 #include "LocalIntegral.h"

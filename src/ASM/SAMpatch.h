@@ -54,6 +54,9 @@ public:
   //! \brief Merges the assembly data from another %SIM with this.
   virtual bool merge(const SAM* other, const std::map<int,int>* old2new);
 
+  //! \brief Obtain element neighbours.
+  void getElmConnectivities(std::vector<std::vector<int>>& neigh) const;
+
 protected:
   //! \brief Initializes the nodal arrays \a MINEX, \a MADOF and \a MSC.
   bool initNodeDofs(const std::vector<char>& dTypes);

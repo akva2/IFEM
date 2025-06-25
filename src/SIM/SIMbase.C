@@ -2049,8 +2049,8 @@ bool SIMbase::systemModes (std::vector<Mode>& solution,
   bool freq = iop == 3 || iop == 4 || iop == 6 || iop > 10;
   IFEM::cout <<"\n >>> Computed Eigenvalues <<<\n     Mode\t"
              << (freq ? "Frequency [Hz]" : "Eigenvalue");
-  solution.resize(nev);
-  for (int i = 1; i <= nev && ok; i++)
+  solution.resize(eigVal.size());
+  for (size_t i = 1; i <= std::min(eigVal.size(), static_cast<size_t>(nev)) && ok; ++i)
   {
     solution[i-1].eigNo = i;
     solution[i-1].eqnVec = eigVec.getColumn(i);

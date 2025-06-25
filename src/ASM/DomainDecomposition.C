@@ -25,6 +25,7 @@
 #include "Vec3.h"
 #include "IFEM.h"
 #include <functional>
+#include <iterator>
 #include <numeric>
 
 #ifdef HAS_ZOLTAN
@@ -766,7 +767,7 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
     int leq = blocks[0].MLGEQ[seq-1];
     old2new[0][leq] = it;
     o2nu[0][leq-nEqs[0]-1] = true;
-    if (blocks.size() > 1 && !blkLMs.empty()) {
+    if (blocks.size() > 2 && !blkLMs.empty()) {
       int lleq = blocks[2].MLGEQ[blocks[2].G2LEQ[seq]-1];
       old2new[2][lleq] = *blockIt;
       o2nu[2][lleq-nEqs[2]-1] = true;
@@ -912,8 +913,8 @@ bool DomainDecomposition::calcGlobalEqNumbers(const ProcessAdm& adm,
 }
 
 
-bool DomainDecomposition::calcGlobalEqNumbersPart(const ProcessAdm& adm,
-                                                  const SIMbase& sim)
+bool DomainDecomposition::calcGlobalEqNumbersPart (const ProcessAdm& adm,
+                                                   const SIMbase& sim)
 {
 #ifdef HAVE_MPI
   for (size_t b = 0; b < blocks.size(); ++b) {
@@ -933,7 +934,8 @@ bool DomainDecomposition::calcGlobalEqNumbersPart(const ProcessAdm& adm,
 
   for (size_t i = 0; i < myElms.size(); ++i) {
     IntVec meen;
-    sim.getSAM()->getElmEqns(meen, myElms[i]+1);
+    int gEl = myElms[i]+1;//sim.getPatch(1)->getElmID(myElms[i]+1);
+    sim.getSAM()->getElmEqns(meen, gEl);
     for (int eq : meen) {
       for (size_t b = 0; b < blocks.size(); ++b) {
         int beq = eq;
@@ -956,6 +958,7 @@ bool DomainDecomposition::calcGlobalEqNumbersPart(const ProcessAdm& adm,
     MPI_Bcast(&blocks[b].MLGEQ[0], blocks[b].MLGEQ.size(), MPI_INT,
               adm.getNoProcs()-1, *adm.getCommunicator());
   }
+
   for (size_t i = 0; i < blocks[0].MLGEQ.size(); ++i)
     blocks[0].G2LEQ[blocks[0].MLGEQ[i]] = i+1;
 #endif
@@ -976,7 +979,7 @@ int DomainDecomposition::getGlobalEq(int lEq, size_t idx) const
     return lEq;
   }
 
-  if (!blocks[idx].MLGEQ.empty() && lEq > (int)blocks[idx].MLGEQ.size())
+  if (blocks[idx].MLGEQ.empty() || lEq > static_cast<int>(blocks[idx].MLGEQ.size()))
     return 0;
 
   return blocks[idx].MLGEQ[lEq-1];
@@ -1284,20 +1287,21 @@ bool DomainDecomposition::graphPartition(const ProcessAdm& adm, const SIMbase& s
   int changes, numGidEntries, numLidEntries, numImport, numExport;
   ZOLTAN_ID_PTR importGlobalGids, importLocalGids, exportGlobalGids, exportLocalGids;
   int* importProcs, *importToPart, *exportProcs, *exportToPart;
+  IFEM::cout << "  ... partitioning mesh using Zoltan" << std::endl;
   Zoltan_LB_Partition(zz, /* input (all remaining fields are output) */
-                           &changes,        /* 1 if partitioning was changed, 0 otherwise */
-                           &numGidEntries,  /* Number of integers used for a global ID */
-                           &numLidEntries,  /* Number of integers used for a local ID */
-                           &numImport,      /* Number of vertices to be sent to me */
-                           &importGlobalGids,  /* Global IDs of vertices to be sent to me */
-                           &importLocalGids,   /* Local IDs of vertices to be sent to me */
-                           &importProcs,    /* Process rank for source of each incoming vertex */
-                           &importToPart,   /* New partition for each incoming vertex */
-                           &numExport,      /* Number of vertices I must send to other processes*/
-                           &exportGlobalGids,  /* Global IDs of the vertices I must send */
-                           &exportLocalGids,   /* Local IDs of the vertices I must send */
-                           &exportProcs,    /* Process to which I send each of the vertices */
-                           &exportToPart);  /* Partition to which each vertex will belong */
+                      &changes,        /* 1 if partitioning was changed, 0 otherwise */
+                      &numGidEntries,  /* Number of integers used for a global ID */
+                      &numLidEntries,  /* Number of integers used for a local ID */
+                      &numImport,      /* Number of vertices to be sent to me */
+                      &importGlobalGids,  /* Global IDs of vertices to be sent to me */
+                      &importLocalGids,   /* Local IDs of vertices to be sent to me */
+                      &importProcs,    /* Process rank for source of each incoming vertex */
+                      &importToPart,   /* New partition for each incoming vertex */
+                      &numExport,      /* Number of vertices I must send to other processes*/
+                      &exportGlobalGids,  /* Global IDs of the vertices I must send */
+                      &exportLocalGids,   /* Local IDs of the vertices I must send */
+                      &exportProcs,    /* Process to which I send each of the vertices */
+                      &exportToPart);  /* Partition to which each vertex will belong */
 
   if (sim.getProcessAdm().getProcId() == 0) {
     std::vector<bool> offProc(sim.getNoElms(), false);

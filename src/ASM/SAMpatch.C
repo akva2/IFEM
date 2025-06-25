@@ -11,11 +11,42 @@
 //!
 //==============================================================================
 
+#include "Profiler.h"
 #include "SAMpatch.h"
 #include "ASMbase.h"
 #include "MPC.h"
 #include "IFEM.h"
+
 #include <functional>
+#include <set>
+
+namespace {
+
+template<class I1, class I2, class Comp = std::less<> >
+bool has_element_in_common(I1 first1, I1 last1, I2 first2, I2 last2, Comp&& comp = Comp())
+{
+  while (first1 != last1 && first2 != last2) {
+    if (comp(*first1, *first2))
+      ++first1;
+    else if (comp(*first2, *first1))
+      ++first2;
+    else
+      return true;
+  }
+
+  return false;
+}
+
+
+bool has_element_in_common(const std::set<int>& s1, const std::set<int>& s2)
+{
+  // Optimize, these cannot have anything in common.
+   if (s1.empty() || s2.empty() || *s2.begin() > *(s1.rbegin()))
+     return false;
+  return has_element_in_common(s1.begin(), s1.end(), s2.begin(), s2.end());
+}
+
+}
 
 
 bool SAMpatch::init (const std::vector<ASMbase*>& patches, int numNod,
@@ -503,4 +534,30 @@ bool SAMpatch::merge (const SAM* other, const std::map<int,int>* old2new)
   bool status = this->initSystemEquations();
   IFEM::cout <<"Number of unknowns    "<< neq << std::endl;
   return status;
+}
+
+
+void SAMpatch::getElmConnectivities (IntMat& neigh) const
+{
+  PROFILE("Get element connectivities");
+  for (const ASMbase* pch : this->model) {
+    std::vector<std::set<int>> mnpcCache;
+    mnpcCache.resize(pch->getNoElms());
+    IFEM::cout << "  ... setting up element node cache from SAM for P"
+               << pch->idx+1 << " (" << pch->getNoElms() << " elms)" << std::endl;
+#pragma omp parallel for schedule(static)
+    for (size_t iel = 1; iel <= pch->getNoElms(); ++iel) {
+      int samEl = pch->getElmID(iel);
+      this->getUniqueEqns(mnpcCache[iel-1], samEl);
+    }
+
+    IFEM::cout << "  ... determining element connectivities from SAM for P"
+               << pch->idx + 1 << std::endl;
+#pragma omp parallel for schedule(static)
+    for (size_t iel = 0; iel < mnpcCache.size(); ++iel)
+      for (size_t el = 0; el < mnpcCache.size(); ++el)
+        if (iel != el && has_element_in_common(mnpcCache[iel], mnpcCache[el]))
+          neigh[pch->getElmID(iel+1)-1].push_back(pch->getElmID(el+1)-1);
+    IFEM::cout << "  ... done" << std::endl;
+  }
 }

@@ -15,6 +15,7 @@
 #include "PETScSchurPC.h"
 #include "ProcessAdm.h"
 #include "LinAlgInit.h"
+#include "IFEM.h"
 #include "SAM.h"
 
 namespace {
@@ -54,19 +55,17 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
     int jeq = meen[j-1];
     if (jeq < 1) continue;
 
-#pragma omp critical
-    MatSetValue(A[getBlk(jeq, jeq)], getEq(jeq), getEq(jeq), eM(j,j), ADD_VALUES);
+    int pjeq = getEq(jeq);
+    MatSetValue(A[getBlk(jeq, jeq)], pjeq, pjeq, eM(j,j), ADD_VALUES);
 
     for (i = 1; i < j; i++)
     {
       int ieq = meen[i-1];
       if (ieq < 1) continue;
+      int pieq = getEq(ieq);
 
-#pragma omp critical
-      {
-        MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq), eM(i,j), ADD_VALUES);
-        MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq), eM(j,i), ADD_VALUES);
-      }
+      MatSetValue(A[getBlk(ieq, jeq)], pieq, pjeq, eM(i,j), ADD_VALUES);
+      MatSetValue(A[getBlk(jeq, ieq)], pjeq, pieq, eM(j,i), ADD_VALUES);
     }
   }
 
@@ -87,14 +86,12 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
         int ieq = meen[i-1];
         int iceq = -ieq;
         if (ieq > 0)
-#pragma omp critical
           VecSetValue(*SV, dd.getGlobalEq(ieq)-1, -c0*eM(i,j), ADD_VALUES);
         else if (iceq > 0)
           for (ip = mpmceq[iceq-1]; ip < mpmceq[iceq]-1; ip++)
             if (mmceq[ip] > 0)
             {
               ieq = meqn[mmceq[ip]-1];
-#pragma omp critical
               VecSetValue(*SV, dd.getGlobalEq(ieq)-1,
                           -c0*ttcc[ip]*eM(i,j), ADD_VALUES);
             }
@@ -111,20 +108,16 @@ void assemSparse (const Matrix& eM, PETScMatrix& SM, Vec* SV,
           int iceq = -ieq;
           if (ieq > 0)
           {
-#pragma omp critical
-            {
-              MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq),
-                          ttcc[jp]*eM(i,j), ADD_VALUES);
-              MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq),
-                          ttcc[jp]*eM(j,i), ADD_VALUES);
-            }
+            MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq),
+                        ttcc[jp]*eM(i,j), ADD_VALUES);
+            MatSetValue(A[getBlk(jeq, ieq)], getEq(jeq), getEq(ieq),
+                        ttcc[jp]*eM(j,i), ADD_VALUES);
           }
           else if (iceq > 0)
             for (ip = mpmceq[iceq-1]; ip < mpmceq[iceq]-1; ip++)
               if (mmceq[ip] > 0)
               {
                 ieq = meqn[mmceq[ip]-1];
-#pragma omp critical
                 MatSetValue(A[getBlk(ieq, jeq)], getEq(ieq), getEq(jeq),
                             ttcc[ip]*ttcc[jp]*eM(i,j), ADD_VALUES);
               }
@@ -497,15 +490,15 @@ void PETScMatrix::setupGlb2Blk (const SAM& sam)
   const DomainDecomposition& dd = adm.dd;
 
   for (int ieq = 1; ieq <= sam.neq; ++ieq) {
-    for (size_t b = 0; b < blocks; ++b) {
-      if (const auto it = dd.getG2LEQ(b+1).find(ieq);
-          it != dd.getG2LEQ(b+1).end())
+    for (size_t b = 1; b <= blocks; ++b) {
+      if (const auto it = dd.getG2LEQ(b).find(ieq);
+          it != dd.getG2LEQ(b).end())
       {
         glb2Blk[ieq-1][0] = b;
         if (adm.isParallel())
           glb2Blk[ieq-1][1] = adm.dd.isPartitioned()
-                                  ? adm.dd.getGlobalEq(ieq, b+1)
-                                  : adm.dd.getGlobalEq(it->second, b+1);
+                                  ? adm.dd.getGlobalEq(ieq, b)
+                                  : adm.dd.getGlobalEq(it->second, b);
         else
           glb2Blk[ieq-1][1] = it->second;
         break;
@@ -533,13 +526,11 @@ void PETScMatrix::setupBlockSparsityDD (const SAM& sam)
     }
 
   for (int i = 0; i < sam.neq; ++i) {
-    int blk = glb2Blk[i][0]+1;
-    int grow = glb2Blk[i][1];
+    const auto& [blk, grow] = glb2Blk[i];
 
     if (grow >= dd.getMinEq(blk) && grow <= dd.getMaxEq(blk))
       for (int dof : dofc[i]) {
-        int cblk = glb2Blk[dof-1][0]+1;
-        int gcol = glb2Blk[dof-1][1];
+        const auto& [cblk, gcol] = glb2Blk[dof-1];
         if (gcol >= dd.getMinEq(cblk) && gcol <= dd.getMaxEq(cblk))
           ++d_nnz[(blk-1)*blocks + cblk-1][grow-dd.getMinEq(blk)];
         else
@@ -667,12 +658,13 @@ void PETScMatrix::setupBlockSparsitySerial (const SAM& sam)
 bool PETScMatrix::assemble (const Matrix& eM, const SAM& sam, int e)
 {
   if (solParams.useSparseMatrix())
-      return this->SparseMatrix::assemble(eM, sam, e);
+    return this->SparseMatrix::assemble(eM, sam, e);
 
   IntVec meen;
   if (!sam.getElmEqns(meen,e,eM.rows()))
     return false;
 
+#pragma omp critical
   assemSparse(eM,*this,nullptr,adm.dd,glb2Blk,meen,sam.meqn,sam.mpmceq,sam.mmceq,sam.ttcc);
 
   return this->flagNonZeroEqs(meen);
@@ -692,6 +684,7 @@ bool PETScMatrix::assemble (const Matrix& eM, const SAM& sam,
   if (!sam.getElmEqns(meen,e,eM.rows()))
     return false;
 
+#pragma omp critical
   assemSparse(eM,*this,&Bptr->getVector(),adm.dd,glb2Blk,meen,sam.meqn,sam.mpmceq,sam.mmceq,sam.ttcc);
 
   return this->flagNonZeroEqs(meen);
@@ -728,6 +721,12 @@ bool PETScMatrix::endAssembly ()
 
   MatAssemblyBegin(pA,MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(pA,MAT_FINAL_ASSEMBLY);
+
+  // PetscInt nz;
+  // const PetscScalar* va;
+  // MatGetRow(pA, 1, &nz, nullptr, &va);
+  // IFEM::cout << "numrows " << nz << " " << *std::max_element(va, va + nz) << std::endl;
+  // MatRestoreRow(pA, 1, &nz, nullptr, &va);
 
   assembled = true;
 
@@ -943,16 +942,33 @@ bool PETScMatrix::solveEig (PETScMatrix& B, RealArray& val,
   ST          st;
   PetscInt    m, n, nconv;
   PetscScalar kr, ki;
-  PetscScalar *xrarr;
   Vec         xr, xi;
 
   EPS eps;
   EPSCreate(*adm.getCommunicator(),&eps);
 
-  MatAssemblyBegin(pA,MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(pA,MAT_FINAL_ASSEMBLY);
-  MatAssemblyBegin(B.pA,MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(B.pA,MAT_FINAL_ASSEMBLY);
+  // MatAssemblyBegin(pA,MAT_FINAL_ASSEMBLY);
+  // MatAssemblyEnd(pA,MAT_FINAL_ASSEMBLY);
+  // MatAssemblyBegin(B.pA,MAT_FINAL_ASSEMBLY);
+  // MatAssemblyEnd(B.pA,MAT_FINAL_ASSEMBLY);
+  // Vec tmp;
+  // VecCreate(*adm.getCommunicator(), &tmp);
+  PetscInt M, N;
+  MatGetLocalSize(pA,&M,&N);
+  MatGetSize(pA,&m,&n);
+  // VecSetSizes(tmp, M, PETSC_DETERMINE);
+  // VecSetUp(tmp);
+  // MatGetDiagonal(B.pA, tmp);
+
+  // PetscScalar* arr;
+  // VecGetArray(tmp, &arr);
+  // for (PetscInt i = 0; i < M; ++i) {
+  //     IFEM::cout << arr[i] << " ";
+  //     if (arr[i] == 0.0)
+  //       IFEM::cout << i << " " << adm.dd.getGlobalEq(i+1) << std::endl;
+  //     IFEM::cout << std::endl;
+  // }
+  // VecDestroy(&tmp);
 
   const auto slepc_mode = std::array{EPS_NHEP, EPS_HEP, EPS_GHEP, EPS_GNHEP};
   EPSSetOperators(eps,pA,iop > 2 ? B.pA : nullptr);
@@ -960,13 +976,11 @@ bool PETScMatrix::solveEig (PETScMatrix& B, RealArray& val,
 
   EPSSetType(eps,EPSKRYLOVSCHUR);
   EPSSetWhichEigenpairs(eps,EPS_SMALLEST_MAGNITUDE);
-  EPSSetDimensions(eps, nv, PETSC_DETERMINE, 4*nv);
+  EPSSetDimensions(eps, nv, PETSC_DETERMINE, PETSC_DETERMINE);
   EPSSetFromOptions(eps);
   EPSGetST(eps,&st);
   STSetShift(st,shift);
 
-  PetscCall(STSetPreconditionerMat(st, nullptr));
-  PetscCall(STGetOperator(st,NULL));
   STGetKSP(st, &ksp);
   this->setParameters(false);
   ksp = nullptr;
@@ -977,9 +991,6 @@ bool PETScMatrix::solveEig (PETScMatrix& B, RealArray& val,
   EPSSolve(eps);
   EPSGetConverged(eps,&nconv);
 
-  MatGetSize(pA,&m,&n);
-  PetscInt M, N;
-  MatGetLocalSize(pA,&M,&N);
   if (m != n) return false;
   if (M != N) return false;
 
@@ -987,19 +998,35 @@ bool PETScMatrix::solveEig (PETScMatrix& B, RealArray& val,
   VecSetSizes(xr,N,PETSC_DETERMINE);
   VecSetFromOptions(xr);
   VecDuplicate(xr,&xi);
+  Vec eig;
+  VecScatter scatter;
+  VecScatterCreateToAll(xr, &scatter, &eig);
 
-  val.resize(nv);
-  vec.resize(n,nv);
-  for (int i = 0; i < nv; i++) {
+  val.resize(nconv);
+  vec.resize(n,nconv);
+  for (int i = 0; i < nconv; i++) {
     EPSGetEigenpair(eps,i,&kr,&ki,xr,xi);
-    VecGetArray(xr,&xrarr);
+
     val[i] = kr;
-    vec.fillColumn(i+1,xrarr);
-    VecRestoreArray(xr,&xrarr);
+
+    VecScatterBegin(scatter, xr, eig, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterEnd(scatter, xr, eig, INSERT_VALUES, SCATTER_FORWARD);
+
+    PetscScalar* xrarr;
+    VecGetArray(eig, &xrarr);
+    if (adm.dd.isPartitioned())
+      for (const auto& it : adm.dd.getG2LEQ(0))
+        vec(it.second,i+1) = xrarr[it.first-1];
+    else
+      vec.fillColumn(i+1,xrarr);
+
+    VecRestoreArray(eig,&xrarr);
   }
 
   VecDestroy(&xi);
   VecDestroy(&xr);
+  VecDestroy(&eig);
+  VecScatterDestroy(&scatter);
 
   EPSDestroy(&eps);
 

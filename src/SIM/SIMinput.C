@@ -25,6 +25,7 @@
 #include "DualField.h"
 #include "Functions.h"
 #include "FunctionSum.h"
+#include "SAMpatch.h"
 #include "Utilities.h"
 #include "Vec3Oper.h"
 #include "HDF5Reader.h"
@@ -212,18 +213,14 @@ bool SIMinput::parseGeometryTag (const tinyxml2::XMLElement* elem)
       {
         IFEM::cout <<"\tReading partitioning from file "<< file;
 
-        IntVec elmOfs(adm.getNoProcs());
-        int procId = 0;
+        IntVec elmSize(adm.getNoProcs());
         size_t ofs = 0;
-        for (int& eofs : elmOfs)
-        {
-          ifs.read(reinterpret_cast<char*>(&eofs), sizeof(int));
-          if (procId++ < adm.getProcId()) ofs += eofs;
-        }
-        ifs.seekg(ofs*sizeof(int), std::ios_base::cur);
-        elms.resize(elmOfs[adm.getProcId()]);
-        for (int& eofs : elmOfs)
-          ifs.read(reinterpret_cast<char*>(&eofs), sizeof(int));
+        ifs.read(reinterpret_cast<char*>(elmSize.data()), adm.getNoProcs()*sizeof(int));
+        for (int i = 0; i < adm.getProcId(); ++i)
+          ofs += elmSize[i];
+        ifs.seekg(ofs * sizeof(int), std::ios_base::cur);
+        elms.resize(elmSize[adm.getProcId()]);
+        ifs.read(reinterpret_cast<char*>(elms.data()), elmSize[adm.getProcId()]*sizeof(int));
 
         IFEM::cout <<", size = "<< elms.size() << std::endl;
       }
@@ -1931,8 +1928,10 @@ bool SIMinput::deSerialize (const SerializeMap&)
 IntMat SIMinput::getElmConnectivities () const
 {
   IntMat neigh(this->getNoElms());
-  for (const ASMbase* pch : myModel)
-    pch->getElmConnectivities(neigh);
+  if (!std::all_of(myModel.begin(), myModel.end(),
+                   [&neigh](const ASMbase* pch)
+                   { return pch->getElmConnectivities(neigh); }))
+    static_cast<SAMpatch*>(mySam)->getElmConnectivities(neigh);
 
   for (const ASM::Interface& iface : myInterfaces)
     if (iface.dim == static_cast<int>(nsd)-1)
