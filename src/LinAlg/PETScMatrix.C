@@ -43,11 +43,11 @@ PETScVector::PETScVector(const ProcessAdm& padm, size_t n)
 PETScVector::PETScVector(const ProcessAdm& padm, const Real* values, size_t n)
   : StdVector(values,n), adm(padm)
 {
-  if (adm.isParallel())
+  if (adm.isParallel() && adm.dd.isPartitioned())
     n = adm.dd.getMaxEq() - adm.dd.getMinEq() + 1;
 
   VecCreate(*adm.getCommunicator(),&x);
-  VecSetSizes(x,n,PETSC_DECIDE);
+  VecSetSizes(x,PETSC_DECIDE,n);
   VecSetFromOptions(x);
   LinAlgInit::increfs();
 }
@@ -771,17 +771,21 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool knoll)
 
 bool PETScMatrix::assembleDirect()
 {
-  MatSetSizes(pA, this->dim(1), this->dim(2),
-              PETSC_DETERMINE, PETSC_DETERMINE);
+  MatSetSizes(pA, PETSC_DETERMINE, PETSC_DETERMINE, this->dim(1), this->dim(2));
 
-  IntVec iA, jA;
-  this->calcCSR(iA,jA);
-  MatMPIAIJSetPreallocationCSR(pA, iA.data(), jA.data(), nullptr);
-  MatSetOption(pA, MAT_NEW_NONZERO_LOCATION_ERR, PETSC_TRUE);
+  // IntVec iA, jA;
+  // this->calcCSR(iA,jA);
+  // MatMPIAIJSetPreallocationCSR(pA, iA.data(), jA.data(), nullptr);
+  MatSetOption(pA, MAT_NEW_NONZERO_LOCATION_ERR, PETSC_FALSE);
   MatSetUp(pA);
+  PetscInt low, high;
+
+  MatGetOwnershipRange(pA, &low, &high);
 
   for (const auto& e : this->getValues())
-    MatSetValue(pA, e.first.first-1, e.first.second-1, e.second, INSERT_VALUES);
+    if (static_cast<PetscInt>(e.first.first-1) >= low &&
+        static_cast<PetscInt>(e.first.first-1) < high)
+      MatSetValue(pA, e.first.first-1, e.first.second-1, e.second, INSERT_VALUES);
 
   MatAssemblyBegin(pA,MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(pA,MAT_FINAL_ASSEMBLY);

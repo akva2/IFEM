@@ -197,7 +197,7 @@ void AlgEqSystem::initialize (char initLHS)
   std::fill(R.begin(),R.end(),0.0);
 
 #ifdef USE_OPENMP
-  size_t nthread = omp_get_max_threads();
+  size_t nthread = std::max(1, omp_get_max_threads());
   if (nthread > 1 && !c.empty())
   {
     d = new std::vector<double>[nthread];
@@ -351,7 +351,7 @@ bool AlgEqSystem::staticCondensation (Matrix& Ared, Vector& bred,
                                       const IntVec& extNodes, size_t imat,
                                       const char* recmatFile) const
 {
-  if (imat > A.size()) return false;
+  if (imat >= A.size()) return false;
 
   const SparseMatrix* Amat = dynamic_cast<const SparseMatrix*>(A[imat]._A);
   const double*       Rvec = A[imat]._b ? A[imat]._b->getRef() : nullptr;

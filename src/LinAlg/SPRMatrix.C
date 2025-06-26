@@ -13,8 +13,11 @@
 
 #include "SPRMatrix.h"
 #include "SAM.h"
+
+#ifdef HAS_SPR
 #include <numeric>
 #include <fstream>
+#endif
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -158,7 +161,7 @@ SPRMatrix::SPRMatrix () : rWork(1)
   values = nullptr;
 
 #ifdef USE_OPENMP
-  jWork = new std::vector<Int_>[omp_get_max_threads()];
+  jWork = new std::vector<Int_>[std::max(1,omp_get_max_threads())];
 #else
   jWork = &iWork;
 #endif
@@ -185,7 +188,7 @@ SPRMatrix::SPRMatrix (const SPRMatrix& A) : SystemMatrix(A), rWork(1)
   values = copyArr(A.values,A.mpar[7]+A.mpar[15]);
 
 #ifdef USE_OPENMP
-  jWork = new std::vector<Int_>[omp_get_max_threads()];
+  jWork = new std::vector<Int_>[std::max(1, omp_get_max_threads())];
 #else
   jWork = &iWork;
 #endif

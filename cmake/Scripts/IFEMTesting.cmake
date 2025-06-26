@@ -17,6 +17,7 @@ macro(IFEM_add_test_app path workdir name parallel)
   include(GoogleTest)
   gtest_discover_tests(${name}-test
                        WORKING_DIRECTORY ${workdir}
+                       DISCOVERY_TIMEOUT 100
                        NO_PRETTY_VALUES)
   list(APPEND TEST_APPS ${name}-test)
   target_link_libraries(${name}-test GTest::GTest ${ARGN})
@@ -58,6 +59,7 @@ macro(IFEM_add_unittests IFEM_PATH)
     set(TEST_SRCS_MPI ${IFEM_PATH}/src/ASM/Test/MPI/TestDomainDecomposition.C)
     if(PETSC_FOUND)
       list(APPEND TEST_SRCS_MPI ${IFEM_PATH}/src/LinAlg/Test/MPI/TestPETScMatrix.C)
+      list(APPEND TEST_SRCS_MPI ${IFEM_PATH}/src/Eig/Test/MPI/TestEigSolver.C)
     endif()
     if(ISTL_FOUND)
       list(APPEND TEST_SRCS_MPI ${IFEM_PATH}/src/LinAlg/Test/MPI/TestISTLMatrix.C)
