@@ -87,6 +87,13 @@ public:
   //! \brief Get integer setting
   bool hasValue(const std::string& key) const { return params.hasValue(key); }
 
+  //! \brief True if we should assemble to Sparse matrix and copy to PETSc matrix.
+  bool useSparseMatrix() const
+  {
+      return params.hasValue("use_sparse_matrix")
+          && params.getIntValue("use_sparse_matrix") == 1;
+  }
+
   //! \brief Returns the linear system type.
   LinAlg::LinearSystemType getLinSysType() const { return params.getLinSysType(); }
 

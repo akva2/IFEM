@@ -116,6 +116,23 @@ public:
   //! \brief Initializes the matrix to zero assuming it is properly dimensioned.
   void init() override;
 
+  //! \brief Adds an element matrix into the associated system matrix.
+  //! \param[in] eM  The element matrix
+  //! \param[in] sam Auxiliary data for FE assembly management
+  //! \param[in] e   Identifier for the element that \a eM belongs to
+  //! \return \e true on successful assembly, otherwise \e false
+  bool assemble(const Matrix& eM, const SAM& sam, int e) override;
+  //! \brief Adds an element matrix into the associated system matrix.
+  //! \param[in] eM  The element matrix
+  //! \param[in] sam Auxiliary data for FE assembly management
+  //! \param     B   The system right-hand-side vector
+  //! \param[in] e   Identifier for the element that \a eM belongs to
+  //! \return \e true on successful assembly, otherwise \e false
+  //!
+  //! \details When multi-point constraints are present, contributions from
+  //! these are also added into the system right-hand-side vector, \a B.
+  bool assemble(const Matrix& eM, const SAM& sam, SystemVector& B, int e) override;
+
   //! \brief Finalizes the system matrix assembly.
   bool endAssembly() override;
 
@@ -190,28 +207,22 @@ protected:
               const PETScSolParams& spar,
               const SparseMatrix& A);
 
-  //! \brief Setup sparsity pattern for a DD partitioned model.
+  //! \brief Setup sparsity pattern for model.
+  //! \param[in] elms Elements on this process
   //! \param[in] sam Auxiliary data describing the FE model topology, etc.
-  void setupSparsityDD(const SAM& sam);
-  //! \brief Setup sparsity pattern for a graph partitioned model.
-  //! \param[in] sam Auxiliary data describing the FE model topology, etc.
-  void setupSparsityPartitioned(const SAM& sam);
-  //! \brief Setup sparsity pattern for a serial model.
-  //! \param[in] sam Auxiliary data describing the FE model topology, etc.
-  void setupSparsitySerial(const SAM& sam);
+  void setupSparsity(const std::vector<int>& elms, const SAM& sam);
 
-  //! \brief Setup sparsity pattern for block-matrices for a DD partitioned model.
-  //! \param[in] sam Auxiliary data describing the FE model topology, etc.
-  void setupBlockSparsityDD(const SAM& sam);
-  //! \brief Setup sparsity pattern for block-matrices for a graph partitioned model.
-  void setupBlockSparsityPartitioned(const SAM& sam);
-  //! \brief Setup sparsity pattern for block-matrices for a serial model.
-  void setupBlockSparsitySerial(const SAM& sam);
+  //! \brief Setup sparsity pattern for block-matrices for a model.
+  void setupBlockSparsity(const std::vector<int>& elms, const SAM& sam);
 
-  //! \brief Calculates the global-to-block mapping for equations.
-  std::vector<std::array<int,2>> setupGlb2Blk (const SAM& sam);
-  //! \brief Calculates the global-to-block mapping for equations for a graph partitioned model.
-  void setupGlb2BlkPart (const SAM& sam);
+  //! \brief Calculates blocks for global eqs.
+  void setupGlb2Blk(const SAM& sam);
+
+  //! \brief Sets up preallocator matrix.
+  Mat preAllocator (const int nrows, const int ncols = 0) const;
+
+  //! \brief Sets up preallocator matrices for blocks.
+  std::vector<Mat> preAllocators () const;
 
   Mat                 pA;              //!< The actual PETSc matrix
   KSP                 ksp;             //!< Linear equation solver
@@ -230,7 +241,8 @@ protected:
   std::vector<Mat> matvec; //!< Blocks for block matrices.
 
   std::vector<IS> isvec; //!< Index sets for blocks.
-  std::vector<std::array<int,3>> glb2Blk; //!< Maps matrix entries in CSC order to block matrix entries.
+
+  std::vector<std::array<int,2>> glb2Blk; //!< Maps equations to block and block eq.
 };
 
 
