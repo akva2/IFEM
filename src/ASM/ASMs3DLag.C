@@ -1339,7 +1339,7 @@ size_t ASMs3DLag::getNoProjectionNodes () const
 }
 
 
-bool ASMs3DLag::assembleL2matrices (SparseMatrix& A, StdVector& B,
+bool ASMs3DLag::assembleL2matrices (SystemMatrix& A, SystemVector& B,
                                     const L2Integrand& integrand,
                                     bool continuous) const
 {

@@ -154,7 +154,7 @@ Go::GeomObject* ASMs3D::evalSolution (const IntegrandBase& integrand) const
 }
 
 
-bool ASMs3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
+bool ASMs3D::assembleL2matrices (SystemMatrix& A, SystemVector& B,
                                  const L2Integrand& integrand,
                                  bool continuous) const
 {
@@ -172,7 +172,6 @@ bool ASMs3D::assembleL2matrices (SparseMatrix& A, StdVector& B,
   const int n2 = proj->numCoefs(1);
   const int nel1 = proj->numCoefs(0) - p1 + 1;
   const int nel2 = proj->numCoefs(1) - p2 + 1;
-  const int nel3 = proj->numCoefs(2) - p3 + 1;
 
   int pmax = p1 > p2 ? p1 : p2;
   if (pmax < p3) pmax = p3;

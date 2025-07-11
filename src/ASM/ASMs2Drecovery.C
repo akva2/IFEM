@@ -154,7 +154,7 @@ Go::GeomObject* ASMs2D::evalSolution (const IntegrandBase& integrand) const
 }
 
 
-bool ASMs2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
+bool ASMs2D::assembleL2matrices (SystemMatrix& A, SystemVector& B,
                                  const L2Integrand& integrand,
                                  bool continuous) const
 {
