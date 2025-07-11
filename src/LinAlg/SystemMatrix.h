@@ -69,6 +69,9 @@ public:
   //! \brief Copies entries from input vector \b x into \a *this.
   SystemVector& copy(const SystemVector& x);
 
+  virtual void assemble(const Vectors& vecs,
+                        const std::vector<int>& meqn, int nnod) = 0;
+
   //! \brief Finalizes the system vector assembly.
   virtual bool endAssembly() { return true; }
 
@@ -122,6 +125,10 @@ public:
 
   //! \brief Creates a copy of the system vector and returns a pointer to it.
   virtual SystemVector* copy() const { return new StdVector(*this); }
+
+  virtual void assemble(const Vectors& vecs,
+                        const std::vector<int>& meqn,
+                        int nnod);
 
   //! \brief Returns the dimension of the system vector.
   virtual size_t dim() const { return this->size(); }
