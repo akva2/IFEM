@@ -2364,6 +2364,12 @@ void ASMu3D::getElmConnectivities (IntMat& neigh, bool local) const
 }
 
 
+IntMat ASMu3D::getElmNodes (int basis) const
+{
+  return LR::getElmNodes(this->getBasis(basis));
+}
+
+
 void ASMu3D::findBoundaryElms (IntVec& elms, int lIndex, int orient) const
 {
   elms.clear();
