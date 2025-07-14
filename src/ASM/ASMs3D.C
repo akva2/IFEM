@@ -2046,6 +2046,7 @@ bool ASMs3D::integrate (Integrand& integrand,
 			const TimeDomain& time)
 {
   if (!svol) return true; // silently ignore empty patches
+  if (!myElms.empty() && myElms.front() == -1) return true;
 
   PROFILE2("ASMs3D::integrate(I)");
 
@@ -2308,11 +2309,12 @@ bool ASMs3D::integrate (Integrand& integrand,
 
 
 bool ASMs3D::integrate (Integrand& integrand,
-			GlobalIntegral& glInt,
-			const TimeDomain& time,
+                        GlobalIntegral& glInt,
+                        const TimeDomain& time,
                         const Real3DMat& itgPts)
 {
   if (!svol) return true; // silently ignore empty patches
+  if (!myElms.empty() && myElms.front() == -1) return true;
 
   if (integrand.getReducedIntegration(2) != 0)
   {
@@ -2522,6 +2524,7 @@ bool ASMs3D::integrate (Integrand& integrand, int lIndex,
 			const TimeDomain& time)
 {
   if (!svol) return true; // silently ignore empty patches
+  if (!myElms.empty() && myElms.front() == -1) return true;
 
   PROFILE2("ASMs3D::integrate(B)");
 
@@ -2789,6 +2792,7 @@ bool ASMs3D::integrateEdge (Integrand& integrand, int lEdge,
 			    const TimeDomain& time)
 {
   if (!svol) return true; // silently ignore empty patches
+  if (!myElms.empty() && myElms.front() == -1) return true;
 
   PROFILE2("ASMs3D::integrate(E)");
 
