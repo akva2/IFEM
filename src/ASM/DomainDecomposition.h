@@ -108,6 +108,11 @@ public:
   //! \brief Setup domain decomposition.
   bool setup(const ProcessAdm& adm, const SIMbase& sim);
 
+  //! \brief Setup domain decomposition.
+  bool setup(const ProcessAdm& adm,
+             const IntMat& neighs,
+             const std::vector<std::vector<int>>& mnpc);
+
   //! \brief Obtain local subdomains for an equation block.
   //! \param nx Number of domains in x
   //! \param ny Number of domains in y
@@ -257,7 +262,7 @@ private:
   bool sanityCheckCorners(const SIMbase& sim);
 
   //! \brief Setup domain decomposition based on graph partitioning.
-  bool graphPartition(const ProcessAdm& adm, const SIMbase& sim);
+  bool graphPartition(const ProcessAdm& adm, const IntMat& neigh);
 
   std::map<int,int> patchOwner; //!< Process that owns a particular patch
 
