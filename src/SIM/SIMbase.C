@@ -2025,9 +2025,11 @@ bool SIMbase::solutionNorms (const TimeDomain& time,
 
   delete norm;
 
-  if (!adm.dd.isPartitioned())
-    for (Vector& glbNorm : gNorm)
-      adm.allReduceAsSum(static_cast<RealArray&>(glbNorm));
+  if (eNorm && adm.dd.isPartitioned())
+    adm.allReduceAsSum(static_cast<RealArray&>(*eNorm));
+
+  for (Vector& glbNorm : gNorm)
+    adm.allReduceAsSum(static_cast<RealArray&>(glbNorm));
 
   return ok && this->postProcessNorms(gNorm,eNorm);
 }

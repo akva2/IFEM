@@ -1127,7 +1127,14 @@ bool ASMu2D::integrate (Integrand& integrand,
   const int p2 = lrspline->order(1);
 
   ThreadGroups oneGroup;
-  if (glInt.threadSafe()) oneGroup.oneGroup(nel);
+  if (glInt.threadSafe()) {
+    if (myElms.empty())
+      oneGroup.oneGroup(nel);
+    else if (myElms.front() == -1)
+      oneGroup[0].resize(1);
+    else
+      oneGroup[0].resize(1, myElms);
+  }
   const IntMat& group = glInt.threadSafe() ? oneGroup[0] : threadGroups[0];
 
 

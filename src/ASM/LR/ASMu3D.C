@@ -930,9 +930,15 @@ bool ASMu3D::integrate (Integrand& integrand,
   const int p3 = lrspline->order(2);
 
   ThreadGroups oneGroup;
-  if (glInt.threadSafe()) oneGroup.oneGroup(nel);
+  if (glInt.threadSafe()) {
+    if (myElms.empty())
+      oneGroup.oneGroup(nel);
+    else if (myElms.front() == -1)
+      oneGroup[0].resize(1);
+    else
+      oneGroup[0].resize(1, myElms);
+  }
   const IntMat& group = glInt.threadSafe() ? oneGroup[0] : threadGroups[0];
-
 
   // === Assembly loop over all elements in the patch ==========================
 

@@ -1725,7 +1725,14 @@ bool ASMs2D::integrate (Integrand& integrand,
   const int nel1 = n1 - p1 + 1;
 
   ThreadGroups oneGroup;
-  if (glInt.threadSafe()) oneGroup.oneStripe(nel);
+  if (glInt.threadSafe()) {
+    if (myElms.empty())
+      oneGroup.oneStripe(nel);
+    else if (myElms.front() == -1)
+      oneGroup[0].resize(1);
+    else
+      oneGroup.oneStripe(myElms);
+  }
   const ThreadGroups& groups = glInt.threadSafe() ? oneGroup : threadGroups;
 
 
