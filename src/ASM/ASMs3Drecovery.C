@@ -244,18 +244,18 @@ bool ASMs3D::assembleL2matrices (SystemMatrix& A, SystemVector& B,
             } else if ((dV = 0.125*this->getParametricVolume(1+iel)) < 0.0) {
               ok = false;
               continue; // topology error (probably logic error)
-            } else {
-              if (!this->getElementCoordinatesPrm(Xnod,gpar[0][i1*ng1],
-                                                  gpar[1][i2*ng2],gpar[2][i3*ng3])) {
-                ok = false;
-                continue;
-              }
-              else if ((dV = 0.125 * proj->knotSpan(0, mnpc.back() % n1)
-                                   * proj->knotSpan(1,(mnpc.back() / n1) % n2)
-                                    * proj->knotSpan(2, mnpc.back() / (n1*n2))) < 0.0) {
-                ok = false;
-                continue;
-              }
+            }
+          } else {
+            if (!this->getElementCoordinatesPrm(Xnod,gpar[0][i1*ng1],
+                                                gpar[1][i2*ng2],gpar[2][i3*ng3])) {
+              ok = false;
+              continue;
+            }
+            else if ((dV = 0.125 * proj->knotSpan(0, mnpc.back() % n1)
+                                 * proj->knotSpan(1,(mnpc.back() / n1) % n2)
+                                  * proj->knotSpan(2, mnpc.back() / (n1*n2))) < 0.0) {
+              ok = false;
+              continue;
             }
           }
         }

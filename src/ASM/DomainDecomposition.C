@@ -184,7 +184,7 @@ OrientIterator::OrientIterator (const ASMbase* pch, int orient, int lIdx)
 static int getNumElements (void* mesh, int* err)
 {
   *err = ZOLTAN_OK;
-  IntMat& neigh = *static_cast<IntMat*>(mesh);
+  const IntMat& neigh = *static_cast<const IntMat*>(mesh);
   return neigh.size();
 }
 
@@ -194,7 +194,7 @@ static void getElementList (void* mesh, int numGlobalEntries,
                             ZOLTAN_ID_PTR lids, int,
                             float*, int* err)
 {
-  IntMat& neigh = *static_cast<IntMat*>(mesh);
+  const IntMat& neigh = *static_cast<const IntMat*>(mesh);
   std::iota(gids, gids+neigh.size(), 0);
   std::iota(lids, lids+neigh.size(), 0);
   *err = ZOLTAN_OK;
@@ -275,13 +275,13 @@ DomainDecomposition::getSubdomains (int nx, int ny, int nz,
 {
   std::vector<IntSet> result(nx*(ny?ny:1)*(nz?nz:1)*getSAM()->getNoPatches());
   size_t d = 0;
-  for (const auto& it : *getSAM()) {
+  for (const ASMbase* it : *getSAM()) {
     const ASMstruct* pch = dynamic_cast<const ASMstruct*>(it);
     if (!pch)
       break;
     int n1, n2, n3;
     pch->getNoStructElms(n1,n2,n3);
-    auto subdomains = calcSubdomains(n1, n2, n3, nx, ny, nz, overlap);
+    const IntMat subdomains = calcSubdomains(n1, n2, n3, nx, ny, nz, overlap);
     for (size_t g = 0; g < subdomains.size(); ++g, ++d) {
       for (const int& iEl : subdomains[g]) {
         if (getNoBlocks() == 0) {
@@ -299,7 +299,7 @@ DomainDecomposition::getSubdomains (int nx, int ny, int nz,
           IntVec nodes;
           getSAM()->getElmNodes(nodes, it->getElmID(iEl+1));
           int basis = blocks[block+1].basis;
-          for (auto& node : nodes) {
+          for (const int node : nodes) {
             char type = getSAM()->getNodeType(node);
             if (type == (basis == 1 ? 'D' : 'P'+basis-2) || (type == ' ' && basis < 2)) {
               IntVec eqns;
@@ -550,7 +550,7 @@ bool DomainDecomposition::calcGlobalNodeNumbers (const ProcessAdm& adm,
   std::iota(MLGN.begin(), MLGN.end(), minNode);
 
   std::map<int,int> old2new;
-  for (const auto& it : ghostConnections) {
+  for (const ASM::Interface& it : ghostConnections) {
     int sidx = sim.getLocalPatchIndex(it.slave);
     if (sidx < 1)
       continue;
@@ -592,7 +592,7 @@ bool DomainDecomposition::calcGlobalNodeNumbers (const ProcessAdm& adm,
     old2new[MLGN[sim.getPatch(1)->getNodeID(locLMs[i])-1]] = glbLMs[i];
 
   // remap ghost nodes
-  for (auto& it : MLGN)
+  for (int& it : MLGN)
     utl::renumber(it, old2new, false);
 
   // remap rest of our nodes
@@ -600,23 +600,23 @@ bool DomainDecomposition::calcGlobalNodeNumbers (const ProcessAdm& adm,
     if (old2new.find(i + minNode) == old2new.end()) {
       std::map<int,int> old2new2;
       old2new2[i + minNode] = ++maxNode;
-      auto dof = sim.getSAM()->getNodeDOFs(i);
+      const std::pair<int,int> dof = sim.getSAM()->getNodeDOFs(i);
       maxDof += dof.second-dof.first+1;
-      for (auto& it : MLGN)
+      for (int& it : MLGN)
         utl::renumber(it, old2new2, false);
     }
 
   if (adm.getProcId() < adm.getNoProcs()-1) {
     adm.send(maxNode, adm.getProcId()+1);
     adm.send(maxDof, adm.getProcId()+1);
-    for (auto& it : locLMs)
+    for (int &it : locLMs)
       it = MLGN[sim.getPatch(1)->getNodeID(it)-1];
 
     adm.send((int)locLMs.size(), adm.getProcId()+1);
     adm.send(locLMs, adm.getProcId()+1);
   }
 
-  for (const auto& it : ghostConnections) {
+  for (const ASM::Interface& it : ghostConnections) {
     int midx = sim.getLocalPatchIndex(it.master);
     if (midx < 1)
       continue;
@@ -767,7 +767,7 @@ bool DomainDecomposition::calcGlobalEqNumbers (const ProcessAdm& adm,
 
   size_t n = 0;
   auto blockIt = blkLMs.begin();
-  for (const auto& it : glbLMs) {
+  for (const int it : glbLMs) {
     int seq = sim.getSAM()->getEquation(sim.getPatch(1)->getNodeID(locLMs[n++]), 1);
     int leq = blocks[0].MLGEQ[seq-1];
     old2new[0][leq] = it;
@@ -780,7 +780,7 @@ bool DomainDecomposition::calcGlobalEqNumbers (const ProcessAdm& adm,
     }
   }
 
-  for (const auto& it : ghostConnections) {
+  for (const ASM::Interface& it : ghostConnections) {
     int sidx = sim.getLocalPatchIndex(it.slave);
     if (sidx < 1)
       continue;
@@ -855,7 +855,7 @@ bool DomainDecomposition::calcGlobalEqNumbers (const ProcessAdm& adm,
 
   for (size_t block = 0; block < blocks.size() && adm.getProcId() > 0; ++block) {
     // remap ghost equations
-    for (auto& it : blocks[block].MLGEQ)
+    for (int& it : blocks[block].MLGEQ)
       utl::renumber(it, old2new[block], false);
 
     // remap the rest of our equations
@@ -866,14 +866,14 @@ bool DomainDecomposition::calcGlobalEqNumbers (const ProcessAdm& adm,
       if (!o2nu[block][i-1])
         old2new2[i + nEqs[block]] = ++blocks[block].maxEq;
     }
-    for (auto& it : blocks[block].MLGEQ)
+    for (int& it : blocks[block].MLGEQ)
       utl::renumber(it, old2new2, false);
   }
 
   if (adm.getProcId() < adm.getNoProcs()-1) {
     std::vector<int> maxEqs;
-    for (auto& it : blocks)
-      maxEqs.push_back(it.maxEq);
+    std::transform(blocks.begin(), blocks.end(), std::back_inserter(maxEqs),
+                   [](const BlockInfo& block) { return block.maxEq; });
 
     adm.send(maxEqs, adm.getProcId()+1);
 
@@ -898,7 +898,7 @@ bool DomainDecomposition::calcGlobalEqNumbers (const ProcessAdm& adm,
     }
   }
 
-  for (const auto& it : ghostConnections) {
+  for (const ASM::Interface& it : ghostConnections) {
     int midx = sim.getLocalPatchIndex(it.master);
     if (midx < 1)
       continue;
@@ -967,9 +967,10 @@ bool DomainDecomposition::calcGlobalEqNumbersPart (const ProcessAdm& adm,
   for (size_t i = 0; i < blocks[0].MLGEQ.size(); ++i)
     if (blocks[0].MLGEQ[i] != -1)
       blocks[0].G2LEQ[blocks[0].MLGEQ[i]] = i+1;
-#endif
-
   return true;
+#else
+  return false;
+#endif
 }
 
 
@@ -1053,7 +1054,7 @@ bool DomainDecomposition::sanityCheckCorners (const SIMbase& sim)
     corners.push_back({glob_data[i], glob_data[i+1],
                         glob_data[i+2], glob_data[i+3], glob_data[i+4]});
 
-  for (const auto& c : corners) {
+  for (const std::array<double,5>& c : corners) {
     auto fail = std::find_if(corners.begin(), corners.end(),
                             [c](const std::array<double,5>& C)
                             {
@@ -1086,7 +1087,7 @@ bool DomainDecomposition::setup (const ProcessAdm& adm, const SIMbase& sim)
 
 #if SP_DEBUG > 1
   IFEM::cout << "  Ghost connections:\n";
-  for (const auto& it : ghostConnections) {
+  for (const ASM::Interface& it : ghostConnections) {
     IFEM::cout << "    Interface: master/idx=" << it.master << "/" << it.midx <<
                   ", slave/idx=" << it.slave << "/" << it.sidx <<
                   ", orient=" << it.orient << ", dim=" << it.dim <<
@@ -1152,13 +1153,13 @@ bool DomainDecomposition::setup (const ProcessAdm& adm, const SIMbase& sim)
       char dofType = blocks[i+1].basis == 1 ? 'D' : 'P'+blocks[i+1].basis-2;
       if (solParams.getBlock(i).comps != 0) {
         std::set<int> comps = utl::getDigits(solParams.getBlock(i).comps);
-        for (auto& c : comps) {
+        for (const int c : comps) {
           std::set<int> tmp = sam->getEquations(dofType, c);
           blocks[i+1].localEqs.insert(tmp.begin(), tmp.end());
         }
       } else {
         std::set<int> bases = utl::getDigits(blocks[i+1].basis);
-        for (auto& b : bases) {
+        for (const int b : bases) {
           int cb = b;
           dofType = cb == 1 ? 'D' : 'P'+cb-2;
           std::set<int> tmp = adm.dd.getSAM()->getEquations(dofType);
@@ -1179,7 +1180,7 @@ bool DomainDecomposition::setup (const ProcessAdm& adm, const SIMbase& sim)
       }
 
       size_t idx = 1;
-      for (auto& it : blocks[i+1].localEqs)
+      for (const int it : blocks[i+1].localEqs)
         blocks[i+1].G2LEQ[it] = idx++;
       IFEM::cout << "  Block " << i+1 << "             " << blocks[i+1].localEqs.size() << std::endl;
     }
@@ -1235,7 +1236,85 @@ bool DomainDecomposition::setup (const ProcessAdm& adm, const SIMbase& sim)
 
   if (ok < adm.getNoProcs())
     return false;
+#endif
 
+  return true;
+}
+
+
+namespace {
+
+//! \brief Wrapper class used to perform partitioning of a matrix without a SAM.
+class SAMCB
+{
+public:
+  //! \brief Constructor.
+  //! \param mnpc Matrix of nodal nodal point correspondence.
+  explicit SAMCB(const std::vector<std::vector<int>>& mnpc)
+    : m_mnpc(mnpc)
+  {
+      m_neq = std::accumulate(mnpc.begin(), mnpc.end(), 0,
+                              [](const int acc, const IntVec& meen)
+                              {
+                                const int max = *std::max_element(meen.begin(), meen.end());
+                                return std::max(acc, max);
+                              }) + 1;
+  }
+
+  //! \brief Returns the maximum number of equations.
+  size_t getNoEquations() const { return m_neq; }
+
+  //! \brief Finds the matrix of equation numbers for an element.
+  //! \param[out] meen Matrix of element equation numbers
+  //! \param[in] iel Identifier for the element to get the equation numbers for
+  //! \param[in] nedof Number of degrees of freedom in the element
+  //! (used for internal consistency checking, unless zero)
+  bool getElmEqns(IntVec& meen, int iel, size_t = 0) const
+  {
+    meen.resize(m_mnpc[iel-1].size());
+    std::transform(m_mnpc[iel-1].begin(), m_mnpc[iel-1].end(), meen.begin(),
+                   [](const int i) { return i + 1; });
+    return true;
+  }
+
+private:
+  size_t m_neq; //!< Number of equations
+  const std::vector<std::vector<int>>& m_mnpc; //!< Matrix of nodal point correspondence
+};
+
+}
+
+
+bool DomainDecomposition::setup (const ProcessAdm& adm,
+                                 const IntMat& neighs,
+                                 const std::vector<std::vector<int>>& mnpc)
+{
+  if (!this->graphPartition(adm, neighs))
+    return false;
+
+  calcGlobalEqNumbersPart(adm, SAMCB(mnpc));
+
+#ifdef HAVE_MPI
+  if (!adm.isParallel())
+    return true;
+
+  std::vector<int> nEqs(blocks.size());
+  if (adm.getProcId() == adm.getNoProcs()-1)
+    for (size_t i = 0; i < blocks.size(); ++i)
+      nEqs[i] = getMaxEq(i);
+
+  MPI_Bcast(&nEqs[0], nEqs.size(), MPI_INT, adm.getNoProcs()-1,
+            *adm.getCommunicator());
+
+  for (size_t i = 0; i < blocks.size(); ++i)
+    blocks[i].nGlbEqs = nEqs[i];
+
+  IFEM::cout << "\n >>> Domain decomposition summary <<<"
+             << "\nNumber of domains     " << adm.getNoProcs();
+  IFEM::cout << "\nNumber of equations   " << nEqs[0] << " (" << getMaxEq()-getMinEq()+1 << " on process)";
+  for (size_t i = 1; i < blocks.size(); ++i)
+    IFEM::cout << "\n  Block " << i << "             " << nEqs[i]  << " (" << getMaxEq(i)-getMinEq(i)+1 << " on process)";
+  IFEM::cout << std::endl;
 #endif
 
   return true;
@@ -1253,7 +1332,7 @@ int DomainDecomposition::getPatchOwner (size_t p) const
 
 
 bool DomainDecomposition::graphPartition (const ProcessAdm& adm,
-                                          const SIMbase& sim)
+                                          const IntMat& neigh)
 {
   if (!myElms.empty())
     return true; // Use existing partitioning
@@ -1342,6 +1421,7 @@ bool DomainDecomposition::graphPartition (const ProcessAdm& adm,
   Zoltan_Destroy(&zz);
 #else
   std::cerr << "*** DomainDecompositon::graphPartition: Compiled without Zoltan support. No partitioning available." << std::endl;
+  return false;
 #endif
 
   if (myElms.empty())

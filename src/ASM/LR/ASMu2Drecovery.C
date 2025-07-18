@@ -102,7 +102,7 @@ LR::LRSpline* ASMu2D::evalSolution (const IntegrandBase& integrand) const
 }
 
 
-bool ASMu2D::assembleL2matrices (SparseMatrix& A, StdVector& B,
+bool ASMu2D::assembleL2matrices (SystemMatrix& A, SystemVector& B,
                                  const L2Integrand& integrand,
                                  bool continuous) const
 {

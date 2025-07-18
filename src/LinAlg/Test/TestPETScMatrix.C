@@ -216,31 +216,22 @@ TEST(TestPETScMatrix, Copy)
   LinSolParams spar;
   PETScMatrix orig(adm, spar);
 
-  orig.redim(8, 8);
+  orig.init(8);
   for (size_t r = 1; r <= orig.dim(1); ++r)
     for (size_t c = std::max(r - 1, size_t{1}); c <= std::min(r + 1, orig.dim(2)); ++c)
-      orig(r,c) = r == c ? 1.0 : -2.0;
-
-  std::unique_ptr<PETScMatrix> copy1(static_cast<PETScMatrix*>(orig.copy()));
-  EXPECT_EQ(orig.dim(1), copy1->dim(1));
-  EXPECT_EQ(orig.dim(2), copy1->dim(2));
-  for (size_t r = 1; r <= orig.dim(1); ++r)
-    for (size_t c = std::max(r - 1, size_t{1}); c <= std::min(r + 1, orig.dim(2)); ++c)
-      EXPECT_FLOAT_EQ(orig(r,c), (*copy1)(r,c));
-
-  EXPECT_EQ(copy1->getMatrix(), nullptr);
+      MatSetValue(orig.getMatrix(), r-c, c-1, r == c ? 1.0 : -2.0, INSERT_VALUES);
 
   orig.endAssembly();
 
-  std::unique_ptr<PETScMatrix> copy2(static_cast<PETScMatrix*>(orig.copy()));
-  EXPECT_EQ(orig.dim(1), copy2->dim(1));
-  EXPECT_EQ(orig.dim(2), copy2->dim(2));
+  std::unique_ptr<PETScMatrix> copy(static_cast<PETScMatrix*>(orig.copy()));
+  EXPECT_EQ(orig.dim(1), copy->dim(1));
+  EXPECT_EQ(orig.dim(2), copy->dim(2));
   for (size_t r = 1; r <= orig.dim(1); ++r)
-    for (size_t c = std::max(r - 1, size_t{1}); c <= std::min(r + 1, orig.dim(2)); ++c) {
-      EXPECT_FLOAT_EQ(orig(r,c), (*copy2)(r,c));
-      PetscScalar a;
-      MatGetValue(copy2->getMatrix(), r-1, c-1, &a);
-      EXPECT_FLOAT_EQ(orig(r,c), a);
+    for (size_t c = 1; c <= orig.dim(2); ++c) {
+      PetscScalar a, o;
+      MatGetValue(orig.getMatrix(), r-1, c-1, &o);
+      MatGetValue(copy->getMatrix(), r-1, c-1, &a);
+      EXPECT_FLOAT_EQ(o, a);
     }
 }
 

@@ -590,7 +590,7 @@ protected:
   //! \param[out] B Right-hand-side vectors
   //! \param[in] integrand Object with problem-specific data and methods
   //! \param[in] continuous If \e false, a discrete L2-projection is used
-  virtual bool assembleL2matrices(SparseMatrix& A, StdVector& B,
+  virtual bool assembleL2matrices(SystemMatrix& A, SystemVector& B,
                                   const L2Integrand& integrand,
                                   bool continuous) const;
 
@@ -684,6 +684,9 @@ protected:
 
   //! \brief Generate element groups from a partition.
   virtual void generateProjThreadGroupsFromElms(const std::vector<int>& elms);
+
+  //! \brief Get MNPC for a given basis.
+  virtual IntMat getElmNodes(int basis) const;
 
   //! \brief Hook for changing number of threads.
   virtual void changeNumThreads();

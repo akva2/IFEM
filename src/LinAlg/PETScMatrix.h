@@ -15,7 +15,8 @@
 #ifndef _PETSC_MATRIX_H
 #define _PETSC_MATRIX_H
 
-#include "SparseMatrix.h"
+#include "DomainDecomposition.h"
+#include "SystemMatrix.h"
 #include "PETScSupport.h"
 #include "PETScSolParams.h"
 #include <array>
@@ -163,7 +164,7 @@ private:
   linear systems of equations.
 */
 
-class PETScMatrix : public SparseMatrix
+class PETScMatrix : public SystemMatrix
 {
 public:
   //! \brief Constructor.
@@ -176,6 +177,25 @@ public:
 
   //! \brief Creates a copy of the system matrix and returns a pointer to it.
   SystemMatrix* copy() const override;
+
+  //! \brief Returns the dimension of the system matrix.
+  //! \param[in] idim Which direction to return the dimension in.
+  size_t dim(int idim = 1) const override;
+
+  //! \brief Initializes a scalar matrix based on element connections.
+  //! \param[in] maxEq Maximum equation number
+  //! \param[in] elms Element nodal connection
+  //! \param[in] neighs Element graph
+  //! \param[in] part Partitioning to use
+  bool init(int maxEq,
+            const std::vector<IntVec>* elms = nullptr,
+            const IntMat* neighs = nullptr,
+            const IntVec* part = nullptr);
+
+  //! \brief Initializes the equation sparsity pattern based on element connections.
+  //! \param[in] MMNPC Matrix of matrices of nodal point correspondances
+  //! \param[in] nel Number of elements
+  void preAssemble(const std::vector<IntVec>& MMNPC, size_t nel) override;
 
   //! \brief Initializes the element assembly process.
   //! \param[in] sam Auxiliary data describing the FE model topology, etc.
@@ -205,6 +225,24 @@ public:
   //! these are also added into the system right-hand-side vector, \a B.
   bool assemble(const Matrix& eM, const SAM& sam, SystemVector& B, int e) override;
 
+  //! \brief Adds an element matrix into the associated system matrix.
+  //! \param[in] eM  The element matrix
+  //! \param[in] sam Auxiliary data for FE assembly management
+  //! \param     B   The system right-hand-side vector
+  //! \param[in] meq Matrix of element equation numbers
+  //! \return \e true on successful assembly, otherwise \e false
+  //!
+  //! \details When multi-point constraints are present, contributions from
+  //! these are also added into the system right-hand-side vector, \a B.
+  bool assemble(const Matrix& eM, const SAM& sam,
+                SystemVector& B, const IntVec& meq) override;
+
+  //! \brief Adds an element matrix into the associated system matrix.
+  //! \param[in] eM  The element matrix
+  //! \param[in] meq Matrix of element equation numbers
+  //! \return \e true on successful assembly, otherwise \e false
+  bool assemble(const Matrix& eM, const std::vector<int>& meq) override;
+
   //! \brief Finalizes the system matrix assembly.
   bool endAssembly() override;
 
@@ -219,6 +257,9 @@ public:
   //! \param[in] B Right-hand-side vector
   //! \param[out] x Solution vector
   bool solve(const SystemVector& B, SystemVector& x) override;
+
+  //! \brief Multiplication with a scalar.
+  void mult(Real alpha) override;
 
   //! \brief Solves a generalized symmetric-definite eigenproblem.
   //! \details The eigenproblem is assumed to be on the form
@@ -257,27 +298,25 @@ public:
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
 
+  //! \brief Solve for multiple right-hand-side vectors.
+  //! \param B Vectors with right-hand-sides to solve for
+  //! \param sField Resulting vectors stored as a matrix
+  bool solveMultipleRhs(PETScVectors& B, Matrix& sField);
+
+  //! \brief Returns a const-ref to internal domain decompositioning.
+  const DomainDecomposition& getInternalDD() const
+  { return m_dd; }
+
 protected:
   //! \brief Solve a linear system.
   bool solve(const Vec& b, Vec& x, bool knoll);
 
-  //! \brief Solve system stored in the elem map.
-  //! \details Create matrix from elem table, and solve for (possibly) multiple
-  //!          right-hand-side vectors in B.
-  //! \param B Vector with right-hand-sides to solve for
-  bool solveDirect(PETScVector& B);
-
-  //! \brief Assemble matrix directly from sparse matrix values.
-  //! \details Assumes no DD, ie, do not use in parallel
-  bool assembleDirect();
-
   //! \brief Disabled copy constructor.
   PETScMatrix(const PETScMatrix& A) = delete;
 
-  //! \brief Clone sparse matrix data.
+  //! \brief Clone matrix data.
   PETScMatrix(const ProcessAdm& padm,
-              const PETScSolParams& spar,
-              const SparseMatrix& A);
+              const PETScSolParams& spar);
 
   //! \brief Setup sparsity pattern for model.
   //! \param[in] elms Elements on this process
@@ -297,6 +336,8 @@ protected:
   std::vector<Mat> preAllocators () const;
 
   Mat                 pA;              //!< The actual PETSc matrix
+  PetscInt            nrow;            //!< Number of matrix rows
+  PetscInt            ncol;            //!< Number of matrix columns
   KSP                 ksp;             //!< Linear equation solver
   MatNullSpace*       nsp;             //!< Null-space of linear operator
   const ProcessAdm&   adm;             //!< Process administrator
@@ -308,6 +349,7 @@ protected:
   ISMat               dirIndexSet;     //!< Direction ordering
   int                 nLinSolves;      //!< Number of linear solves
   bool                assembled;       //!< True if PETSc matrix has been assembled
+  bool                factored;        //!< True if PETsc matrix has been factored
 
   IS glob2LocEq = nullptr; //!< Index set for global-to-local equations.
   std::vector<Mat> matvec; //!< Blocks for block matrices.
@@ -315,6 +357,7 @@ protected:
   std::vector<IS> isvec; //!< Index sets for blocks.
 
   std::vector<std::array<int,2>> glb2Blk; //!< Maps equations to block and block eq.
+  DomainDecomposition m_dd; //!< Internal partitioning information
 };
 
 

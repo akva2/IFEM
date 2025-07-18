@@ -13,12 +13,12 @@
 
 #include "LinAlgInit.h"
 #include "PETScSupport.h"
-#include <iostream>
+
 #if defined(HAVE_MPI) && !defined(HAS_PETSC)
 #include <mpi.h>
 #endif
 
-LinAlgInit* LinAlgInit::instance = 0;
+LinAlgInit* LinAlgInit::instance = nullptr;
 int         LinAlgInit::refs = 0;
 
 
