@@ -40,6 +40,9 @@ public:
   bool init(const std::vector<ASMbase*>& patches, int numNod,
             const std::vector<char>& dTypes);
 
+  //! \brief Obtain element neighbours.
+  void getElmConnectivities(std::vector<std::vector<int>>& neigh) const;
+
   //! \brief Updates the multi-point constraint array \a TTCC.
   //! \param[in] prevSol Previous primary solution vector in DOF-order
   bool updateConstraintEqs(const Vector* prevSol = nullptr);

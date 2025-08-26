@@ -11,6 +11,7 @@
 //==============================================================================
 
 #include "ASMSquare.h"
+#include "SAMpatch.h"
 #include "SIM2D.h"
 
 #include "gtest/gtest.h"
@@ -24,6 +25,10 @@ TEST(TestASMs2D, ElementConnectivities)
   ASSERT_TRUE(pch1.uniformRefine(1,1));
   ASSERT_TRUE(pch1.generateFEMTopology());
   const size_t nel = pch1.getNoElms();
+  SAMpatch sam;
+  sam.init(std::vector<ASMbase*>{1,&pch1}, pch1.getNoNodes(), {});
+  IntMat neighSam(nel);
+  sam.getElmConnectivities(neighSam);
   pch1.shiftElemNumbers(nel);
   IntMat neighGlb(2*nel), neighLoc(nel);
   pch1.getElmConnectivities(neighGlb);

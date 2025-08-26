@@ -81,6 +81,31 @@ bool SAMpatch::init (const std::vector<ASMbase*>& patches, int numNod,
 }
 
 
+void SAMpatch::getElmConnectivities (IntMat& neigh) const
+{
+  using IntSet = std::set<int>;
+  std::vector<IntSet> nodeConn(nnod);
+  for (int iel = 0; iel < nel; iel++) {
+    IntVec mnpc;
+    this->getElmNodes(mnpc, iel+1);
+    for (int node : mnpc)
+      nodeConn[node-1].insert(iel);
+  }
+  neigh.resize(nel);
+  for (const IntSet& elms : nodeConn) {
+    for (int iel : elms) {
+      for (int jel : elms)
+        if (iel != jel)
+          neigh[iel].push_back(jel);
+    }
+  }
+  for (IntVec& vec : neigh) {
+    std::sort(vec.begin(), vec.end());
+    vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+  }
+}
+
+
 bool SAMpatch::initNodeDofs (const std::vector<char>& dTypes)
 {
 #ifdef SP_DEBUG
