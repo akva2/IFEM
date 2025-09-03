@@ -19,6 +19,10 @@
 #include <numeric>
 #include <sstream>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 
 ASMu2DLag::ASMu2DLag (unsigned char n_s,
                       unsigned char n_f, char fType) : ASMs2DLag(n_s,n_f)
@@ -164,9 +168,8 @@ int ASMu2DLag::parseNodeSet (const std::string& setName, const char* cset)
   size_t ifirst = mySet.size();
   utl::parseIntegers(mySet,cset);
 
-  int inod; // Transform to internal node indices
   for (size_t i = ifirst; i < mySet.size(); i++)
-    if ((inod = this->getNodeIndex(mySet[i])) > 0)
+    if (int inod = this->getNodeIndex(mySet[i]); inod > 0)
       mySet[i] = inod;
     else
       IFEM::cout <<"  ** Warning: Non-existing node "<< mySet[i]
@@ -310,9 +313,8 @@ int ASMu2DLag::parseElemSet (const std::string& setName, const char* cset)
   size_t ifirst = mySet.size();
   utl::parseIntegers(mySet,cset);
 
-  int iel; // Transform to internal element indices
   for (size_t i = ifirst; i < mySet.size(); i++)
-    if ((iel = this->getElmIndex(mySet[i])) > 0)
+    if (int iel = this->getElmIndex(mySet[i]); iel > 0)
       mySet[i] = iel;
     else
       IFEM::cout <<"  ** Warning: Non-existing element "<< mySet[i]
@@ -339,10 +341,9 @@ int ASMu2DLag::parseElemBox (const std::string& setName,
     double nelnod = MNPC[iel].size();
     for (size_t j = 0; j < nsd; j++)
     {
-      double X = 0.0;
-      for (int inod : MNPC[iel])
-        X += coord[inod][j];
-      X /= nelnod;
+      const double X = std::accumulate(MNPC[iel].begin(), MNPC[iel].end(), 0.0,
+                                      [&c = coord, j](const double acc, const int inod)
+                                      { return acc + c[inod][j]; }) / nelnod;
       if (X < X0[j] || X > X1[j])
         return false;
     }
@@ -415,8 +416,50 @@ void ASMu2DLag::getBoundaryNodes (int lIndex, IntVec& nodes,
 
 void ASMu2DLag::generateThreadGroups (const Integrand&, bool, bool)
 {
-  // TODO: Add some coloring scheme later
-  threadGroups.oneGroup(nel);
+#ifdef USE_OPENMP
+  if (omp_get_max_threads() > 1 && threadGroups.stripDir != ThreadGroups::NONE)
+  {
+    // -1 is unusable for current color, 0 is available,
+    // any other value is the assigned color
+
+    IntVec status(nel, 0); // status vector for elements:
+    size_t fixedElements = 0;
+    threadGroups[1].clear();
+    threadGroups[0].clear();
+
+    using IntSet = std::set<int>;
+    std::vector<IntSet> nodeConn(nnod);
+    for (size_t iel = 0; iel < nel; iel++)
+      for (int node : MNPC[iel])
+        nodeConn[node].insert(iel);
+
+    for (size_t nColors = 0; fixedElements < nel; ++nColors)
+    {
+      // reset un-assigned element tags
+      std::for_each(status.begin(), status.end(),
+                    [](int& status) { if (status < 0) status = 0; });
+
+      // look for available elements
+      IntVec thisColor;
+      for (size_t i = 0; i < nel; ++i) {
+        if (status[i] == 0) {
+          status[i] = nColors + 1;
+          thisColor.push_back(i);
+          ++fixedElements;
+
+          for (int node : MNPC[i])
+            for (int j : nodeConn[node]) {
+              if (status[j] == 0)  // if not assigned a color yet
+                status[j] = -1; // set as unavailable (with current color)
+            }
+        }
+      }
+      threadGroups[0].push_back(thisColor);
+    }
+    threadGroups.analyzeUnstruct();
+  } else
+#endif
+      threadGroups.oneGroup(nel); // No threading, all elements in one group
 }
 
 

@@ -12,7 +12,10 @@
 //==============================================================================
 
 #include "ThreadGroups.h"
+#include "IFEM.h"
+
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <iostream>
 #ifdef USE_OPENMP
@@ -492,3 +495,28 @@ ThreadGroups ThreadGroups::filter (const IntVec& elmList) const
 
   return filtered;
 }
+
+
+void ThreadGroups::analyzeUnstruct () const
+{
+  size_t min = std::numeric_limits<size_t>::max() - 1;
+  size_t max = 0;
+  std::vector<size_t> groupSizes;
+  double avg = 0.0;
+  for (const IntVec& group : tg[0]) {
+    min = std::min(group.size(), min);
+    max = std::max(group.size(), max);
+    groupSizes.push_back(group.size());
+    avg += group.size();
+  }
+  avg /= tg[0].size();
+  size_t half = groupSizes.size() / 2;
+  std::nth_element(groupSizes.begin(), groupSizes.begin() + half, groupSizes.end());
+  IFEM::cout << "\n Elements are divided in " << tg[0].size() << " colors "
+             << "(min = " << min
+             << ", max = " << max
+             << ", avg = " << avg
+             << ", med = " << groupSizes[half]
+             << ")." << std::endl;
+}
+
