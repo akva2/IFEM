@@ -240,7 +240,7 @@ void HDF5Writer::writeBasis (int level, const DataEntry& entry,
 
 
 void HDF5Writer::writeSIM (int level, const DataEntry& entry,
-                           bool geometryUpdated, const std::string& prefix)
+                          bool geometryUpdated, const std::string& prefix, const TimeStep* tp)
 {
   if (!entry.second.enabled || !entry.second.data || entry.second.data2.empty())
     return;
@@ -314,7 +314,7 @@ void HDF5Writer::writeSIM (int level, const DataEntry& entry,
     str << '/' << sim->getName() << "-" << b;
     if (!checkGroupExistence(m_file,str.str().c_str()))
       H5Gclose(H5Gcreate2(m_file,str.str().c_str(),0,H5P_DEFAULT,H5P_DEFAULT));
-    if (norm) {
+    if (norm || results & DataExporter::ELEMENT_MASK) {
       std::stringstream str2;
       str2 << str.str() << "/knotspan";
       if (checkGroupExistence(m_file,str2.str().c_str()))
@@ -458,6 +458,14 @@ void HDF5Writer::writeSIM (int level, const DataEntry& entry,
                                idx, patchEnorm.cols(), patchEnorm.getRow(k).ptr(),
                                H5T_NATIVE_DOUBLE);
       }
+
+      if (results & DataExporter::ELEMENT_MASK) {
+        std::vector<char> mask(pch->getNoElms());
+        for (size_t i = 0; i < pch->getNoElms(); ++i)
+          mask[i] = pch->isElementActive(i, tp  ? tp->time.t : 0.0) ? 1 : 0;
+        this->writeArray(egroup.front(), "mask", idx, mask.size(), mask.data(), H5T_NATIVE_CHAR);
+      }
+
 
       if (results & DataExporter::EIGENMODES) {
         size_t iMode = 0;

@@ -131,7 +131,7 @@ bool DataExporter::dumpTimeLevel (const TimeStep* tp, bool geoUpd, bool doLog)
           writer->writeVector(m_level,it);
           break;
         case SIM:
-          writer->writeSIM(m_level,it,geoUpd,it.second.prefix);
+          writer->writeSIM(m_level,it,geoUpd,it.second.prefix,tp);
           break;
         case NODALFORCES:
           writer->writeNodalForces(m_level,it);

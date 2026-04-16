@@ -65,7 +65,8 @@ public:
   //! solutions, we assume they come from different projections
   //! \sa SIMbase::project
   virtual void writeSIM(int level, const DataEntry& entry,
-                        bool geometryUpdated, const std::string& prefix);
+                        bool geometryUpdated, const std::string& prefix,
+                        const TimeStep* tp);
 
   //! \brief Writes nodal forces to file.
   //! \param[in] level The time level to write the data at

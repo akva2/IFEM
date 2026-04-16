@@ -44,6 +44,7 @@ public:
     KNOTSPAN,
     SIM,
     NODALFORCES,
+    ELEMENT_MASK,
     BASIS
   };
 
@@ -188,7 +189,8 @@ public:
   //! \param[in] geometryUpdated Whether or not geometries should be written
   //! \param[in] prefix Field name prefix
   virtual void writeSIM(int level, const DataEntry& entry,
-                        bool geometryUpdated, const std::string& prefix) = 0;
+                        bool geometryUpdated, const std::string& prefix,
+                        const TimeStep* tp) = 0;
 
   //! \brief Writes nodal forces to file.
   //! \param[in] level The time level to write the data at
