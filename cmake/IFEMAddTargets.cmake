@@ -11,7 +11,7 @@
 #   LIBRARIES - Targets to link the library to
 #   SOURCES   - Source files for the library
 function(ifem_add_library)
-  set(oneValueArgs NAME ALIAS)
+  set(oneValueArgs NAME ALIAS ARCHIVE_NAME)
   set(multiValueArgs CONDITIONS BASE_DIRS HEADERS LIBRARIES SOURCES)
   cmake_parse_arguments(PARAM "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
   if(PARAM_CONDITIONS)
@@ -24,6 +24,13 @@ function(ifem_add_library)
   add_library(${PARAM_NAME} STATIC)
   if(PARAM_ALIAS)
     add_library(${PARAM_ALIAS} ALIAS ${PARAM_NAME})
+  endif()
+  if(PARAM_ARCHIVE_NAME)
+    set_target_properties(${PARAM_NAME}
+      PROPERTIES
+      ARCHIVE_OUTPUT_NAME
+        ${PARAM_ARCHIVE_NAME}
+    )
   endif()
   target_sources(${PARAM_NAME} PRIVATE ${PARAM_SOURCES})
   if(PARAM_HEADERS)
@@ -141,8 +148,8 @@ function(ifem_add_dependency_dir)
     endif()
     if(MATCH_DIR)
       message(STATUS "Including ${MATCH_DIR} for project ${CMAKE_PROJECT_NAME}")
-      add_subdirectory(${APP_DIR} ${PARAM_TARGET})
-      set(${PARAM_TARGET}_DIRECTORY ${APP_DIR} PARENT_SCOPE)
+      add_subdirectory(${APP_DIR} ${PARAM_DIR})
+      set(${PARAM_TARGET}_DIRECTORY ${MATCH_DIR} PARENT_SCOPE)
     endif()
   else()
     get_target_property(DIR ${PARAM_TARGET} SOURCE_DIR)
