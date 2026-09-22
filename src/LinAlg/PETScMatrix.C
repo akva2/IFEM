@@ -1079,12 +1079,44 @@ bool PETScMatrix::setParameters (bool setup)
         prefix += (m == 0 ? 'u' : 'p');
       else
         prefix += "b" + std::to_string(1+m);
-      KSPSetType(subksp[m],"preonly");
+      const LinSolParams::BlockParams& blockParams = solParams.getBlock(m);
+
+      // A block applies its preconditioner once unless a Krylov method is
+      // asked for to run on it. Tolerances mean nothing to a block that
+      // does not iterate, so they are refused without one rather than
+      // quietly ignored.
+      const std::string blockKSP = blockParams.getStringValue("ksp");
+      const double rtol = blockParams.getDoubleValue("rtol");
+      const double atol = blockParams.getDoubleValue("atol");
+      const double dtol = blockParams.getDoubleValue("dtol");
+      const int maxits = blockParams.getIntValue("maxits");
+      const bool iterate = !blockKSP.empty() && blockKSP != "preonly";
+      if (!iterate && (rtol > 0.0 || atol > 0.0 || dtol > 0.0 || maxits > 0)) {
+        std::cerr <<" *** PETScMatrix: Block "<< m+1 <<" is given tolerances,"
+                  <<" but no method to use\n     them: it applies its"
+                  <<" preconditioner once and stops. Ask for a Krylov\n"
+                  <<"     method on the block with a ksp tag, or drop the"
+                  <<" tolerances."<< std::endl;
+        return false;
+      }
+
+      KSPSetType(subksp[m], iterate ? blockKSP.c_str() : "preonly");
+      if (iterate)
+        KSPSetTolerances(subksp[m],
+                         rtol > 0.0 ? rtol : PETSC_DEFAULT,
+                         atol > 0.0 ? atol : PETSC_DEFAULT,
+                         dtol > 0.0 ? dtol : PETSC_DEFAULT,
+                         maxits > 0 ? maxits : PETSC_DEFAULT);
+
       KSPGetPC(subksp[m],&subpc[m]);
-      if (solParams.getBlock(m).getStringValue("pc") == "schur")
-        new PETScSchurPC(subpc[m], matvec, solParams.getBlock(m), adm);
+      if (blockParams.getStringValue("pc") == "schur")
+        new PETScSchurPC(subpc[m], matvec, blockParams, adm);
       else
         solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup);
+
+      // The blocks are set up from the input like the system around them,
+      // and are adjusted from the command line like it as well
+      KSPSetFromOptions(subksp[m]);
     }
   }
 
