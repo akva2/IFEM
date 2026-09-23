@@ -34,6 +34,7 @@
 
 #include <array>
 #include <fstream>
+#include <map>
 #include <numeric>
 #include <utility>
 
@@ -181,6 +182,78 @@ bool ASMu2Dmx::getSolution (Matrix& sField, const Vector& locSol,
                             const IntVec& nodes) const
 {
   return this->getSolutionMx(sField,locSol,nodes);
+}
+
+
+/*!
+  The bases of a mixed patch alias each other in ways that depend on the basis
+  type: the geometry basis is usually one of the solution bases, and the
+  projection basis may be another of them, or an extra basis appended to the
+  list. Copying each spline object separately would break those identities, so
+  each distinct object is copied once and every member is rewired to the copy,
+  which preserves exactly which bases are shared with which.
+*/
+
+bool ASMu2Dmx::copyMeshFrom (const ASMbase& that)
+{
+  const ASMu2Dmx* patch = dynamic_cast<const ASMu2Dmx*>(&that);
+  if (!patch || patch->m_basis.empty())
+  {
+    std::cerr <<" *** ASMu2Dmx::copyMeshFrom: Not a mixed 2D LR-spline"
+              <<" patch."<< std::endl;
+    return false;
+  }
+
+  if (shareFE)
+  {
+    std::cerr <<" *** ASMu2Dmx::copyMeshFrom: Can not replace the mesh of a"
+              <<" patch sharing its FE data."<< std::endl;
+    return false;
+  }
+
+  // Drop any tensor spline such that generateFEMTopology uses the bases
+  // assigned here, instead of establishing new ones from the tensor spline.
+  delete tensorspline;
+  delete tensorPrjBas;
+  tensorspline = tensorPrjBas = nullptr;
+
+  // The FE topology has to be regenerated for the mesh assigned here. It may
+  // already have been established for the mesh the patch was read with, and
+  // generateFEMTopology keeps an existing one, so it is discarded now.
+  myMLGE.clear();
+  myMLGN.clear();
+  myMNPC.clear();
+
+  std::map<const LR::LRSpline*,SplinePtr> copies;
+  auto&& dup = [&copies](const LR::LRSpline* src) -> SplinePtr
+  {
+    if (!src) return nullptr;
+
+    std::map<const LR::LRSpline*,SplinePtr>::iterator it = copies.find(src);
+    if (it == copies.end())
+    {
+      SplinePtr copy(static_cast<const LR::LRSplineSurface*>(src)->copy());
+      copy->generateIDs();
+      it = copies.emplace(src,copy).first;
+    }
+
+    return it->second;
+  };
+
+  m_basis.clear();
+  m_basis.reserve(patch->m_basis.size());
+  for (const SplinePtr& b : patch->m_basis)
+    m_basis.push_back(dup(b.get()));
+
+  geomB  = dup(patch->geomB.get());
+  projB  = dup(patch->projB.get());
+  projB2 = dup(patch->projB2.get());
+  refB   = dup(patch->refB.get());
+  lrspline = m_basis[itgBasis-1];
+  threadBasis = nullptr;
+  is_rational = patch->is_rational;
+
+  return true;
 }
 
 

@@ -1043,7 +1043,11 @@ bool PETScMatrix::setParameters (bool setup)
       KSPSetType(subksp[m],"preonly");
       KSPGetPC(subksp[m],&subpc[m]);
       if (solParams.getBlock(m).getStringValue("pc") == "schur")
-        new PETScSchurPC(subpc[m], matvec, solParams.getBlock(m), adm);
+        // The inner solve of the Schur preconditioner approximates the
+        // inverse of matvec[0], so the hierarchy it can use is the one built
+        // for the first block, whichever block the preconditioner sits on.
+        new PETScSchurPC(subpc[m], matvec, solParams.getBlock(m), adm,
+                         mgFor(0));
       else
         solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup,
                           mgFor(m));
@@ -1124,8 +1128,25 @@ bool PETScMatrix::setMGHierarchy (size_t block,
   }
 
   for (const SystemMatrix* A : levels) {
-    if (const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A); pM)
-      mg.A.push_back(pM->pA);
+    if (const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A); pM) {
+      // A level of a block hierarchy is the corresponding diagonal block of
+      // the level operator, not the whole of it. This is what lets a Stokes
+      // simulator assemble its system on a coarse mesh and have the velocity
+      // block of it come out as the level operator for block 0.
+      const std::vector<Mat>& blk = pM->matvec;
+      if (blk.empty())
+        mg.A.push_back(pM->pA);
+      else {
+        const size_t nb = pM->solParams.getNoBlocks();
+        if (block >= nb) {
+          std::cerr <<" *** PETScMatrix::setMGHierarchy: Block "<< 1+block
+                    <<" is out of range, the level operator has "<< nb
+                    <<" blocks."<< std::endl;
+          return false;
+        }
+        mg.A.push_back(blk[block*nb+block]);
+      }
+    }
     else if (const SparseMatrix* sM = dynamic_cast<const SparseMatrix*>(A); sM)
       mg.A.push_back(toPETSc(*sM));
     else {
@@ -1133,6 +1154,24 @@ bool PETScMatrix::setMGHierarchy (size_t block,
                 <<" neither a PETSc nor a sparse matrix."<< std::endl;
       return false;
     }
+  }
+
+  // The topmost transfer operator has to land on the block it preconditions,
+  // so a disagreement here means the DOFs the operators were built on are not
+  // the ones the block holds. Catching it now beats a PETSc size error deep
+  // inside the first preconditioner application.
+  PetscInt nFine = 0;
+  if (matvec.empty())
+    MatGetSize(pA,&nFine,nullptr);
+  else {
+    const size_t nb = solParams.getNoBlocks();
+    MatGetSize(matvec[block*nb+block],&nFine,nullptr);
+  }
+  if (PetscInt nRows; (MatGetSize(mg.P.back(),&nRows,nullptr), nRows != nFine)) {
+    std::cerr <<" *** PETScMatrix::setMGHierarchy: The finest transfer"
+              <<" operator has "<< nRows <<" rows, but block "<< 1+block
+              <<" has "<< nFine <<" equations."<< std::endl;
+    return false;
   }
 
   // The preconditioner has to be rebuilt with the hierarchy in place

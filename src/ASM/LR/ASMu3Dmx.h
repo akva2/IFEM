@@ -49,6 +49,11 @@ public:
   //! \brief Reads a basis from the given input stream.
   virtual bool readBasis(std::istream& is, size_t basis);
 
+  //! \brief Replaces the spline bases of this patch by copies of another's.
+  //! \param[in] that The patch to copy the spline bases from
+  virtual bool copyMeshFrom(const ASMbase& that);
+
+
   //! \brief Generates the finite element topology data for the patch.
   //! \details The data generated are the element-to-node connectivity array,
   //! the node-to-IJ-index array, as well as global node and element numbers.

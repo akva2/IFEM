@@ -99,20 +99,25 @@ private:
   with \a pc="gmg" on the matching block.
 */
 
-template<class T1>
-class SIMSolverAdapMG : public SIMSolverAdapImpl<T1,AdaptiveMGSIM>
+template<class T1, template<class,class> class AdapImpl = SIMSolverAdapImpl>
+class SIMSolverAdapMGImpl : public AdapImpl<T1,AdaptiveMGSIM>
 {
-  using Base = SIMSolverAdapImpl<T1,AdaptiveMGSIM>; //!< Base class alias
+  using Base = AdapImpl<T1,AdaptiveMGSIM>; //!< Base class alias
 
 public:
   //! \brief The constructor forwards to the parent class constructor.
-  explicit SIMSolverAdapMG(T1& s1) : Base(s1)
+  //!
+  //! \details \a AdapImpl is the adaptive driver to add the multigrid
+  //! machinery to. It defaults to the plain SIMSolverAdapImpl, but an
+  //! application with an adaptive driver of its own, such as the one Stokes
+  //! uses to pick the norm to adapt on, passes that one instead.
+  explicit SIMSolverAdapMGImpl(T1& s1) : Base(s1)
   {
     this->aSim.setMGInstaller([this]() { return this->installHierarchy(); });
   }
 
   //! \brief Empty destructor.
-  virtual ~SIMSolverAdapMG() {}
+  virtual ~SIMSolverAdapMGImpl() {}
 
   /*!
     \brief Solves the problem on a sequence of adaptively refined meshes.
@@ -232,14 +237,14 @@ protected:
     // Assemble the operators on this level while the mesh is current
     if (!galerkin)
       for (const MG::Operator& op : this->S1.getMGOperators()) {
-        std::unique_ptr<SystemMatrix> A = level->assembleMGOperator(op);
+        SystemMatrix* A = level->assembleMGOperator(op);
         if (!A) {
           std::cerr <<" *** SIMSolverAdapMG: Could not assemble the operator"
                     <<" \""<< op.name <<"\" on level "<< 1+levels.size()
                     <<"."<< std::endl;
           return false;
         }
-        levelOps[op.name].push_back(std::move(A));
+        levelOps[op.name].push_back(A);
       }
 
     levels.push_back(std::move(level));
@@ -286,11 +291,12 @@ protected:
 
       std::vector<const SystemMatrix*> Aptr;
       if (!galerkin)
-        for (const std::unique_ptr<SystemMatrix>& A : levelOps[op.name])
-          Aptr.push_back(A.get());
+        for (const SystemMatrix* A : levelOps[op.name])
+          Aptr.push_back(A);
 
-      // setMGHierarchy copies the operators into PETSc format, so the
-      // topmost one is not needed beyond this point
+      // setMGHierarchy converts the transfer operators to PETSc format, so
+      // the topmost one is not needed beyond this point. The level operators
+      // are not copied, and stay owned by the level simulators.
       if (!pA->setMGHierarchy(op.block,Pptr,Aptr))
         return false;
     }
@@ -307,10 +313,16 @@ protected:
   std::vector<std::unique_ptr<MultigridProvider>> levels; //!< The kept levels
   std::vector<T1*> sims; //!< The kept levels, as simulators
 
-  //! Operators assembled on each kept level, by operator name
-  std::map<std::string,std::vector<std::unique_ptr<SystemMatrix>>> levelOps;
+  //! Operators assembled on each kept level, by operator name.
+  //! They are owned by the level simulators, which \ref levels keeps alive.
+  std::map<std::string,std::vector<SystemMatrix*>> levelOps;
   //! Transfer operators between the kept levels, by operator name
   std::map<std::string,std::vector<std::unique_ptr<SparseMatrix>>> prolong;
 };
+
+
+//! Convenience alias template
+template<class T1>
+using SIMSolverAdapMG = SIMSolverAdapMGImpl<T1,SIMSolverAdapImpl>;
 
 #endif

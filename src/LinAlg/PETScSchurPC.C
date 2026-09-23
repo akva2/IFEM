@@ -15,9 +15,12 @@
 #include "LinSolParams.h"
 #include "ProcessAdm.h"
 
+#include <iostream>
+
 
 PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
-                            const LinSolParams::BlockParams& params, const ProcessAdm& adm)
+                            const LinSolParams::BlockParams& params, const ProcessAdm& adm,
+                            const PETScMGLevels* mg)
   : m_blocks(&blocks)
 {
   PCSetType(pc_init, PCSHELL);
@@ -31,10 +34,35 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   KSPSetOperators(inner_ksp, blocks[0], blocks[0]);
   PC pc;
   KSPGetPC(inner_ksp, &pc);
-  std::string schurpc = params.getStringValue("schurpc");
+  // The <schur> container of the input gives its settings the prefix schur_,
+  // so the preconditioner of the inner solve arrives as schur_pc. The
+  // unprefixed spelling is honoured as well, since that is the key this used
+  // to look for, although no input file in the tree sets it.
+  std::string schurpc = params.getStringValue("schur_pc");
+  if (schurpc.empty())
+    schurpc = params.getStringValue("schurpc");
   if (schurpc.empty())
     schurpc = PCGAMG;
-  PCSetType(pc, schurpc.c_str());
+
+  // The inner solve is where the approximation of the inverse of the momentum
+  // operator enters the Schur complement, and it is the expensive part of the
+  // preconditioner. A geometric multigrid hierarchy built from the adaptive
+  // mesh sequence goes in here in place of the algebraic default.
+  if (schurpc == "gmg") {
+    if (mg && mg->size() > 1) {
+      LinSolParams dummy;
+      PETScSolParams(dummy,adm).setupGeometricMG(pc,*mg,params);
+    }
+    else {
+      std::cerr <<"  ** PETScSchurPC: No geometric multigrid hierarchy for the"
+                <<" inner operator,\n     falling back on "<< PCGAMG <<"."
+                << std::endl;
+      PCSetType(pc,PCGAMG);
+    }
+  }
+  else
+    PCSetType(pc, schurpc.c_str());
+
   KSPSetFromOptions(inner_ksp);
   KSPSetUp(inner_ksp);
   KSPView(inner_ksp, PETSC_VIEWER_STDOUT_WORLD);
@@ -57,6 +85,16 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   std::string type = params.getStringValue("schur_type");
   if (type.empty())
     type = KSPGMRES;
+
+  // The outer solver has no preconditioner, so preonly makes it the identity
+  // and the Schur complement operator is never applied at all, inner solve
+  // included. That is rarely what is wanted, and is silent otherwise.
+  if (type == KSPPREONLY)
+    std::cerr <<"  ** PETScSchurPC: The Schur complement solver is preonly"
+              <<" and has no preconditioner,\n     so it reduces to the"
+              <<" identity and the Schur operator is never applied."
+              << std::endl;
+
   KSPSetType(outer_ksp, type.c_str());
   KSPSetTolerances(outer_ksp, rtol, atol, dtol, maxits);
 

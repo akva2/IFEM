@@ -198,6 +198,13 @@ bool ASMu2D::copyMeshFrom (const ASMbase& that)
   delete tensorPrjBas;
   tensorspline = tensorPrjBas = nullptr;
 
+  // The FE topology has to be regenerated for the mesh assigned here. It may
+  // already have been established for the mesh the patch was read with, and
+  // generateFEMTopology keeps an existing one, so it is discarded now.
+  myMLGE.clear();
+  myMLGN.clear();
+  myMNPC.clear();
+
   lrspline.reset(patch->lrspline->copy());
   lrspline->generateIDs();
   refB = geomB = lrspline;

@@ -27,8 +27,10 @@ public:
   //! \param blocks The matrix blocks
   //! \param params Linear solver parameters
   //! \param adm Processes administrator
+  //! \param[in] mg Multigrid hierarchy for the inner matrix, if any
   PETScSchurPC(PC& pc_init, const std::vector<Mat>& blocks,
-               const LinSolParams::BlockParams& params, const ProcessAdm& adm);
+               const LinSolParams::BlockParams& params, const ProcessAdm& adm,
+               const PETScMGLevels* mg = nullptr);
 
   //! \brief The destructor frees the PETSc structures.
   ~PETScSchurPC();

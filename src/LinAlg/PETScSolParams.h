@@ -88,6 +88,19 @@ public:
                bool setup,
                const PETScMGLevels* mg = nullptr);
 
+  //! \brief Sets up a geometric multigrid preconditioner.
+  //! \param pc The preconditioner to configure
+  //! \param[in] mg The hierarchy of transfer operators and level operators
+  //! \param[in] map The settings to apply
+  //!
+  //! \details The operator of the finest level is left alone, since the KSP
+  //! the preconditioner belongs to already has it. Only the coarse levels are
+  //! taken from \a mg. This is public so that a preconditioner assembled
+  //! outside this class, such as the inner solve of PETScSchurPC, can use a
+  //! hierarchy as well.
+  bool setupGeometricMG(PC& pc, const PETScMGLevels& mg,
+                        const SettingMap& map);
+
   //! \brief Obtain number of blocks
   size_t getNoBlocks() const { return params.getNoBlocks(); }
 
@@ -149,13 +162,6 @@ protected:
                       const ISMat& dirIndexSet,
                       const std::set<int>& blockEqs,
                       bool setup);
-
-  //! \brief Sets up a geometric multigrid preconditioner.
-  //! \param pc The preconditioner to configure
-  //! \param[in] mg The hierarchy of transfer operators and level operators
-  //! \param[in] map The settings to apply
-  bool setupGeometricMG(PC& pc, const PETScMGLevels& mg,
-                        const SettingMap& map);
 
   //! \brief Setup an additive Schwarz preconditioner
   //! \param pc The preconditioner to set coarse solver for
