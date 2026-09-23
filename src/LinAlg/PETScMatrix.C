@@ -16,6 +16,7 @@
 #include "ProcessAdm.h"
 #include "LinAlgInit.h"
 #include "SAM.h"
+#include "SparseMatrix.h"
 
 #include <algorithm>
 #include <numeric>
@@ -320,6 +321,9 @@ PETScMatrix::~PETScMatrix ()
 
   for (IS& v : isvec)
     ISDestroy(&v);
+
+  for (Mat& m : myMGmats)
+    MatDestroy(&m);
 
   matvec.clear();
 }
@@ -991,8 +995,15 @@ bool PETScMatrix::setParameters (bool setup)
   PC pc;
   KSPGetPC(ksp,&pc);
 
+  // Hand over the geometric multigrid hierarchy of a block, if one was set up
+  auto&& mgFor = [this](size_t block) -> const PETScMGLevels*
+  {
+    std::map<size_t,PETScMGLevels>::const_iterator it = mgLevels.find(block);
+    return it == mgLevels.end() ? nullptr : &it->second;
+  };
+
   if (matvec.empty())
-    solParams.setupPC(pc, 0, "", IntSet(), setup);
+    solParams.setupPC(pc, 0, "", IntSet(), setup, mgFor(0));
   else if (matvec.size() > 4) {
     std::cerr << "** PETSCMatrix ** Only two blocks supported for now." << std::endl;
     return false;
@@ -1034,7 +1045,8 @@ bool PETScMatrix::setParameters (bool setup)
       if (solParams.getBlock(m).getStringValue("pc") == "schur")
         new PETScSchurPC(subpc[m], matvec, solParams.getBlock(m), adm);
       else
-        solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup);
+        solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup,
+                          mgFor(m));
     }
   }
 
@@ -1044,6 +1056,87 @@ bool PETScMatrix::setParameters (bool setup)
 
   if (setup && solParams.getIntValue("verbosity") >= 1)
     KSPView(ksp, PETSC_VIEWER_STDOUT_(*adm.getCommunicator()));
+
+  return true;
+}
+
+
+/*!
+  The transfer operators are built on the free DOFs of one operator of the
+  simulator, numbered in order of increasing equation number, which is the
+  order PETSc uses for the index set of a block. They therefore line up with
+  the block they are installed for without any renumbering here.
+*/
+
+bool PETScMatrix::setMGHierarchy (size_t block,
+                                  const std::vector<const SparseMatrix*>& prolong,
+                                  const std::vector<const SystemMatrix*>& levels)
+{
+  if (prolong.size() < 1) {
+    std::cerr <<" *** PETScMatrix::setMGHierarchy: A hierarchy needs at least"
+              <<" two levels."<< std::endl;
+    return false;
+  }
+
+  if (!levels.empty() && levels.size() != prolong.size()) {
+    std::cerr <<" *** PETScMatrix::setMGHierarchy: Got "<< levels.size()
+              <<" coarse level operators and "<< prolong.size()
+              <<" transfer operators, expected the same number of each."
+              << std::endl;
+    return false;
+  }
+
+  // Converts an editable sparse matrix into a PETSc matrix
+  auto&& toPETSc = [this](const SparseMatrix& S) -> Mat
+  {
+    std::vector<PetscInt> nnz(S.rows(),0);
+    for (const auto& [ij,v] : S.getValues())
+      ++nnz[ij.first-1];
+
+    Mat M;
+    MatCreate(*adm.getCommunicator(),&M);
+    MatSetSizes(M,PETSC_DECIDE,PETSC_DECIDE,S.rows(),S.cols());
+    MatSetType(M,MATAIJ);
+    MatSeqAIJSetPreallocation(M,PETSC_DEFAULT,nnz.data());
+    MatMPIAIJSetPreallocation(M,PETSC_DEFAULT,nnz.data(),PETSC_DEFAULT,nullptr);
+    for (const auto& [ij,v] : S.getValues()) {
+      PetscInt r = ij.first-1, c = ij.second-1;
+      PetscScalar val = v;
+      MatSetValues(M,1,&r,1,&c,&val,INSERT_VALUES);
+    }
+    MatAssemblyBegin(M,MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(M,MAT_FINAL_ASSEMBLY);
+    myMGmats.push_back(M);
+    return M;
+  };
+
+  PETScMGLevels& mg = mgLevels[block];
+  mg.A.clear();
+  mg.P.clear();
+
+  for (const SparseMatrix* S : prolong) {
+    if (!S) {
+      std::cerr <<" *** PETScMatrix::setMGHierarchy: Missing a transfer"
+                <<" operator."<< std::endl;
+      return false;
+    }
+    mg.P.push_back(toPETSc(*S));
+  }
+
+  for (const SystemMatrix* A : levels) {
+    if (const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A); pM)
+      mg.A.push_back(pM->pA);
+    else if (const SparseMatrix* sM = dynamic_cast<const SparseMatrix*>(A); sM)
+      mg.A.push_back(toPETSc(*sM));
+    else {
+      std::cerr <<" *** PETScMatrix::setMGHierarchy: A level operator is"
+                <<" neither a PETSc nor a sparse matrix."<< std::endl;
+      return false;
+    }
+  }
+
+  // The preconditioner has to be rebuilt with the hierarchy in place
+  setParams = true;
 
   return true;
 }

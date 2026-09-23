@@ -47,6 +47,7 @@ namespace MG //! Utilities for geometric multigrid.
     std::string name;      //!< Name, referred to from the linear solver input
     int         basis = 1; //!< Index of the basis the operator is defined on
     size_t      comps = 0; //!< Components of that basis, 0 means all of them
+    size_t      block = 0; //!< Linear solver block the hierarchy applies to
   };
 
   //! \brief Builds the prolongation operator between two FE spaces.

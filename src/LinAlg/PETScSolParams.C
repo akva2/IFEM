@@ -21,7 +21,8 @@ void PETScSolParams::setupPC(PC& pc,
                              size_t block,
                              const std::string& prefix,
                              const std::set<int>& blockEqs,
-                             bool setup)
+                             bool setup,
+                             const PETScMGLevels* mg)
 {
   // Set preconditioner
   std::string prec = params.getBlock(block).getStringValue("pc");
@@ -42,6 +43,17 @@ void PETScSolParams::setupPC(PC& pc,
   }
   else if (prec == "asmlu")
     PCSetType(pc,"asm");
+  else if (prec == "gmg") {
+    // There is no hierarchy to speak of before the adaptive loop has been
+    // through enough refinements to keep a coarse level, so the first steps
+    // fall back on a single grid preconditioner rather than failing.
+    if (!mg || mg->size() < 2) {
+      prec = adm.getNoProcs() > 1 ? "asm" : "ilu";
+      PCSetType(pc,prec.c_str());
+    }
+    else if (!this->setupGeometricMG(pc,*mg,params.getBlock(block)))
+      return;
+  }
   else
     PCSetType(pc,prec.c_str());
 
@@ -82,7 +94,7 @@ void PETScSolParams::setupPC(PC& pc,
     PCSetUp(pc);
 
   // Settings for coarse solver
-  if ((prec == "ml" || prec == "gamg")) {
+  if ((prec == "ml" || prec == "gamg" || prec == "gmg")) {
     if (params.getBlock(block).hasValue("multigrid_coarse_solver"))
       setupCoarseSolver(pc, prefix, params.getBlock(block));
     // TODO: dir smoothers
@@ -262,6 +274,56 @@ void PETScSolParams::setupCoarseSolver(PC& pc, const std::string& prefix, const 
 #endif
     PCSetUp(cpc);
   }
+}
+
+
+/*!
+  The hierarchy comes from a sequence of adaptively refined meshes, so the
+  levels are already there and only have to be handed to PETSc: the
+  prolongations as the interpolation between neighbouring levels, and, when
+  the simulator has assembled them, the operator on each coarse level. PETSc
+  uses the transpose of the interpolation as the restriction unless told
+  otherwise, which is what the variational setting calls for, so no separate
+  restriction is needed.
+
+  Without coarse level operators the coarse grids are formed as the Galerkin
+  products of the finest operator instead. That is cheaper to set up and needs
+  nothing from the simulator, but it is not the same operator as a
+  rediscretization on the coarse mesh, and for an auxiliary operator such as a
+  pressure Schur complement approximation there is no fine operator to coarsen
+  in the first place.
+*/
+
+bool PETScSolParams::setupGeometricMG (PC& pc, const PETScMGLevels& mg,
+                                       const SettingMap& map)
+{
+  const PetscInt nLevels = mg.size();
+  if (!mg.A.empty() && mg.A.size() != static_cast<size_t>(nLevels)-1) {
+    std::cerr <<" *** PETScSolParams: Got "<< mg.A.size() <<" coarse level"
+              <<" operators for a hierarchy of "<< nLevels <<" levels,"
+              <<" expected "<< nLevels-1 <<"."<< std::endl;
+    return false;
+  }
+
+  PCSetType(pc,PCMG);
+  PCMGSetLevels(pc,nLevels,nullptr);
+  PCMGSetType(pc,PC_MG_MULTIPLICATIVE);
+  PCMGSetCycleType(pc,map.getStringValue("multigrid_cycle") == "w"
+                      ? PC_MG_CYCLE_W : PC_MG_CYCLE_V);
+
+  for (PetscInt i = 1; i < nLevels; i++)
+    PCMGSetInterpolation(pc,i,mg.P[i-1]);
+
+  if (mg.A.empty())
+    PCMGSetGalerkin(pc,PC_MG_GALERKIN_BOTH);
+  else // level nLevels-1 is the finest, whose operator the PC already has
+    for (PetscInt i = 0; i < nLevels-1; i++) {
+      KSP lksp;
+      PCMGGetSmoother(pc,i,&lksp);
+      KSPSetOperators(lksp,mg.A[i],mg.A[i]);
+    }
+
+  return true;
 }
 
 

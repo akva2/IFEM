@@ -21,11 +21,14 @@
 #include "PETScSolParams.h"
 
 #include <array>
+#include <map>
 #include <memory>
 
 using PetscIntVec = std::vector<PetscInt>;    //!< PETSc integer vector
 using PetscIntMat = std::vector<PetscIntVec>; //!< PETSc integer matrix
 using PetscRealVec = std::vector<PetscReal>;  //!< PETSc real vector
+class SparseMatrix;
+
 using ISVec = std::vector<IS>;                //!< Index set vector
 using ISMat = std::vector<ISVec>;             //!< Index set matrix
 
@@ -304,6 +307,22 @@ public:
   //! \return True on success
   bool setParameters(bool setup);
 
+  //! \brief Installs a geometric multigrid hierarchy for a block.
+  //! \param[in] block Index of the block the hierarchy applies to
+  //! \param[in] prolong Prolongations, \a prolong[i] mapping the DOFs of
+  //! level \a i onto those of level \a i+1, with the coarsest level first
+  //! and the level this matrix is posed on last
+  //! \param[in] levels Operator on each level except the finest one, in the
+  //! same order. May be empty, in which case PETSc forms the coarse operators
+  //! as the Galerkin products of this matrix instead.
+  //!
+  //! \details This is what makes a <tt>pc</tt> of \a gmg work for the given
+  //! block. The matrices are copied into PETSc format and owned by this
+  //! object, so the caller is free to discard its own copies afterwards.
+  bool setMGHierarchy(size_t block,
+                      const std::vector<const SparseMatrix*>& prolong,
+                      const std::vector<const SystemMatrix*>& levels = {});
+
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
 
@@ -363,6 +382,10 @@ protected:
   std::vector<IS> isvec; //!< Index sets for blocks
 
   std::vector<std::array<int,2>> glb2Blk; //!< Maps equations to block and block eq
+
+  //! Geometric multigrid hierarchies, keyed by block index
+  std::map<size_t,PETScMGLevels> mgLevels;
+  std::vector<Mat> myMGmats; //!< Matrices created for \ref mgLevels
   std::unique_ptr<DomainDecomposition> m_dd{}; //!< Internal partitioning information
 };
 

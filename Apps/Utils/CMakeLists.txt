@@ -11,6 +11,7 @@ set(APPUTILS_PUBLIC_HEADERS
   ISolverOpt.h
   OptControlOps.h
   MeshUtils.h
+  MultigridProvider.h
   MultiPatchModelGenerator.h
   PiolaOperators.h
   SIMconfigure.h
@@ -24,6 +25,7 @@ set(APPUTILS_PUBLIC_HEADERS
   SIMNodalConstraint.h
   SIMSemi3D.h
   SIMSolverAdap.h
+  SIMSolverAdapMG.h
   SIMSolver.h
   SIMSolverOpt.h
   SIMSolverTS.h

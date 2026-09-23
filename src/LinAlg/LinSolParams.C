@@ -63,6 +63,7 @@ LinSolParams::BlockParams::BlockParams () : basis(1), comps(0)
 {
   this->addValue("pc", "default");
   this->addValue("multigrid_ksp", "defrichardson");
+  this->addValue("multigrid_cycle", "v");
 }
 
 LinSolParams::LinSolParams (LinAlg::LinearSystemType ls) : blocks(1), linSys(ls)
@@ -112,6 +113,8 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
         this->addValue("multigrid_coarse_solver", v);
       if (utl::getAttribute(child, "max_coarse_size", v))
         this->addValue("multigrid_max_coarse_size", v);
+      if (utl::getAttribute(child, "cycle", v))
+        this->addValue("multigrid_cycle", v);
     } else if (!strcasecmp(child->Value(),"dirsmoother")) {
       int order;
       std::string type;

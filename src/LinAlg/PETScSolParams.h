@@ -38,6 +38,23 @@ enum SchurPrec { SIMPLE, MSIMPLER, PCD };
 
 
 /*!
+  \brief A geometric multigrid hierarchy for one block of the linear system.
+  \details The levels are ordered with the coarsest first and the level the
+  linear system itself is posed on last. The operators are optional; without
+  them PETSc forms the coarse ones as the Galerkin products of the finest.
+*/
+
+struct PETScMGLevels
+{
+  std::vector<Mat> A; //!< Operator on each level, the finest one excluded
+  std::vector<Mat> P; //!< Prolongation from level \a i to level \a i+1
+
+  //! \brief Returns the number of levels in the hierarchy.
+  size_t size() const { return P.empty() ? 0 : P.size()+1; }
+};
+
+
+/*!
   \brief Class for PETSc solver parameters.
   \details It contains information about solver method, preconditioner
   and convergence criteria.
@@ -64,10 +81,12 @@ public:
   //! \param prefix PETsc param prefix for block
   //! \param blockEqs The local equations belonging to block
   //! \param setup True to setup preconditioner
+  //! \param[in] mg Geometric multigrid hierarchy for this block, if any
   void setupPC(PC& pc, size_t block,
                const std::string& prefix,
                const std::set<int>& blockEqs,
-               bool setup);
+               bool setup,
+               const PETScMGLevels* mg = nullptr);
 
   //! \brief Obtain number of blocks
   size_t getNoBlocks() const { return params.getNoBlocks(); }
@@ -130,6 +149,13 @@ protected:
                       const ISMat& dirIndexSet,
                       const std::set<int>& blockEqs,
                       bool setup);
+
+  //! \brief Sets up a geometric multigrid preconditioner.
+  //! \param pc The preconditioner to configure
+  //! \param[in] mg The hierarchy of transfer operators and level operators
+  //! \param[in] map The settings to apply
+  bool setupGeometricMG(PC& pc, const PETScMGLevels& mg,
+                        const SettingMap& map);
 
   //! \brief Setup an additive Schwarz preconditioner
   //! \param pc The preconditioner to set coarse solver for
