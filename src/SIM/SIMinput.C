@@ -796,6 +796,49 @@ FunctionBase* SIMinput::parseDualTag (const tinyxml2::XMLElement* elem,
 {
   IFEM::cout <<"  Parsing <"<< elem->Value() <<">";
 
+  // Lambda function registering the extraction function just created as a
+  // contribution to the total dual field, using the specified weight.
+  auto&& useWeight = [this,elem]() -> FunctionBase*
+  {
+    double weight = 0.0;
+    utl::getAttribute(elem,"weight",weight);
+    if (weight != 0.0)
+    {
+      if (!dualField)
+        dualField = new FunctionSum(extrFunc.back(),weight);
+      else if (FunctionSum* fs = dynamic_cast<FunctionSum*>(dualField); fs)
+        fs->add(extrFunc.back(),weight);
+    }
+
+    return extrFunc.back();
+  };
+
+  // An extraction function may alternatively be given as an explicit function
+  // expression. Such a function is used as is, without being clipped against a
+  // separate function domain, and therefore has to vanish outside the region of
+  // interest by itself. This is the way to define a general quantity of
+  // interest, e.g., a flux through a part of the boundary.
+  std::string ftypeStr;
+  if (utl::getAttribute(elem,"type",ftypeStr) && !ftypeStr.empty())
+  {
+    // The gradient of the extraction function is what defines the quantity of
+    // interest, so differentiate the expression exactly unless told otherwise.
+    bool autodiff = true;
+    utl::getAttribute(elem,"autodiff",autodiff);
+
+    const tinyxml2::XMLNode* fval = elem->FirstChild();
+    const char* fstr = fval ? fval->Value() : "";
+    RealFunc* w = ftypeStr == "expression"
+                ? utl::parseExprRealFunc(fstr,autodiff)
+                : utl::parseRealFunc(fstr,ftypeStr,false);
+    if (!w)
+      return nullptr;
+
+    IFEM::cout <<"\n\tw = "<< fstr << std::endl;
+    extrFunc.push_back(w);
+    return useWeight();
+  }
+
   int comp = 1, patch = 1;
   utl::getAttribute(elem,"comp",comp);
   utl::getAttribute(elem,"patch",patch);
@@ -874,17 +917,7 @@ FunctionBase* SIMinput::parseDualTag (const tinyxml2::XMLElement* elem,
       extrFunc.push_back(new DualVecFunc(comp,X0,normal,XZp,depth,width,pch));
   }
 
-  double weight = 0.0;
-  utl::getAttribute(elem,"weight",weight);
-  if (weight != 0.0)
-  {
-    if (!dualField)
-      dualField = new FunctionSum(extrFunc.back(),weight);
-    else if (FunctionSum* fs = dynamic_cast<FunctionSum*>(dualField); fs)
-      fs->add(extrFunc.back(),weight);
-  }
-
-  return extrFunc.back();
+  return useWeight();
 }
 
 
