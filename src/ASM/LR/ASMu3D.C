@@ -163,6 +163,51 @@ bool ASMu3D::write (std::ostream& os, int basis) const
 }
 
 
+bool ASMu3D::copyMeshFrom (const ASMbase& that)
+{
+  const ASMu3D* patch = dynamic_cast<const ASMu3D*>(&that);
+  if (!patch || !patch->lrspline)
+  {
+    std::cerr <<" *** ASMu3D::copyMeshFrom: Not a 3D LR-spline patch."
+              << std::endl;
+    return false;
+  }
+
+  if (shareFE)
+  {
+    std::cerr <<" *** ASMu3D::copyMeshFrom: Can not replace the mesh of a"
+              <<" patch sharing its FE data."<< std::endl;
+    return false;
+  }
+
+  // Drop any tensor spline such that generateFEMTopology uses the mesh
+  // assigned here, instead of regenerating one from the tensor spline.
+  delete tensorspline;
+  delete tensorPrjBas;
+  tensorspline = tensorPrjBas = nullptr;
+
+  lrspline.reset(patch->lrspline->copy());
+  lrspline->generateIDs();
+  refB = geomB = lrspline;
+
+  // A projection basis which is distinct from the geometry basis is refined
+  // alongside it, and therefore has to be copied as well.
+  if (patch->separateProjectionBasis())
+  {
+    const LR::LRSplineVolume* pB = patch->getBasis(ASM::PROJECTION_BASIS);
+    projB.reset(pB->copy());
+    projB->generateIDs();
+  }
+  else
+    projB = lrspline;
+
+  nnod = lrspline->nBasisFunctions();
+  nel  = lrspline->nElements();
+
+  return true;
+}
+
+
 void ASMu3D::clear (bool retainGeometry)
 {
   if (!retainGeometry) {

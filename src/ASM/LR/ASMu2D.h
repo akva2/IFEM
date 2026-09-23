@@ -140,6 +140,10 @@ public:
   //! \brief Writes the geometry of the SplineSurface object to given stream.
   virtual bool write(std::ostream&, int) const;
 
+  //! \brief Replaces the spline surface of this patch by a copy of another.
+  //! \param[in] that The patch to copy the spline surface from
+  virtual bool copyMeshFrom(const ASMbase& that);
+
   //! \brief Generates the finite element topology data for the patch.
   //! \details The data generated are the element-to-node connectivity array,
   //! and the arrays of global node and element numbers.

@@ -166,6 +166,7 @@ target_sources(
     src/SIM/GenAlphaSIM.C
     src/SIM/HHTSIM.C
     src/SIM/ModelGenerator.C
+    src/SIM/MultigridTransfer.C
     src/SIM/MultiStepSIM.C
     src/SIM/NewmarkNLSIM.C
     src/SIM/NewmarkSIM.C
@@ -338,6 +339,7 @@ set(IFEM_PUBLIC_HEADERS
   src/SIM/GenAlphaSIM.h
   src/SIM/HHTSIM.h
   src/SIM/ModelGenerator.h
+  src/SIM/MultigridTransfer.h
   src/SIM/MultiStepSIM.h
   src/SIM/NewmarkNLSIM.h
   src/SIM/NewmarkSIM.h
@@ -576,6 +578,7 @@ IFEM_add_test_app(
       src/SIM/Test/TestAdaptiveSetup.C
       src/SIM/Test/TestInitialConditions.C
       src/SIM/Test/TestModelGenerator.C
+      src/SIM/Test/TestMultigridTransfer.C
       src/SIM/Test/TestNewmark.C
       src/SIM/Test/TestNonLinSIM.C
       src/SIM/Test/TestSIM.C

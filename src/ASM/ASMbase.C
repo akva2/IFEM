@@ -149,6 +149,12 @@ ASMbase::~ASMbase ()
 }
 
 
+bool ASMbase::copyMeshFrom (const ASMbase&)
+{
+  return Aerror("copyMeshFrom");
+}
+
+
 ASMbase* ASMbase::cloneUnShared () const
 {
   const ASM2D* patch2 = dynamic_cast<const ASM2D*>(this);

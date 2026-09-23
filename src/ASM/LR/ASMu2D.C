@@ -175,6 +175,52 @@ bool ASMu2D::write (std::ostream& os, int basis) const
 }
 
 
+bool ASMu2D::copyMeshFrom (const ASMbase& that)
+{
+  const ASMu2D* patch = dynamic_cast<const ASMu2D*>(&that);
+  if (!patch || !patch->lrspline)
+  {
+    std::cerr <<" *** ASMu2D::copyMeshFrom: Not a 2D LR-spline patch."
+              << std::endl;
+    return false;
+  }
+
+  if (shareFE)
+  {
+    std::cerr <<" *** ASMu2D::copyMeshFrom: Can not replace the mesh of a"
+              <<" patch sharing its FE data."<< std::endl;
+    return false;
+  }
+
+  // Drop any tensor spline such that generateFEMTopology uses the mesh
+  // assigned here, instead of regenerating one from the tensor spline.
+  delete tensorspline;
+  delete tensorPrjBas;
+  tensorspline = tensorPrjBas = nullptr;
+
+  lrspline.reset(patch->lrspline->copy());
+  lrspline->generateIDs();
+  refB = geomB = lrspline;
+  is_rational = patch->is_rational;
+
+  // A projection basis which is distinct from the geometry basis is refined
+  // alongside it, see ASMu2D::refine, and therefore has to be copied as well.
+  if (patch->separateProjectionBasis())
+  {
+    const LR::LRSplineSurface* pB = patch->getBasis(ASM::PROJECTION_BASIS);
+    projB.reset(pB->copy());
+    projB->generateIDs();
+  }
+  else
+    projB = lrspline;
+
+  nnod = lrspline->nBasisFunctions();
+  nel  = lrspline->nElements();
+
+  return true;
+}
+
+
 void ASMu2D::clear (bool retainGeometry)
 {
   if (!retainGeometry) {

@@ -128,6 +128,18 @@ public:
   //! constraints, loads, etc.) are however not copied.
   ASMbase* cloneUnShared() const;
 
+  //! \brief Replaces the spline geometry of this patch by a copy of another.
+  //! \param[in] that The patch to copy the spline geometry from
+  //!
+  //! \details Unlike the copy constructors, which share the spline objects
+  //! with the copied patch, this method gives this patch a private deep copy
+  //! of the spline objects of \a that. It is intended for taking a snapshot of
+  //! a mesh which is about to be refined further, such that the snapshot can
+  //! be used as a coarse level in a multi-level method. Only the spline
+  //! objects are copied; the FE topology has to be regenerated afterwards, and
+  //! the properties are expected to be assigned by the owning simulator.
+  virtual bool copyMeshFrom(const ASMbase& that);
+
   //! \brief Checks if this patch is empty.
   virtual bool empty() const = 0;
 
