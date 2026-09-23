@@ -6,7 +6,10 @@ project(IFEMAppUtils LANGUAGES C CXX)
 set(APPUTILS_PUBLIC_HEADERS
   CompatibleOperators.h
   EqualOrderOperators.h
+  GlbNodalSystem.h
   ISolver.h
+  ISolverOpt.h
+  OptControlOps.h
   MeshUtils.h
   MultiPatchModelGenerator.h
   PiolaOperators.h
@@ -22,6 +25,7 @@ set(APPUTILS_PUBLIC_HEADERS
   SIMSemi3D.h
   SIMSolverAdap.h
   SIMSolver.h
+  SIMSolverOpt.h
   SIMSolverTS.h
   StabilizationUtils.h
   TimeIntUtils.h
@@ -35,6 +39,8 @@ ifem_add_library(
   SOURCES
     CompatibleOperators.C
     EqualOrderOperators.C
+    GlbNodalSystem.C
+    OptControlOps.C
     MeshUtils.C
     MultiPatchModelGenerator.C
     PiolaOperators.C
