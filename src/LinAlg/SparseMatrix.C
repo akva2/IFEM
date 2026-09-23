@@ -790,7 +790,11 @@ void SparseMatrix::compressPattern ()
 {
   if (solver == SUPERLU || solver == UMFPACK)
     this->optimiseCols();
-  else if (solver == S_A_M_G)
+  else
+    // Row-oriented storage for matrices that are not tied to one of the
+    // direct solvers. This is the format the element access method and the
+    // matrix-vector product fall back to, so a matrix that is only assembled
+    // and multiplied, never factorized, can be compressed too.
     this->optimiseRows();
 }
 
@@ -1025,6 +1029,18 @@ bool SparseMatrix::optimiseCols (const std::vector<IntSet>& dofc)
 
 bool SparseMatrix::solve (SystemVector& B, Real* rc)
 {
+  return this->solveSystem(B,rc,false);
+}
+
+
+bool SparseMatrix::solveTranspose (SystemVector& B, Real* rc)
+{
+  return this->solveSystem(B,rc,true);
+}
+
+
+bool SparseMatrix::solveSystem (SystemVector& B, Real* rc, bool transposed)
+{
   if (this->dim(1) < 1) return true; // No equations to solve
 
   StdVector* Bptr = dynamic_cast<StdVector*>(&B);
@@ -1032,12 +1048,18 @@ bool SparseMatrix::solve (SystemVector& B, Real* rc)
 
   switch (solver)
     {
-    case SUPERLU: return this->solveSLUx(*Bptr,rc);
-    case S_A_M_G: return this->solveSAMG(*Bptr);
-    case UMFPACK: return this->solveUMF(*Bptr,rc);
-    default: std::cerr <<"SparseMatrix::solve: No equation solver"<< std::endl;
+    case SUPERLU: return this->solveSLUx(*Bptr,rc,transposed);
+    case UMFPACK: return this->solveUMF(*Bptr,rc,transposed);
+    case S_A_M_G:
+      if (transposed) break;
+      return this->solveSAMG(*Bptr);
+    default:
+      std::cerr <<"SparseMatrix::solve: No equation solver"<< std::endl;
+      return false;
     }
 
+  std::cerr <<"SparseMatrix::solve: The transposed system can not be solved"
+            <<" with this equation solver"<< std::endl;
   return false;
 }
 
@@ -1144,7 +1166,7 @@ bool SparseMatrix::solveSLU (Vector& B)
   or its multi-threaded equivalent \a pdgssvx.
 */
 
-bool SparseMatrix::solveSLUx (Vector& B, Real* rcond)
+bool SparseMatrix::solveSLUx (Vector& B, Real* rcond, bool transposed)
 {
   if (!factored)
     this->optimiseCols();
@@ -1191,6 +1213,8 @@ bool SparseMatrix::solveSLUx (Vector& B, Real* rcond)
   Real ferr[nrhs], berr[nrhs];
   superlu_memusage_t mem_usage;
 
+  slu->opts->trans = transposed ? TRANS : NOTRANS;
+
   // Invoke the expert driver
   pdgssvx(numThreads, slu->opts, &slu->A, slu->perm_c, slu->perm_r,
           &slu->equed, slu->R, slu->C, &slu->L, &slu->U, &Bmat, &Xmat,
@@ -1235,6 +1259,10 @@ bool SparseMatrix::solveSLUx (Vector& B, Real* rcond)
 
   slu->opts->ConditionNumber = printSLUstat || rcond ? YES : NO;
   slu->opts->PivotGrowth = printSLUstat ? YES : NO;
+  // The factorization is of the untransposed matrix in both cases; the driver
+  // only changes which of the triangular solves it performs, and which way
+  // round it applies the equilibration scalings
+  slu->opts->Trans = transposed ? TRANS : NOTRANS;
 
   void* work = nullptr;
   int  lwork = 0;
@@ -1296,7 +1324,7 @@ bool SparseMatrix::solveSLUx (Vector& B, Real* rcond)
 }
 
 
-bool SparseMatrix::solveUMF (Vector& B, Real* rcond)
+bool SparseMatrix::solveUMF (Vector& B, Real* rcond, bool transposed)
 {
   if (!factored)
     this->optimiseCols();
@@ -1320,7 +1348,7 @@ bool SparseMatrix::solveUMF (Vector& B, Real* rcond)
   size_t nrhs = B.size() / nrow;
   bool okAll = info[UMFPACK_STATUS] == UMFPACK_OK;
   for (size_t i = 0; i < nrhs && okAll; ++i) {
-    umfpack_di_solve(UMFPACK_A,
+    umfpack_di_solve(transposed ? UMFPACK_Aat : UMFPACK_A,
                      IA.data(), JA.data(), A.ptr(),
                      &X[i*nrow], &B[i*nrow], numeric, nullptr, info);
     okAll = info[UMFPACK_STATUS] == UMFPACK_OK;

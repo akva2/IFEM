@@ -15,6 +15,8 @@
 #define _SYSTEM_MATRIX_H
 
 #include "MatVec.h"
+
+#include <iostream>
 #include "LinAlgenums.h"
 
 class SAM;
@@ -353,6 +355,25 @@ public:
   //! \param b Right-hand-side vectors on input, solution vectors on output
   //! \param[out] x Matrix of solution vectors (row-oriented)
   virtual bool solve(SystemVector& b, Matrix& x);
+
+  //! \brief Solves the transposed linear system of equations.
+  //! \param b Right-hand-side vector on input, solution vector on output
+  //! \param[out] rc Reciprocal condition number of the LHS-matrix (optional)
+  //!
+  //! \details This is what the adjoint equation of an optimal control problem
+  //! with a non-symmetric state operator needs. The direct solvers can do it
+  //! with the same factorization as the untransposed system, so an adjoint
+  //! solve is no more expensive than a forward solve. The default
+  //! implementation announces that the matrix type cannot do it.
+  virtual bool solveTranspose(SystemVector&, Real* = nullptr)
+  {
+    std::cerr <<" *** SystemMatrix::solveTranspose: Not available for this"
+              <<" matrix type."<< std::endl;
+    return false;
+  }
+
+  //! \brief Returns \e true if this matrix can solve the transposed system.
+  virtual bool canSolveTranspose() const { return false; }
 
   //! \brief Returns the L-infinity norm of the matrix.
   virtual Real Linfnorm() const = 0;

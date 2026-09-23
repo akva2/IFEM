@@ -218,6 +218,17 @@ public:
   //! \param[out] rc Reciprocal condition number of the LHS-matrix (optional)
   virtual bool solve(SystemVector& B, Real* rc = nullptr);
 
+  //! \brief Solves the transposed linear system of equations.
+  //! \param B Right-hand-side vector on input, solution vector on output
+  //! \param[out] rc Reciprocal condition number of the LHS-matrix (optional)
+  virtual bool solveTranspose(SystemVector& B, Real* rc = nullptr);
+
+  //! \brief Returns \e true if this matrix can solve the transposed system.
+  virtual bool canSolveTranspose() const
+  {
+    return solver == SUPERLU || solver == UMFPACK;
+  }
+
   //! \brief Calculates compressed-sparse-row arrays from the element map.
   //! \param[out] iA Start index of each row in jA
   //! \param[out] jA Column indices
@@ -254,6 +265,12 @@ protected:
   //! \param B Right-hand-side vector on input, solution vector on output
   bool solveSAMG(Vector& B);
 
+  //! \brief Invokes the equation solver for a given right-hand-side.
+  //! \param B Right-hand-side vector on input, solution vector on output
+  //! \param[out] rc Reciprocal condition number of the LHS-matrix (optional)
+  //! \param[in] transposed If \e true, solve the transposed system
+  bool solveSystem(SystemVector& B, Real* rc, bool transposed);
+
   //! \brief Invokes the SuperLU equation solver for a given right-hand-side.
   //! \param B Right-hand-side vector on input, solution vector on output
   bool solveSLU(Vector& B);
@@ -261,12 +278,12 @@ protected:
   //! \brief Invokes the SuperLU equation solver for a given right-hand-side.
   //! \param B Right-hand-side vector on input, solution vector on output
   //! \param[out] rcond Reciprocal condition number of the LHS-matrix (optional)
-  bool solveSLUx(Vector& B, Real* rcond);
+  bool solveSLUx(Vector& B, Real* rcond, bool transposed = false);
 
   //! \brief Invokes the UMFPACK equation solver for a given right-hand-side.
   //! \param B Right-hand-side vector on input, solution vector on output
   //! \param[out] rcond Reciprocal condition number of the LHS-matrix (optional)
-  bool solveUMF(Vector& B, Real* rcond);
+  bool solveUMF(Vector& B, Real* rcond, bool transposed = false);
 
   //! \brief Writes the system matrix to the given output stream.
   virtual std::ostream& write(std::ostream& os) const;

@@ -163,3 +163,65 @@ TEST_CASE("TestSparseMatrix.MxV")
 #endif
   }
 }
+
+
+/*!
+  Solving the transposed system must reuse the factorization of the
+  untransposed one, so this also checks that repeated solves alternating
+  between the two directions all give the right answer.
+*/
+
+TEST_CASE("TestSparseMatrix.SolveTranspose")
+{
+  // A small non-symmetric matrix with a known inverse action
+  const size_t n = 4;
+  const double Aij[n][n] = { {  4.0, 1.0, 0.0, 2.0 },
+                             { -1.0, 3.0, 1.0, 0.0 },
+                             {  0.0, 2.0, 5.0, 1.0 },
+                             {  3.0, 0.0, 1.0, 6.0 } };
+
+  for (SparseMatrix::SparseSolver eqSolver : { SparseMatrix::SUPERLU,
+                                               SparseMatrix::UMFPACK })
+  {
+    SparseMatrix Amat(n,n,eqSolver);
+    for (size_t i = 1; i <= n; i++)
+      for (size_t j = 1; j <= n; j++)
+        if (Aij[i-1][j-1] != 0.0)
+          Amat(i,j) = Aij[i-1][j-1];
+
+    if (!Amat.canSolveTranspose())
+      continue;
+
+    // Right-hand-sides chosen such that the solutions are known exactly
+    StdVector b(n), c(n);
+    for (size_t i = 1; i <= n; i++)
+      for (size_t j = 1; j <= n; j++)
+      {
+        b(i) += Aij[i-1][j-1]*j;   // A*(1,2,3,4)
+        c(i) += Aij[j-1][i-1]*j;   // A^T*(1,2,3,4)
+      }
+
+    StdVector x(b), y(c);
+    if (!Amat.solve(x))
+      continue; // The solver is not compiled in
+
+    REQUIRE(Amat.solveTranspose(y));
+
+    for (size_t i = 1; i <= n; i++)
+    {
+      REQUIRE_THAT(x(i), WithinRel(static_cast<double>(i), 1.0e-12));
+      REQUIRE_THAT(y(i), WithinRel(static_cast<double>(i), 1.0e-12));
+    }
+
+    // And once more in the opposite order, to check that the direction of the
+    // previous solve does not leak into the next one
+    StdVector x2(b), y2(c);
+    REQUIRE(Amat.solveTranspose(y2));
+    REQUIRE(Amat.solve(x2));
+    for (size_t i = 1; i <= n; i++)
+    {
+      REQUIRE_THAT(x2(i), WithinRel(static_cast<double>(i), 1.0e-12));
+      REQUIRE_THAT(y2(i), WithinRel(static_cast<double>(i), 1.0e-12));
+    }
+  }
+}
