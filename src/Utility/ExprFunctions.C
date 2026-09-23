@@ -679,21 +679,46 @@ evalTimeDerivative (const Vec3& X) const
 }
 
 
+/*!
+  The error counter is global, and is incremented by run-time evaluation errors
+  in unrelated functions as well as by parse errors. An analytical solution that
+  is singular at a point which the post-processing happens to sample is enough
+  to set it. The constructors below silently give up when they see it set on
+  entry, leaving behind a function that evaluates to zero everywhere, so it has
+  to be cleared first. Afterwards it refers to this expression alone, and a
+  faulty one is reported as a null pointer, as utl::parseRealFunc also does.
+*/
+
 RealFunc* utl::parseExprRealFunc (const std::string& function, bool autodiff)
 {
-  if (autodiff)
-    return new EvalFuncSpatial<autodiff::var>(function.c_str());
-  else
-    return new EvalFunction(function.c_str());
+  ExprEval::numError = 0;
+
+  RealFunc* f = autodiff
+              ? static_cast<RealFunc*>(new EvalFuncSpatial<autodiff::var>(function.c_str()))
+              : static_cast<RealFunc*>(new EvalFunction(function.c_str()));
+
+  if (ExprEval::numError == 0)
+    return f;
+
+  delete f;
+  return nullptr;
 }
 
 
+//! \copydetails utl::parseExprRealFunc()
 VecFunc* utl::parseExprVecFunc (const std::string& function, bool autodiff)
 {
-  if (autodiff)
-    return new EvalMultiFunction<VecFunc,Vec3,autodiff::var>(function, "");
-  else
-    return new EvalMultiFunction<VecFunc,Vec3,Real>(function, "");
+  ExprEval::numError = 0;
+
+  VecFunc* f = autodiff
+             ? static_cast<VecFunc*>(new EvalMultiFunction<VecFunc,Vec3,autodiff::var>(function, ""))
+             : static_cast<VecFunc*>(new EvalMultiFunction<VecFunc,Vec3,Real>(function, ""));
+
+  if (ExprEval::numError == 0)
+    return f;
+
+  delete f;
+  return nullptr;
 }
 
 
