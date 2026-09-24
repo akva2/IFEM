@@ -2335,74 +2335,52 @@ bool ASMu3D::checkElementSize (int elmId, bool globalNum) const
 }
 
 
-void ASMu3D::extendRefinementDomain (IntSet& refineIndices,
-                                     const IntSet& neighborIndices) const
+//! \brief Maps a local face index to the corresponding LR-spline edge.
+static LR::parameterEdge faceOf (int lidx)
 {
-  const int nedge = 12;
-  const int nface =  6;
-
-  IntVec bndry0;
-  const LR::LRSplineVolume* ref = this->getBasis(ASM::REFINEMENT_BASIS);
-  for (size_t c = 1; c <= 8; ++c)
-      bndry0.push_back(GlobalNodes::getBoundaryNodes(*ref,
-                                                     0, c, 0).front());
-
-  std::vector<IntVec> bndry1(nedge);
-  for (int j = 1; j <= nedge; j++)
-    bndry1[j-1] = GlobalNodes::getBoundaryNodes(*ref, 1, j, 0);
-
-  std::vector<IntVec> bndry2(nface);
-  for (int j = 1; j <= nface; j++)
-    bndry2[j-1] = GlobalNodes::getBoundaryNodes(*ref, 2, j, 0);
-
-  // Add refinement from neighbors
-  for (int j : neighborIndices)
-  {
-    bool done_with_this_node = false;
-
-    // Check if node is a corner node,
-    // compute large extended domain (all directions)
-    for (int edgeNode : bndry0)
-      if (edgeNode == j)
-      {
-        IntVec secondary = this->getOverlappingNodes(j);
-        refineIndices.insert(secondary.begin(),secondary.end());
-        done_with_this_node = true;
-        break;
-      }
-
-    // Check if node is an edge node,
-    // compute moderate extended domain (2 directions)
-    int allowedDir;
-    for (int edge = 0; edge < nedge && !done_with_this_node; edge++)
-      for (int edgeNode : bndry1[edge])
-        if (edgeNode == j)
-        {
-          if (edge < 4)
-            allowedDir = 6; // bin(110), allowed to grow in v- and w-direction
-          else if (edge < 8)
-            allowedDir = 5; // bin(101), allowed to grow in u- and w-direction
-          else
-            allowedDir = 3; // bin(011), allowed to grow in u- and v-direction
-          IntVec secondary = this->getOverlappingNodes(j,allowedDir);
-          refineIndices.insert(secondary.begin(),secondary.end());
-          done_with_this_node = true;
-          break;
-        }
-
-    // Check if node is a face node,
-    // compute small extended domain (1 direction)
-    for (int face = 0; face < nface && !done_with_this_node; face++)
-      for (int edgeNode : bndry2[face])
-        if (edgeNode == j)
-        {
-          allowedDir = 1 << face/2;
-          IntVec secondary = this->getOverlappingNodes(j,allowedDir);
-          refineIndices.insert(secondary.begin(),secondary.end());
-          done_with_this_node = true;
-          break;
-        }
+  switch (lidx) {
+    case 1: return LR::WEST;
+    case 2: return LR::EAST;
+    case 3: return LR::SOUTH;
+    case 4: return LR::NORTH;
+    case 5: return LR::BOTTOM;
+    case 6: return LR::TOP;
   }
+  return LR::NONE;
+}
+
+
+bool ASMu3D::matchMesh (ASMunstruct& neighbor, int myIdx, int nbIdx, int orient)
+{
+  ASMu3D* nb = dynamic_cast<ASMu3D*>(&neighbor);
+  if (!nb)
+    return false;
+
+  LR::parameterEdge myFace = faceOf(myIdx);
+  LR::parameterEdge nbFace = faceOf(nbIdx);
+  if (myFace == LR::NONE || nbFace == LR::NONE)
+    return false;
+
+  // The orientation flag is the one used when sorting the boundary functions
+  // of the two faces onto each other, see ASMLRSpline::Sort. Bit 2 swaps the
+  // two running directions of the face, bits 1 and 0 reverse the first and
+  // the second of them, respectively.
+  bool flipUV    = (orient & 4);
+  bool reverseU  = (orient & 2);
+  bool reverseV  = (orient & 1);
+
+  LR::LRSplineVolume* mine = this->getBasis(ASM::REFINEMENT_BASIS);
+  LR::LRSplineVolume* theirs = nb->getBasis(ASM::REFINEMENT_BASIS);
+  if (!mine || !theirs)
+    return false;
+
+  if (!mine->matchParametricEdge(myFace,theirs,nbFace,
+                                 reverseU,reverseV,flipUV))
+    return false;
+
+  this->meshUpdated();
+  nb->meshUpdated();
+  return true;
 }
 
 
@@ -2415,6 +2393,12 @@ bool ASMu3D::refine (const LR::RefineData& prm, Vectors& sol)
   if (prm.elements.size() + prm.errors.size() == 0)
     return true;
 
+  return this->refineProjectionBasis();
+}
+
+
+bool ASMu3D::refineProjectionBasis ()
+{
   if (!this->separateProjectionBasis())
     return true;
 

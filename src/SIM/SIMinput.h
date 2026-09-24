@@ -186,6 +186,11 @@ public:
   //! \param[in] sol Vectors to interpolate onto refined mesh
   bool refine(const LR::RefineData& prm, Vectors& sol);
 
+  //! \brief Makes the meshes of connected patches conform with each other.
+  //! \details Iterates the pairwise matching over the declared topological
+  //! connections until no patch mesh changes any more.
+  bool matchPatchMeshes();
+
   //! \brief Refines the mesh based on a mesh density function.
   //! \param[in] refC Mesh refinement criteria function
   //! \param[in] refTol Mesh refinement threshold

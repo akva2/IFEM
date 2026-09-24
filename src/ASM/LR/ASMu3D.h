@@ -703,11 +703,16 @@ protected:
   virtual void remapErrors(RealArray& errors,
                            const RealArray& origErr, bool elemErrors) const;
 
-  //! \brief Extends the refinement domain with information for neighbors.
-  //! \param refineIndices List of basis functions to refine
-  //! \param neighborIndices Basis functions to refine from neighbor patches
-  virtual void extendRefinementDomain(IntSet& refineIndices,
-                                      const IntSet& neighborIndices) const;
+  //! \brief Propagates the current mesh onto the separate projection basis.
+  virtual bool refineProjectionBasis();
+
+  //! \brief Makes the meshes of this patch and a neighbour conform.
+  //! \param neighbor The neighbouring patch
+  //! \param myIdx Local index of the shared face on this patch
+  //! \param nbIdx Local index of the shared face on the neighbour
+  //! \param orient Orientation flag of the connection
+  virtual bool matchMesh(ASMunstruct& neighbor,
+                         int myIdx, int nbIdx, int orient);
 
   //! \brief Converts current tensor spline object to LR-spline.
   std::shared_ptr<LR::LRSplineVolume> createLRfromTensor();

@@ -171,6 +171,16 @@ public:
   //! \param sol Control point results values that are transferred to new mesh
   virtual bool refine(const LR::RefineData& prm, Vectors& sol);
 
+  //! \brief Stores solution vectors in the control points of every basis.
+  virtual bool packSolution(const Vectors& sol, IntVec& nf);
+  //! \brief Extracts solution vectors from the control points of every basis.
+  virtual void unpackSolution(Vectors& sol, const IntVec& nf);
+  //! \brief Refines the refinement basis and brings the other bases along.
+  virtual bool refineMesh(const LR::RefineData& prm);
+
+  //! \brief Brings the other bases along after a mesh change.
+  virtual void meshUpdated();
+
   //! \brief Remaps element-wise errors from geometry mesh to refinement mesh.
   //! \param[out] errors The remapped errors
   //! \param[in] origErr The element-wise errors on the geometry mesh

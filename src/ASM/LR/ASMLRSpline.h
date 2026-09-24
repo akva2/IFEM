@@ -103,6 +103,36 @@ public:
   //! \param sol Control point results values that are transferred to new mesh
   virtual bool refine(const LR::RefineData& prm, Vectors& sol);
 
+  //! \brief Stores solution vectors as extra control point dimensions.
+  //! \param[in] sol Solution vectors to store
+  //! \param[out] nf Number of field components stored for each vector
+  //!
+  //! \details Refining an LR-spline is knot insertion, which interpolates the
+  //! control points onto the refined mesh. Solution vectors are therefore
+  //! carried across a refinement by storing them as extra control point
+  //! dimensions, and extracting them again afterwards. The two halves are
+  //! exposed separately such that a multi-patch driver can keep the vectors
+  //! stored while it makes the patch meshes conform with each other.
+  virtual bool packSolution(const Vectors& sol, IntVec& nf);
+  //! \brief Extracts solution vectors from the extra control point dimensions.
+  //! \param sol Solution vectors to extract, resized to the current mesh
+  //! \param[in] nf Number of field components stored for each vector
+  virtual void unpackSolution(Vectors& sol, const IntVec& nf);
+
+  //! \brief Refines the mesh, leaving any stored solution vectors alone.
+  //! \param[in] prm Input data used to control the mesh refinement
+  virtual bool refineMesh(const LR::RefineData& prm);
+
+  //! \brief Propagates the current mesh onto a separate projection basis.
+  //! \details Does nothing unless this patch has a projection basis of its
+  //! own. Insertion of an existing knot line is a no-op, so this may be
+  //! invoked whenever the mesh has settled, also more than once.
+  virtual bool refineProjectionBasis() { return true; }
+
+  //! \brief Checks the basis of this patch for linear independence.
+  //! \return \e false if the basis is linearly dependent, or inconclusive
+  bool checkLinearIndependence() const;
+
   using ASMbase::evalSolution;
   //! \brief Projects the secondary solution field onto the primary basis.
   //! \param[in] integrand Object with problem-specific data and methods
@@ -122,31 +152,6 @@ public:
   //! \brief Sort basis functions based on local knot vectors.
   static void Sort(int u, int v, int orient,
                    std::vector<LR::Basisfunction*>& functions);
-
-  //! \brief Returns all boundary functions that are covered by the given nodes.
-  //! \param[in] nodes Set of (0-based) patch local node IDs
-  //! \return 0-based node IDs for boundary functions whose support is
-  //! completely covered by the union of the support of the input nodes
-  virtual IntVec getBoundaryCovered(const IntSet& nodes) const;
-
-  //! \brief Returns all functions whose support overlap with the input nodes.
-  //! \param[in] nodes List of (0-based) patch local node IDs
-  //! (typically requested by adaptive refinement)
-  //! \param[in] dir 3-bit binary mask on which parameter directions are allowed
-  //! to grow; i.e. bin(011)=dec(3) allows u-direction and v-direction to grow,
-  //! default is bin(111)=dec(7) all directions
-  //! \return 0-based node IDs for functions with overlapping support with
-  //! the ones in boundary
-  IntVec getOverlappingNodes(const IntSet& nodes, int dir = 7) const;
-
-  //! \brief Returns all functions whose support overlap with the input node.
-  //! \param[in] node 0-based patch local node ID
-  //! \param[in] dir 3-bit binary mask for which parameter directions can grow
-  //! \return 0-based node IDs for functions with overlapping support
-  IntVec getOverlappingNodes(int node, int dir = 7) const
-  {
-    return this->getOverlappingNodes(IntSet(&node,(&node)+1),dir);
-  }
 
   //! \brief Transfers Gauss point variables from old basis to this patch.
   //! \param[in] oldBasis The LR-spline basis to transfer from
@@ -197,6 +202,13 @@ protected:
   //! \param[in] prm Input data used to control the mesh refinement
   //! \param lrspline The spline to perform adaptation for
   bool doRefine(const LR::RefineData& prm, LR::LRSpline* lrspline);
+
+  //! \brief Updates the patch after its mesh has been changed.
+  //! \details Regenerates the spline function IDs and discards the FE data
+  //! established for the mesh as it was before the change. A patch with more
+  //! than one basis also has to bring the other bases along here, since only
+  //! the refinement basis is matched with that of a neighbouring patch.
+  virtual void meshUpdated();
 
   using ASMbase::evalPoint;
   //! \brief Evaluates the geometry at a specified point.

@@ -81,10 +81,22 @@ public:
   virtual void remapErrors(RealArray& errors, const RealArray& orig,
                            bool = false) const { errors = orig; }
 
-  //! \brief Returns all boundary functions that are covered by the given nodes.
-  virtual IntVec getBoundaryCovered(const IntSet&) const { return IntVec(); }
-  //! \brief Extends the refinement domain with information for neighbors.
-  virtual void extendRefinementDomain(IntSet&, const IntSet&) const {}
+  //! \brief Makes the meshes of this patch and a neighbour conform.
+  //! \param neighbor The neighbouring patch
+  //! \param myIdx Local index of the shared boundary on this patch
+  //! \param nbIdx Local index of the shared boundary on the neighbour
+  //! \param orient Orientation flag of the connection
+  //! \return \e true if either mesh was changed
+  //!
+  //! \details Each patch is given the knot lines that the other one has on
+  //! the shared boundary and it does not, such that the two meshes induce the
+  //! same mesh there. Both patches may be refined by this. Since only the
+  //! declared connections are visited, and conformity is transitive, a driver
+  //! that iterates this to a fixed point also makes the meshes conform on
+  //! boundaries that several patches share without a connection of their own.
+  //! The default implementation does nothing, which is the right answer for
+  //! patches whose shared boundaries carry no mesh of their own.
+  virtual bool matchMesh(ASMunstruct&, int, int, int) { return false; }
 
   //! \brief Returns the coordinates of the element center.
   virtual Vec3 getElementCenter(int iel) const = 0;

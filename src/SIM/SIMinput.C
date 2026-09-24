@@ -34,6 +34,8 @@
 #include <fstream>
 #include <sstream>
 #include <numeric>
+#include <array>
+#include <map>
 
 
 SIMinput::SIMinput (IntegrandBase* itg) : SIMbase(itg)
@@ -1700,90 +1702,130 @@ bool SIMinput::refine (const LR::RefineData& prm, Vectors& sol)
     return false;
   }
 
-  // Multi-patch models need to pass refinement indices over patch boundaries
-  std::vector<LR::RefineData> prmloc(myModel.size(),LR::RefineData(prm));
-  std::vector<IntSet> refineIndices(myModel.size());
-  std::vector<IntSet> conformingIndices(myModel.size());
-  bool changed = !this->getPatch(1)->isShared();
-  while (changed) {
-    changed = false;
-    for (size_t i = 0; i < myModel.size(); i++)
+  // The refinement indices are global function numbers, so a function on a
+  // shared boundary carries the same number on every patch it belongs to and
+  // is picked up by all of them here. No propagation between the patches is
+  // needed for that, only a lookup per patch.
+  const IntSet marked(prm.elements.begin(),prm.elements.end());
+  std::vector<IntVec> locElms(myModel.size());
+  for (size_t i = 0; i < myModel.size(); i++)
+  {
+    size_t nNodes = prm.MLGN.empty() ? myModel[i]->getNoNodes()
+                                     : prm.MLGN[i].size();
+    for (size_t n = 0; n < nNodes; n++)
     {
-      // Extract local indices from the vector of global indices
-      for (int k : prm.elements)
-      {
-        int locId;
-        if (prm.MLGN.empty())
-          locId = myModel[i]->getNodeIndex(k+1)-1;
-        else
-          locId = utl::findIndex(prm.MLGN[i],k);
-        if (locId >= 0 && refineIndices[i].insert(locId).second)
-          changed = true;
-      }
+      int globId = prm.MLGN.empty() ? myModel[i]->getNodeID(n+1)-1
+                                    : prm.MLGN[i][n];
+      if (marked.find(globId) != marked.end())
+        locElms[i].push_back(n);
+    }
+  }
 
-      // Fetch boundary nodes covered (may need to pass this to other patches)
-      IntVec bndry_nodes = pch[i]->getBoundaryCovered(refineIndices[i]);
-
-      // DESIGN NOTE: It is tempting here to use patch connectivity information.
-      // However, this does not account (in the general case)
-      // for cross-connections in L-shape geometries, i.e.,
-      //
-      // +-----+
-      // | #1  |
-      // |     |         patch #1 (edge 3) connected to patch #2 (edge 4)
-      // +-----+-----+   patch #2 (edge 2) connected to patch #3 (edge 1)
-      // | #2  | #3  |
-      // |     |     |   we need to pass the corner index of patch #3 (vertex 3)
-      // +-----+-----+   to patch #1 (vertex 2), but this connection is not
-      //                 guaranteed to appear in the input file
-
-      for (int k : bndry_nodes)
-      {
-        // Check if this boundary node appears on other patches
-        int globId;
-        if (prm.MLGN.empty())
-          globId = myModel[i]->getNodeID(k+1);
-        else
-          globId = prm.MLGN[i][k];
-        for (size_t j = 0; j < myModel.size(); j++)
-          if (j != i)
-          {
-            int locId;
-            if (prm.MLGN.empty())
-              locId = myModel[j]->getNodeIndex(globId)-1;
-            else
-              locId = utl::findIndex(prm.MLGN[j],globId);
-            if (locId >= 0)
-            {
-              conformingIndices[j].insert(locId);
-              conformingIndices[i].insert(k);
-            }
-          }
-      }
+  // Refining a patch inserts knot lines that may reach a shared boundary, and
+  // the neighbour must then have them too for the two meshes to still induce
+  // the same mesh there. The solution vectors are kept in the control points
+  // across the whole sequence, so that the knot insertions made while making
+  // the meshes conform interpolate them along with the geometry.
+  std::vector<ASMLRSpline*> lrPch(myModel.size(),nullptr);
+  for (size_t i = 0; i < myModel.size(); i++)
+    if (!(lrPch[i] = dynamic_cast<ASMLRSpline*>(myModel[i])))
+    {
+      std::cerr <<" *** SIMinput::refine: Multi-patch refinement requires"
+                <<" LR-spline patches."<< std::endl;
+      return false;
     }
 
-    for (size_t i = 0; i < pch.size(); i++)
-      pch[i]->extendRefinementDomain(refineIndices[i],conformingIndices[i]);
+  std::vector<Vectors> lsol(myModel.size(),Vectors(sol.size()));
+  std::vector<IntVec>  nf(myModel.size());
+  for (size_t i = 0; i < myModel.size(); i++)
+  {
+    for (size_t j = 0; j < sol.size(); j++)
+      this->extractPatchSolution(sol[j], lsol[i][j], myModel[i],
+                                 sol[j].size() / this->getNoNodes());
+
+    LR::RefineData prmloc(prm);
+    prmloc.elements = locElms[i];
+
+    if (myModel[i]->isShared() && !prm.refShare)
+      nf[i].assign(lsol[i].size(),0); // refined already, leave the vectors be
+    else if (!lrPch[i]->packSolution(lsol[i],nf[i]))
+      return false;
+
+    if (!lrPch[i]->refineMesh(prmloc))
+      return false;
   }
+
+  if (!this->matchPatchMeshes())
+    return false;
 
   Vectors lsols;
   lsols.reserve(sol.size()*myModel.size());
+  bool linIndepTest = prm.options.size() > 3 ? prm.options[3] != 0 : false;
   for (size_t i = 0; i < myModel.size(); i++)
   {
-    LR::RefineData prmloc(prm);
-    prmloc.elements = IntVec(refineIndices[i].begin(),refineIndices[i].end());
-
-    Vectors lsol(sol.size());
-    for (size_t j = 0; j < sol.size(); j++)
-      this->extractPatchSolution(sol[j], lsol[j], myModel[i],
-                                 sol[j].size() / this->getNoNodes());
-    if (!pch[i]->refine(prmloc,lsol))
+    lrPch[i]->unpackSolution(lsol[i],nf[i]);
+    if (!lrPch[i]->refineProjectionBasis())
       return false;
-    lsols.insert(lsols.end(),lsol.begin(),lsol.end());
+    if (linIndepTest && !lrPch[i]->checkLinearIndependence())
+      return false;
+
+    lsols.insert(lsols.end(),lsol[i].begin(),lsol[i].end());
   }
+
   sol.swap(lsols);
   ++isRefined;
   return true;
+}
+
+
+/*!
+  Conformity is transitive: if two patches both conform with a third on the
+  boundaries they share with it, they also conform with each other on whatever
+  part of those boundaries they have in common. Iterating the pairwise matching
+  over the declared connections until nothing changes therefore also resolves
+  the corners and edges where several patches meet without a connection of
+  their own being declared between them, which is the usual case for such
+  extraordinary points.
+*/
+
+bool SIMinput::matchPatchMeshes ()
+{
+  // Only the boundaries that carry a mesh of their own can be matched, and
+  // the same connection may appear more than once in the interface list, as
+  // that is appended to every time the topology is parsed.
+  typedef std::array<int,6> IfcKey;
+  std::map<IfcKey,const ASM::Interface*> connections;
+  for (const ASM::Interface& ifc : myInterfaces)
+    if (ifc.dim+1 == static_cast<int>(this->getNoParamDim()))
+      connections.insert(std::make_pair(IfcKey{ifc.master, ifc.slave, ifc.midx,
+                                               ifc.sidx, ifc.orient, ifc.basis},
+                                        &ifc));
+
+  const int maxSweep = 20;
+  for (int sweep = 0; sweep < maxSweep; sweep++)
+  {
+    bool changed = false;
+    for (const std::pair<const IfcKey,const ASM::Interface*>& it : connections)
+    {
+      const ASM::Interface& ifc = *it.second;
+      int lmaster = this->getLocalPatchIndex(ifc.master);
+      int lslave  = this->getLocalPatchIndex(ifc.slave);
+      if (lmaster < 1 || lslave < 1)
+        continue;
+
+      ASMunstruct* mpch = dynamic_cast<ASMunstruct*>(myModel[lmaster-1]);
+      ASMunstruct* spch = dynamic_cast<ASMunstruct*>(myModel[lslave-1]);
+      if (mpch && spch)
+        changed |= mpch->matchMesh(*spch,ifc.midx,ifc.sidx,ifc.orient);
+    }
+
+    if (!changed)
+      return true;
+  }
+
+  std::cerr <<" *** SIMinput::matchPatchMeshes: The patch meshes still did not"
+            <<" conform after "<< maxSweep <<" sweeps."<< std::endl;
+  return false;
 }
 
 

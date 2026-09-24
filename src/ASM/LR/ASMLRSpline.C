@@ -216,6 +216,93 @@ ASMLRSpline::ASMLRSpline (const ASMLRSpline& patch, unsigned char n_f)
 }
 
 
+bool ASMLRSpline::packSolution (const Vectors& sol, IntVec& nf)
+{
+  if (!geomB)
+    return false;
+
+  nf.resize(sol.size());
+  for (size_t j = 0; j < sol.size(); j++)
+    if ((nf[j] = LR::extendControlPoints(geomB.get(),sol[j],
+                                         this->getNoFields(1))) < 0)
+      return false;
+
+  return true;
+}
+
+
+void ASMLRSpline::unpackSolution (Vectors& sol, const IntVec& nf)
+{
+  for (int i = sol.size()-1; i >= 0; i--)
+    if (nf[i] > 0) {
+      sol[i].resize(nf[i]*nnod);
+      LR::contractControlPoints(geomB.get(),sol[i],nf[i]);
+    }
+}
+
+
+bool ASMLRSpline::refineMesh (const LR::RefineData& prm)
+{
+  if (!geomB)
+    return false;
+
+  if (shareFE && !prm.refShare)
+  {
+    // This patch shares its spline object with another patch, in another
+    // simulator on the same mesh, which has refined it already.
+    nnod = geomB->nBasisFunctions();
+    nel  = geomB->nElements();
+    return true;
+  }
+
+  if (prm.errors.empty() && prm.elements.empty())
+  {
+    // Nothing is marked on this patch. Its mesh may still be changed later on,
+    // when it is made to conform with the mesh of a neighbouring patch.
+    nnod = geomB->nBasisFunctions();
+    nel  = geomB->nElements();
+    return true;
+  }
+
+  if (!this->doRefine(prm,geomB.get()))
+    return false;
+
+  nnod = geomB->nBasisFunctions();
+  nel  = geomB->nElements();
+  IFEM::cout <<"Refined mesh: "<< nel <<" elements "<< nnod <<" nodes."<< std::endl;
+  return true;
+}
+
+
+bool ASMLRSpline::checkLinearIndependence () const
+{
+  std::cout <<"Testing for linear independence by overloading"<< std::endl;
+  bool isLinIndep = geomB->isLinearIndepByOverloading(false);
+  if (!isLinIndep) {
+    std::cout <<"Inconclusive..."<< std::endl;
+#ifdef HAS_BOOST
+    std::cout <<"Testing for linear independence by full tensor expansion"<< std::endl;
+    isLinIndep = geomB->isLinearIndepByMappingMatrix(false);
+#endif
+  }
+  if (isLinIndep)
+    std::cout <<"...Passed."<< std::endl;
+  else
+    std::cout <<"FAILED!!!"<< std::endl;
+
+  return isLinIndep;
+}
+
+
+void ASMLRSpline::meshUpdated ()
+{
+  geomB->generateIDs();
+  this->clear(true);
+  nnod = geomB->nBasisFunctions();
+  nel  = geomB->nElements();
+}
+
+
 bool ASMLRSpline::refine (const LR::RefineData& prm, Vectors& sol)
 {
   if (!geomB)
@@ -236,42 +323,17 @@ bool ASMLRSpline::refine (const LR::RefineData& prm, Vectors& sol)
 
   PROFILE2("ASMLRSpline::refine");
 
-  IntVec nf(sol.size());
-  for (size_t j = 0; j < sol.size(); j++)
-    if ((nf[j] = LR::extendControlPoints(geomB.get(),sol[j],this->getNoFields(1))) < 0)
-      return false;
-
-  if (!this->doRefine(prm,geomB.get()))
+  IntVec nf;
+  if (!this->packSolution(sol,nf))
     return false;
 
-  nnod = geomB->nBasisFunctions();
-  nel  = geomB->nElements();
-  IFEM::cout <<"Refined mesh: "<< nel <<" elements "<< nnod <<" nodes."<< std::endl;
+  if (!this->refineMesh(prm))
+    return false;
 
-  for (int i = sol.size()-1; i >= 0; i--)
-    if (nf[i] > 0) {
-      sol[i].resize(nf[i]*nnod);
-      LR::contractControlPoints(geomB.get(),sol[i],nf[i]);
-    }
+  this->unpackSolution(sol,nf);
 
-  bool linIndepTest = prm.options.size() > 3 ? prm.options[3] != 0 : false;
-  if (linIndepTest)
-  {
-    std::cout <<"Testing for linear independence by overloading"<< std::endl;
-    bool isLinIndep = geomB->isLinearIndepByOverloading(false);
-    if (!isLinIndep) {
-      std::cout <<"Inconclusive..."<< std::endl;
-#ifdef HAS_BOOST
-      std::cout <<"Testing for linear independence by full tensor expansion"<< std::endl;
-      isLinIndep = geomB->isLinearIndepByMappingMatrix(false);
-#endif
-    }
-    if (isLinIndep)
-      std::cout <<"...Passed."<< std::endl;
-    else
-      std::cout <<"FAILED!!!"<< std::endl;
-    return isLinIndep;
-  }
+  if (prm.options.size() > 3 && prm.options[3] != 0)
+    return this->checkLinearIndependence();
 
   return true;
 }
@@ -363,50 +425,6 @@ void ASMLRSpline::getFunctionsForElements (IntSet& functions,
       for (LR::Basisfunction* b : geomB->getElement(iel)->support())
         functions.insert(globalId ? this->getNodeID(b->getId()+1)-1:b->getId());
   }
-}
-
-
-IntVec ASMLRSpline::getBoundaryCovered (const IntSet& nodes) const
-{
-  IntSet result;
-  int numbEdges = this->getNoParamDim() * 2;
-  int boundrDim = this->getNoParamDim() - 1;
-  for (int edge = 1; edge <= numbEdges; edge++)
-  {
-    IntVec bnd = GlobalNodes::getBoundaryNodes(*refB, boundrDim, edge, 0);
-    for (const int i : nodes)
-      for (const int j : bnd)
-        if (refB->getBasisfunction(i)->contains(*refB->getBasisfunction(j)))
-          result.insert(j);
-  }
-
-  return IntVec(result.begin(), result.end());
-}
-
-
-IntVec ASMLRSpline::getOverlappingNodes (const IntSet& nodes, int dir) const
-{
-  IntSet result;
-  for (int i : nodes)
-  {
-    const LR::Basisfunction* b = refB->getBasisfunction(i);
-    for (LR::Element* el : b->support())
-      for (LR::Basisfunction* basis : el->support())
-      {
-        bool support_only_bigger_in_allowed_direction = true;
-        for (int j = 0; j < b->nVariate() && support_only_bigger_in_allowed_direction; j++)
-        {
-          if ((1<<j) & dir) continue; // the function is allowed to grow in the direction j
-          if (b->getParmin(j) > basis->getParmin(j) ||
-              b->getParmax(j) < basis->getParmax(j))
-            support_only_bigger_in_allowed_direction = false;
-        }
-        if (support_only_bigger_in_allowed_direction)
-          result.insert(basis->getId());
-      }
-  }
-
-  return IntVec(result.begin(), result.end());
 }
 
 

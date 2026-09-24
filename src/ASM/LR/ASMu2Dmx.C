@@ -1199,6 +1199,89 @@ bool ASMu2Dmx::evalSolution (Matrix& sField, const IntegrandBase& integrand,
 }
 
 
+bool ASMu2Dmx::packSolution (const Vectors& sol, IntVec& nf)
+{
+  for (const Vector& solvec : sol)
+    for (size_t j = 0; j < m_basis.size(); j++) {
+      Vector bVec;
+      this->extractNodeVec(solvec, bVec, 0, j+1);
+      if (ASMmxBase::Type != ASMmxBase::SUBGRID || j > 0)
+        LR::extendControlPoints(m_basis[j].get(), bVec, nfx[j]);
+    }
+
+  // The sizes needed to extract the vectors again are those of the bases,
+  // so nothing beyond the number of vectors has to be remembered here.
+  nf.assign(sol.size(),1);
+  return true;
+}
+
+
+void ASMu2Dmx::unpackSolution (Vectors& sol, const IntVec&)
+{
+  size_t len = 0;
+  for (size_t j = 0; j < m_basis.size(); ++j)
+    len += nfx[j]*nb[j];
+
+  size_t ofs = 0;
+  for (int i = sol.size()-1; i >= 0; i--)
+    for (size_t j = 0; j < m_basis.size(); ++j) {
+      sol[i].resize(len);
+      if (ASMmxBase::Type != ASMmxBase::SUBGRID || j > 0)
+          LR::contractControlPoints(m_basis[j].get(), sol[i], nfx[j], ofs);
+      ofs += nfx[j]*nb[j];
+    }
+}
+
+
+bool ASMu2Dmx::refineMesh (const LR::RefineData& prm)
+{
+  if (shareFE && !prm.refShare)
+    return true;
+
+  if (prm.errors.empty() && prm.elements.empty())
+    return true; // nothing marked here, but a neighbour may still refine it
+
+  if (!this->doRefine(prm,this->getBasis(ASM::REFINEMENT_BASIS)))
+    return false;
+
+  this->meshUpdated();
+  return true;
+}
+
+
+void ASMu2Dmx::meshUpdated ()
+{
+  size_t mult2b = m_basis.size();
+  if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1)
+    mult2b = 0;
+  else if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2)
+    mult2b = 1;
+  for (size_t j = 0; j < m_basis.size(); ++j)
+    if (refB != m_basis[j])
+      this->copyRefinement(m_basis[j].get(), j == mult2b ? 2 : 1);
+
+  // Uniformly refine to find basis 1
+  if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
+    m_basis[0].reset(this->getBasis(ASM::REFINEMENT_BASIS)->copy());
+    projB = m_basis.front();
+    size_t nFunc = refB->nBasisFunctions();
+    IntVec elems(nFunc);
+    std::iota(elems.begin(),elems.end(),0);
+    m_basis[0]->refineBasisFunction(elems);
+  }
+
+  if (projB2)
+    projB2->generateIDs();
+
+  for (size_t j = 0; j < m_basis.size(); ++j) {
+    m_basis[j]->generateIDs();
+    nb[j] = m_basis[j]->nBasisFunctions();
+  }
+
+  this->clear(true);
+}
+
+
 bool ASMu2Dmx::refine (const LR::RefineData& prm, Vectors& sol)
 {
   if (shareFE)
@@ -1207,73 +1290,32 @@ bool ASMu2Dmx::refine (const LR::RefineData& prm, Vectors& sol)
   if (prm.errors.empty() && prm.elements.empty())
     return true;
 
-  for (Vector& solvec : sol)
-    for (size_t j = 0; j < m_basis.size(); j++) {
-      Vector bVec;
-      this->extractNodeVec(solvec, bVec, 0, j+1);
-      if (ASMmxBase::Type != ASMmxBase::SUBGRID || j > 0)
-        LR::extendControlPoints(m_basis[j].get(), bVec, nfx[j]);
-    }
+  IntVec nf;
+  if (!this->packSolution(sol,nf))
+    return false;
 
-  if (doRefine(prm, this->getBasis(ASM::REFINEMENT_BASIS))) {
-    size_t mult2b = m_basis.size();
-    if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS1)
-      mult2b = 0;
-    else if (ASMmxBase::Type == REDUCED_CONT_RAISE_BASIS2)
-      mult2b = 1;
-    for (size_t j = 0; j < m_basis.size(); ++j)
-      if (refB != m_basis[j])
-        this->copyRefinement(m_basis[j].get(), j == mult2b ? 2 : 1);
+  if (!this->refineMesh(prm))
+    return false;
 
-    // Uniformly refine to find basis 1
-    if (ASMmxBase::Type == ASMmxBase::SUBGRID) {
-      m_basis[0].reset(this->getBasis(ASM::REFINEMENT_BASIS)->copy());
-      projB = m_basis.front();
-      size_t nFunc = refB->nBasisFunctions();
-      IntVec elems(nFunc);
-      std::iota(elems.begin(),elems.end(),0);
-      m_basis[0]->refineBasisFunction(elems);
-    }
+  this->unpackSolution(sol,nf);
 
-    if (projB2)
-      projB2->generateIDs();
+#ifdef SP_DEBUG
+  std::cout <<"Refined mesh: ";
+  for (const SplinePtr& it : m_basis)
+    std::cout << it->nElements() <<" ";
+  std::cout <<"elements ";
+  for (const SplinePtr& it : m_basis)
+    std::cout << it->nBasisFunctions() <<" ";
+  std::cout <<"nodes."<< std::endl;
+  std::cout << "Projection basis: "
+            << projB->nElements() << " elements "
+            << projB->nBasisFunctions() << " nodes" << std::endl;
+  std::cout << "Refinement basis: "
+            << refB->nElements() << " elements "
+            << refB->nBasisFunctions() << " nodes" << std::endl;
+#endif
 
-    size_t len = 0;
-    for (size_t j = 0; j< m_basis.size(); ++j) {
-      m_basis[j]->generateIDs();
-      nb[j] = m_basis[j]->nBasisFunctions();
-      len += nfx[j]*nb[j];
-    }
-
-    size_t ofs = 0;
-    for (int i = sol.size()-1; i >= 0; i--)
-      for (size_t j = 0; j < m_basis.size(); ++j) {
-        sol[i].resize(len);
-        if (ASMmxBase::Type != ASMmxBase::SUBGRID || j > 0)
-          LR::contractControlPoints(m_basis[j].get(), sol[i], nfx[j], ofs);
-        ofs += nfx[j]*nb[j];
-      }
-
-  #ifdef SP_DEBUG
-    std::cout <<"Refined mesh: ";
-    for (const SplinePtr& it : m_basis)
-      std::cout << it->nElements() <<" ";
-    std::cout <<"elements ";
-    for (const SplinePtr& it : m_basis)
-      std::cout << it->nBasisFunctions() <<" ";
-    std::cout <<"nodes."<< std::endl;
-    std::cout << "Projection basis: "
-              << projB->nElements() << " elements "
-              << projB->nBasisFunctions() << " nodes" << std::endl;
-    std::cout << "Refinement basis: "
-              << refB->nElements() << " elements "
-              << refB->nBasisFunctions() << " nodes" << std::endl;
-  #endif
-
-    return true;
-  }
-
-  return false;
+  return true;
 }
 
 

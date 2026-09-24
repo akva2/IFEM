@@ -420,53 +420,41 @@ bool ASMu2D::checkElementSize (int elmId, bool globalNum) const
 }
 
 
-void ASMu2D::extendRefinementDomain (IntSet& refineIndices,
-                                     const IntSet& neighborIndices) const
+//! \brief Maps a local edge index to the corresponding LR-spline edge.
+static LR::parameterEdge edgeOf (int lidx)
 {
-  // OPTIMIZATION NOTE: If we by some clever data structures already knew
-  // which edge each node in conformingIndices was on, then we don't have
-  // to brute-force search for it like we do here.
-  // getBoundaryNodes() seems to compute this, but it is only for
-  // the sending patch boundary index, not the recieving patch boundary index.
-
-  IntVec              bndry0;
-  std::vector<IntVec> bndry1(4);
-  for (int i = 1; i <= 4; i++)
-  {
-    bndry0.push_back(GlobalNodes::getBoundaryNodes(*this->getBasis(ASM::REFINEMENT_BASIS),
-                                                   0, i, 0).front());
-    bndry1[i-1] = GlobalNodes::getBoundaryNodes(*this->getBasis(ASM::REFINEMENT_BASIS),
-                                                  1, i, 0);
+  switch (lidx) {
+    case 1: return LR::WEST;
+    case 2: return LR::EAST;
+    case 3: return LR::SOUTH;
+    case 4: return LR::NORTH;
   }
+  return LR::NONE;
+}
 
-  // Add refinement from neighbors
-  for (int j : neighborIndices)
-  {
-    bool done_with_this_node = false;
 
-    // Check if node is a corner node,
-    // compute large extended domain (all directions)
-    for (int edgeNode : bndry0)
-      if (edgeNode == j)
-      {
-        IntVec secondary = this->getOverlappingNodes(j);
-        refineIndices.insert(secondary.begin(),secondary.end());
-        done_with_this_node = true;
-        break;
-      }
+bool ASMu2D::matchMesh (ASMunstruct& neighbor, int myIdx, int nbIdx, int orient)
+{
+  ASMu2D* nb = dynamic_cast<ASMu2D*>(&neighbor);
+  if (!nb)
+    return false;
 
-    // Check if node is an edge node,
-    // compute small extended domain (one direction)
-    for (int edge = 0; edge < 4 && !done_with_this_node; edge++)
-      for (int edgeNode : bndry1[edge])
-        if (edgeNode == j)
-        {
-          IntVec secondary = this->getOverlappingNodes(j, edge/2+1);
-          refineIndices.insert(secondary.begin(),secondary.end());
-          done_with_this_node = true;
-          break;
-        }
-  }
+  LR::parameterEdge myEdge = edgeOf(myIdx);
+  LR::parameterEdge nbEdge = edgeOf(nbIdx);
+  if (myEdge == LR::NONE || nbEdge == LR::NONE)
+    return false;
+
+  LR::LRSplineSurface* mine = this->getBasis(ASM::REFINEMENT_BASIS);
+  LR::LRSplineSurface* theirs = nb->getBasis(ASM::REFINEMENT_BASIS);
+  if (!mine || !theirs)
+    return false;
+
+  if (!mine->matchParametricEdge(myEdge,theirs,nbEdge,orient != 0))
+    return false;
+
+  this->meshUpdated();
+  nb->meshUpdated();
+  return true;
 }
 
 
@@ -2909,6 +2897,12 @@ bool ASMu2D::refine (const LR::RefineData& prm, Vectors& sol)
   if (prm.elements.size() + prm.errors.size() == 0)
     return true;
 
+  return this->refineProjectionBasis();
+}
+
+
+bool ASMu2D::refineProjectionBasis ()
+{
   if (!this->separateProjectionBasis())
     return true;
 
