@@ -1671,6 +1671,13 @@ bool SIMinput::refine (const LR::RefineData& prm, Vector& sol)
 }
 
 
+void SIMinput::clearProperties ()
+{
+  myInterfaces.clear();
+  this->SIMbase::clearProperties();
+}
+
+
 bool SIMinput::refine (const LR::RefineData& prm, Vectors& sol)
 {
   isSaved = false;

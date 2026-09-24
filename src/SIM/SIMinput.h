@@ -186,6 +186,12 @@ public:
   //! \param[in] sol Vectors to interpolate onto refined mesh
   bool refine(const LR::RefineData& prm, Vectors& sol);
 
+  //! \brief Initializes the property containers of the model.
+  //! \details The topological connections are established by parsing the
+  //! model, so they are cleared here along with the rest of what a re-read
+  //! rebuilds. Keeping them would leave one copy per read in the list.
+  virtual void clearProperties();
+
   //! \brief Makes the meshes of connected patches conform with each other.
   //! \details Iterates the pairwise matching over the declared topological
   //! connections until no patch mesh changes any more.
