@@ -18,6 +18,12 @@
 
 #include "Catch2Support.h"
 
+#include <algorithm>
+#include <array>
+#include <iterator>
+#include <utility>
+#include <vector>
+
 
 TEST_CASE("TestGlobalNodes.2D")
 {
@@ -71,4 +77,48 @@ TEST_CASE("TestGlobalNodes.3D")
   };
 
   REQUIRE(nodes == ref);
+}
+
+
+TEST_CASE("TestGlobalNodes.Edges3D")
+{
+  ASMuCube pch;
+  pch.generateFEMTopology();
+  const LR::LRSpline& lr = *pch.getBasis();
+
+  // The local edges of a tri-variate patch are numbered such that edges 1-4
+  // run along u, 5-8 along v and 9-12 along w, see ASMs3D::getBoundary1Nodes.
+  // Each of them is therefore the intersection of the two faces that meet
+  // there. This pins the edge numbering of GlobalNodes::getBoundaryNodes,
+  // which has no other test coverage and which multi-patch refinement relies
+  // on to identify the functions on a shared boundary.
+  const std::array<std::pair<int,int>,12> facesOfEdge = {{
+    {3,5}, {4,5}, {3,6}, {4,6},   // along u: south/north x bottom/top
+    {1,5}, {2,5}, {1,6}, {2,6},   // along v: west/east x bottom/top
+    {1,3}, {2,3}, {1,4}, {2,4}    // along w: west/east x south/north
+  }};
+
+  std::vector<GlobalNodes::IntVec> edges(12);
+  for (int lidx = 1; lidx <= 12; lidx++)
+  {
+    GlobalNodes::IntVec a = GlobalNodes::getBoundaryNodes(lr, 2, facesOfEdge[lidx-1].first, 0);
+    GlobalNodes::IntVec b = GlobalNodes::getBoundaryNodes(lr, 2, facesOfEdge[lidx-1].second, 0);
+    std::sort(a.begin(), a.end());
+    std::sort(b.begin(), b.end());
+
+    GlobalNodes::IntVec expected;
+    std::set_intersection(a.begin(), a.end(), b.begin(), b.end(),
+                          std::back_inserter(expected));
+    REQUIRE(!expected.empty());
+
+    edges[lidx-1] = GlobalNodes::getBoundaryNodes(lr, 1, lidx, 0);
+    GlobalNodes::IntVec sorted = edges[lidx-1];
+    std::sort(sorted.begin(), sorted.end());
+    REQUIRE(sorted == expected);
+  }
+
+  // No two edges may consist of the same functions
+  for (int i = 0; i < 12; i++)
+    for (int j = i+1; j < 12; j++)
+      REQUIRE(edges[i] != edges[j]);
 }

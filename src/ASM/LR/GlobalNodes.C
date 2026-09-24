@@ -16,6 +16,7 @@
 #include "ASMLRSpline.h"
 #include "Utilities.h"
 
+#include <iostream>
 #include <numeric>
 
 namespace {
@@ -90,7 +91,7 @@ GlobalNodes::getBoundaryNodes (const LR::LRSpline& lr,
         case 5: edge = LR::BOTTOM | LR::WEST; break;
         case 6: edge = LR::BOTTOM | LR::EAST; break;
         case 7: edge = LR::TOP | LR::WEST; break;
-        case 8: edge = LR::TOP | LR::WEST; break;
+        case 8: edge = LR::TOP | LR::EAST; break;
         case 9: edge = LR::SOUTH | LR::WEST; break;
         case 10: edge = LR::SOUTH | LR::EAST; break;
         case 11: edge = LR::NORTH | LR::WEST; break;
@@ -165,6 +166,14 @@ GlobalNodes::calcGlobalNodes (const GlobalNodes::LRSplineVec& pchs,
 
       IntVec mNodes = getBoundaryNodes(*pchs[i], it.dim, it.midx, 0);
       IntVec sNodes = getBoundaryNodes(*pchs[it.slave-1], it.dim, it.sidx, it.orient);
+      if (mNodes.size() != sNodes.size())
+      {
+        std::cerr <<" *** GlobalNodes::calcGlobalNodes: Non-matching boundaries,"
+                  <<" P"<< it.master <<" b"<< it.midx <<" has "<< mNodes.size()
+                  <<" nodes while P"<< it.slave <<" b"<< it.sidx <<" has "
+                  << sNodes.size() << std::endl;
+        return {};
+      }
       for (size_t n = 0; n < mNodes.size(); ++n)
         old2new[result[it.slave-1][sNodes[n]]] = result[i][mNodes[n]];
     }
