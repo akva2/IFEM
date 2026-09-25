@@ -446,7 +446,6 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
   }
 
   // Map the coefficients onto the equations of the two levels
-  const int* cMad = cSam.getMADOF();
   const int* fMad = fSam.getMADOF();
   const size_t cOfs = nodeOffset(cPch,op.basis);
   const size_t fOfs = nodeOffset(fPch,op.basis);
