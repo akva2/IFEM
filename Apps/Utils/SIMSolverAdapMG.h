@@ -229,13 +229,6 @@ protected:
   //! \brief Returns \e true if a refinement step is kept as a coarse level.
   bool isCoarseLevel(int iStep) const
   {
-    // A hierarchy whose levels are meshes of their own is built before the
-    // first step and does not grow with the refinements, so there is nothing
-    // to keep. Doing it anyway costs a simulator and a pass over the input
-    // file for a level which is never used.
-    if (!levelMeshes.empty())
-      return false;
-
     if (coarseLevels.empty())
       return (iStep-1)%stride == 0;
 
@@ -272,6 +265,15 @@ protected:
     for (size_t i = 0; i < myModel.size(); i++)
       if (!sim->getFEModel()[i]->copyMeshFrom(*myModel[i]))
         return false;
+
+    // The topology was resolved while the input file was read, against the
+    // mesh that file names, and the copy above has replaced that mesh. It
+    // has to be resolved once more for the mesh now in place, or the patches
+    // are left unjoined. Reading the file again does that and keeps the
+    // model which is there, which is how a refinement is followed up.
+    sim->clearProperties();
+    if (!sim->read(inputFile))
+      return false;
 
     if (!this->addLevel(sim,level,"Keeping"))
       return false;
