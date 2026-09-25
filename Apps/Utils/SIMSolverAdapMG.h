@@ -23,6 +23,8 @@
 #include "LogStream.h"
 #include "MultigridTransfer.h"
 #include "PETScMatrix.h"
+#include "DomainDecomposition.h"
+#include "ProcessAdm.h"
 #include "SAM.h"
 #include "SparseMatrix.h"
 #include "TopologySet.h"
@@ -308,26 +310,16 @@ protected:
     patch are the functions whose knot vectors agree in every direction but
     the one the lines run along, which is a mesh line while the mesh is a
     tensor mesh, as the mesh of a boundary layer is.
+
+    \param[in] sim The level the lines are taken from
+    \param[in] block Matrix block the equations are numbered within
   */
-  std::vector<IntVec> lineSubdomains(const T1& sim) const
+  std::vector<IntVec> lineSubdomains(const T1& sim, size_t block) const
   {
     std::vector<IntVec> subd;
     const SAM* sam = sim.getSAM();
     if (!sam)
       return subd;
-
-    // The lines are collected in the equation numbers of this process, and a
-    // line of a partitioned mesh runs through the equations of several. Which
-    // process is to solve such a line, and how the piece each one holds is
-    // handed to the smoother, is not settled, so the lines are for now only
-    // built when there is one process to hold them.
-    if (sim.getProcessAdm().getNoProcs() > 1)
-    {
-      IFEM::cout <<"  ** Mesh line smoothing is not available on more than"
-                 <<" one process, smoothing from the settings instead."
-                 << std::endl;
-      return subd;
-    }
 
     // A line smoother is only worth its cost where the mesh is anisotropic,
     // which in a boundary layer mesh is the patches next to the wall. The
@@ -404,13 +396,50 @@ protected:
     for (const std::pair<const size_t,IntSet>& j : joined)
       subd.emplace_back(j.second.begin(),j.second.end());
 
+    // A line of a partitioned mesh runs through the equations of several
+    // processes, and each of them keeps the stretch it owns. A line is thus
+    // cut where the partition cuts it, which costs the smoother some of its
+    // strength but leaves every subdomain solvable without talking to
+    // anyone. How much it costs is the number of lines the partition cut,
+    // which is reported so that it can be weighed.
+    const DomainDecomposition& dd = sim.getProcessAdm().dd;
+    auto&& owned = [&dd,block](int eq)
+    {
+      const int geq = dd.getGlobalEq(eq+1,block);
+      return geq >= dd.getMinEq(block) && geq <= dd.getMaxEq(block);
+    };
+
+    size_t cut = 0;
+    std::vector<IntVec> mine;
+    mine.reserve(subd.size());
+    for (const IntVec& line : subd)
+    {
+      IntVec keep;
+      keep.reserve(line.size());
+      std::copy_if(line.begin(),line.end(),std::back_inserter(keep),owned);
+      if (keep.size() < line.size())
+        ++cut;
+      if (!keep.empty())
+        mine.push_back(std::move(keep));
+    }
+    subd.swap(mine);
+
     // The subdomains have to span the whole system, or the smoother they
     // define is singular. Whatever the lines did not reach is smoothed one
     // equation at a time, which is what a point smoother does anyway.
+    int nOwned = 0;
     for (int eq = 0; eq < sam->getNoEquations(); eq++)
-      if (covered.find(eq) == covered.end())
-        subd.emplace_back(1,eq);
+      if (owned(eq))
+      {
+        ++nOwned;
+        if (covered.find(eq) == covered.end())
+          subd.emplace_back(1,eq);
+      }
 
+    if (subd.empty())
+      return subd;
+
+    // The counts are of this process, whose stream they are written to.
     size_t mn = subd.front().size(), mx = mn, tot = 0;
     for (const IntVec& d : subd) {
       mn = std::min(mn,d.size());
@@ -419,7 +448,10 @@ protected:
     }
     IFEM::cout <<"\tMesh lines: "<< subd.size() <<" subdomains of "<< mn
                <<" to "<< mx <<" equations, covering "<< tot <<" of "
-               << sam->getNoEquations() << std::endl;
+               << nOwned;
+    if (cut > 0)
+      IFEM::cout <<", "<< cut <<" cut by the partitioning";
+    IFEM::cout << std::endl;
 
     return subd;
   }
@@ -521,8 +553,8 @@ protected:
       std::vector<std::vector<IntVec>> subd;
       if (lineDir > 0) {
         for (const T1* sim : sims)
-          subd.push_back(this->lineSubdomains(*sim));
-        subd.push_back(this->lineSubdomains(this->S1));
+          subd.push_back(this->lineSubdomains(*sim,op.block));
+        subd.push_back(this->lineSubdomains(this->S1,op.block));
       }
 
       // setMGHierarchy converts the transfer operators to PETSc format, so
