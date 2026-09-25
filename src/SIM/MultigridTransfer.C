@@ -271,6 +271,10 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
   std::vector<bool> known(fB->nBasisFunctions(),false);
 
   size_t nLeft = rows.size();
+  // Roundoff in the coefficients is amplified by the inverse of the local
+  // system, which is the worse conditioned the more the element sizes differ.
+  // Tracking it gives the scale the reconstruction below has to be judged on.
+  Real maxAmp = Real(1.0);
   Matrix Af, Ac, Au, AtA, AtB, B, Psub;
   IntVec cIdx, fIdx, unknown;
   while (nLeft > 0)
@@ -354,6 +358,7 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
         // equations, which would square the conditioning
         if (!utl::invert(Au))
           continue; // singular, so the element is overloaded after all
+        maxAmp = std::max(maxAmp,Au.norm2()*std::sqrt(Real(nGP)));
         Psub.multiply(Au,B);
       }
       else
@@ -363,6 +368,7 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
         AtA.multiply(Au,Au,true,false);
         if (!utl::invert(AtA))
           continue;
+        maxAmp = std::max(maxAmp,AtA.norm2()*std::sqrt(Real(nGP)));
         AtB.multiply(Au,B,true,false);
         Psub.multiply(AtA,AtB);
       }
@@ -419,12 +425,19 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
                              evalBasis(cB->getBasisfunction(c.first),X)));
   }
 
-  // The basis functions are O(1), so an absolute tolerance is well scaled,
-  // and a coarse function which is not in the fine space misses by O(1) too.
-  if (maxErr > Real(1.0e-8))
+  // The coefficients are O(1) on a uniform mesh but grow with the grading,
+  // since the local systems solved for them are the worse conditioned the
+  // more the element sizes differ, and the roundoff in the reconstruction
+  // grows with them. Scaling the tolerance by their size keeps the check
+  // meaningful on a graded mesh without letting a real failure through: a
+  // coarse function which is not in the fine space misses by O(1), which is
+  // orders above anything roundoff produces here.
+  if (maxErr > Real(1.0e-10)*maxAmp)
   {
     std::cerr <<" *** MG::prolongation: The coarse basis is not reproduced by"
-              <<" the fine one,\n     off by "<< maxErr <<". The two meshes"
+              <<" the fine one,\n     off by "<< maxErr <<", more than the "
+              << Real(1.0e-10)*maxAmp <<" the conditioning of the local\n"
+              <<"     systems accounts for. The two meshes"
               <<" are not nested, so there is no\n     transfer operator"
               <<" between them. Levels have to be built by inserting"
               <<"\n     knots into a common geometry, not by removing them"
