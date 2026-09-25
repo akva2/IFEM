@@ -1074,7 +1074,8 @@ bool PETScMatrix::setParameters (bool setup)
 
 bool PETScMatrix::setMGHierarchy (size_t block,
                                   const std::vector<const SparseMatrix*>& prolong,
-                                  const std::vector<const SystemMatrix*>& levels)
+                                  const std::vector<const SystemMatrix*>& levels,
+                                  const std::vector<std::vector<std::vector<int>>>& subdomains)
 {
   if (prolong.size() < 1) {
     std::cerr <<" *** PETScMatrix::setMGHierarchy: A hierarchy needs at least"
@@ -1173,6 +1174,8 @@ bool PETScMatrix::setMGHierarchy (size_t block,
               <<" has "<< nFine <<" equations."<< std::endl;
     return false;
   }
+
+  mgLevels[block].subdomains = subdomains;
 
   // The preconditioner has to be rebuilt with the hierarchy in place
   setParams = true;

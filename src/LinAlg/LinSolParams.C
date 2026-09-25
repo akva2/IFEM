@@ -109,6 +109,8 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
         this->addValue("multigrid_no_fine_smooth", v);
       if (utl::getAttribute(child, "ksp", v))
         this->addValue("multigrid_ksp", v);
+      if (utl::getAttribute(child, "damping", v))
+        this->addValue("multigrid_damping", v);
       if (utl::getAttribute(child, "coarse_solver", v))
         this->addValue("multigrid_coarse_solver", v);
       if (utl::getAttribute(child, "max_coarse_size", v))

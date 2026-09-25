@@ -49,6 +49,15 @@ struct PETScMGLevels
   std::vector<Mat> A; //!< Operator on each level, the finest one excluded
   std::vector<Mat> P; //!< Prolongation from level \a i to level \a i+1
 
+  //! \brief Equations of the subdomains of each level, coarsest level first.
+  //!
+  //! \details A smoother given these solves the subdomains rather than the
+  //! points, which is what an anisotropic mesh needs: the error a point
+  //! smoother leaves behind is smooth along the strong coupling and
+  //! oscillatory across it, and a subdomain spanning that coupling removes
+  //! it in one go. Empty when the levels carry no subdomains of their own.
+  std::vector<std::vector<std::vector<int>>> subdomains;
+
   //! \brief Returns the number of levels in the hierarchy.
   size_t size() const { return P.empty() ? 0 : P.size()+1; }
 };
@@ -100,6 +109,15 @@ public:
   //! hierarchy as well.
   bool setupGeometricMG(PC& pc, const PETScMGLevels& mg,
                         const SettingMap& map);
+
+  //! \brief Sets up an additive Schwarz smoother over the given subdomains.
+  //! \param pc The smoother of one multigrid level
+  //! \param[in] subdomains The equations of each subdomain on that level
+  //! \param[in] iBlock Matrix block the smoother belongs to
+  //! \param[in] asmlu True to solve each subdomain by a direct factorization
+  void setupSubdomainSmoother(PC& pc,
+                              const std::vector<std::vector<int>>& subdomains,
+                              size_t iBlock, bool asmlu);
 
   //! \brief Obtain number of blocks
   size_t getNoBlocks() const { return params.getNoBlocks(); }
@@ -158,10 +176,14 @@ protected:
   //! \param[in] dirIndexSet The index set for direction smoothers
   //! \param blockEqs The local equations belonging to block
   //! \param setup True to setup preconditioner
+  //! \param[in] mg Hierarchy whose subdomains the smoothers solve over,
+  //! if it brought any. Levels without subdomains are set up from the
+  //! settings as usual.
   void setupSmoothers(PC& pc, size_t iBlock,
                       const ISMat& dirIndexSet,
                       const std::set<int>& blockEqs,
-                      bool setup);
+                      bool setup,
+                      const PETScMGLevels* mg = nullptr);
 
   //! \brief Setup an additive Schwarz preconditioner
   //! \param pc The preconditioner to set coarse solver for

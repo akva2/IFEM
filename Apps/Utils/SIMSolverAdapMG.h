@@ -25,6 +25,8 @@
 #include "PETScMatrix.h"
 #include "SAM.h"
 #include "SparseMatrix.h"
+#include "TopologySet.h"
+#include "LR/ASMLRSpline.h"
 #include "Utilities.h"
 #include "tinyxml2.h"
 
@@ -33,6 +35,8 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <numeric>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -192,6 +196,8 @@ protected:
       utl::parseIntegers(coarseLevels,levelList.c_str());
     utl::getAttribute(elem,"stride",stride);
     utl::getAttribute(elem,"galerkin",galerkin);
+    utl::getAttribute(elem,"lines",lineDir);
+    utl::getAttribute(elem,"set",lineSet);
 
     for (const tinyxml2::XMLElement* child = elem->FirstChildElement();
          child; child = child->NextSiblingElement())
@@ -293,6 +299,131 @@ protected:
     return true;
   }
 
+  /*!
+    \brief Collects the mesh lines of a level as sets of equations.
+
+    \details A smoother solving these rather than the points is what an
+    anisotropic mesh needs, and the lines have to be taken from the mesh of
+    the level they smooth, not from the one being solved on. The lines of a
+    patch are the functions whose knot vectors agree in every direction but
+    the one the lines run along, which is a mesh line while the mesh is a
+    tensor mesh, as the mesh of a boundary layer is.
+  */
+  std::vector<IntVec> lineSubdomains(const T1& sim) const
+  {
+    std::vector<IntVec> subd;
+    const SAM* sam = sim.getSAM();
+    if (!sam)
+      return subd;
+
+    // The lines are collected in the equation numbers of this process, and a
+    // line of a partitioned mesh runs through the equations of several. Which
+    // process is to solve such a line, and how the piece each one holds is
+    // handed to the smoother, is not settled, so the lines are for now only
+    // built when there is one process to hold them.
+    if (sim.getProcessAdm().getNoProcs() > 1)
+    {
+      IFEM::cout <<"  ** Mesh line smoothing is not available on more than"
+                 <<" one process, smoothing from the settings instead."
+                 << std::endl;
+      return subd;
+    }
+
+    // A line smoother is only worth its cost where the mesh is anisotropic,
+    // which in a boundary layer mesh is the patches next to the wall. The
+    // others are left to the point smoother, and saying which is which is a
+    // job the topology sets already do.
+    std::set<size_t> selected;
+    if (!lineSet.empty()) {
+      for (const TopItem& item : sim.getEntity(lineSet))
+        if (abs(item.idim) == static_cast<int>(sim.getNoParamDim()))
+          selected.insert(item.patch);
+
+      if (selected.empty())
+        IFEM::cout <<"  ** No patches in the topology set \""<< lineSet
+                   <<"\", taking mesh lines from all of them."<< std::endl;
+    }
+
+    IntSet covered;
+    for (const ASMbase* pch : sim.getFEModel())
+    {
+      if (!selected.empty() && selected.find(pch->idx+1) == selected.end())
+        continue;
+
+      const ASMLRSpline* lrPch = dynamic_cast<const ASMLRSpline*>(pch);
+      std::vector<IntVec> lines;
+      if (!lrPch || !lrPch->getLineDofs(lineDir,lines))
+        continue;
+
+      for (const IntVec& line : lines) {
+        IntSet eqs;
+        for (int inod : line) {
+          IntVec meqn;
+          sam->getNodeEqns(meqn,pch->getNodeID(inod));
+          for (int eq : meqn)
+            if (eq > 0)
+              eqs.insert(eq-1); // PETSc counts equations from zero
+        }
+        if (!eqs.empty()) {
+          subd.emplace_back(eqs.begin(),eqs.end());
+          covered.insert(eqs.begin(),eqs.end());
+        }
+      }
+    }
+
+    if (subd.empty())
+      return subd;
+
+    // Patches which meet within the selection contribute a line each to the
+    // equations they share, be it the two halves of a line cut by an
+    // interface or the one line two patches both see along a seam. Joining
+    // those into a single line makes the lines follow the mesh rather than
+    // the patches, and leaves the smoother without the overlap which would
+    // otherwise cost it its convergence.
+    std::map<int,size_t> owner;
+    std::vector<size_t> merge(subd.size());
+    std::iota(merge.begin(),merge.end(),0);
+    std::function<size_t(size_t)> root = [&merge,&root](size_t i)
+    { return merge[i] == i ? i : merge[i] = root(merge[i]); };
+
+    for (size_t i = 0; i < subd.size(); i++)
+      for (int eq : subd[i]) {
+        std::map<int,size_t>::iterator it = owner.find(eq);
+        if (it == owner.end())
+          owner[eq] = root(i);
+        else
+          merge[root(i)] = root(it->second);
+      }
+
+    std::map<size_t,IntSet> joined;
+    for (size_t i = 0; i < subd.size(); i++)
+      joined[root(i)].insert(subd[i].begin(),subd[i].end());
+
+    subd.clear();
+    subd.reserve(joined.size());
+    for (const std::pair<const size_t,IntSet>& j : joined)
+      subd.emplace_back(j.second.begin(),j.second.end());
+
+    // The subdomains have to span the whole system, or the smoother they
+    // define is singular. Whatever the lines did not reach is smoothed one
+    // equation at a time, which is what a point smoother does anyway.
+    for (int eq = 0; eq < sam->getNoEquations(); eq++)
+      if (covered.find(eq) == covered.end())
+        subd.emplace_back(1,eq);
+
+    size_t mn = subd.front().size(), mx = mn, tot = 0;
+    for (const IntVec& d : subd) {
+      mn = std::min(mn,d.size());
+      mx = std::max(mx,d.size());
+      tot += d.size();
+    }
+    IFEM::cout <<"\tMesh lines: "<< subd.size() <<" subdomains of "<< mn
+               <<" to "<< mx <<" equations, covering "<< tot <<" of "
+               << sam->getNoEquations() << std::endl;
+
+    return subd;
+  }
+
   //! \brief Creates a level simulator which has read the given input file.
   //! \param[in] file The input file the level reads
   //! \param[out] level The level, owning the simulator returned
@@ -387,10 +518,17 @@ protected:
         for (const SystemMatrix* A : levelOps[op.name])
           Aptr.push_back(A);
 
+      std::vector<std::vector<IntVec>> subd;
+      if (lineDir > 0) {
+        for (const T1* sim : sims)
+          subd.push_back(this->lineSubdomains(*sim));
+        subd.push_back(this->lineSubdomains(this->S1));
+      }
+
       // setMGHierarchy converts the transfer operators to PETSc format, so
       // the topmost one is not needed beyond this point. The level operators
       // are not copied, and stay owned by the level simulators.
-      if (!pA->setMGHierarchy(op.block,Pptr,Aptr))
+      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd))
         return false;
     }
 
@@ -405,6 +543,9 @@ protected:
   IntVec coarseLevels; //!< Refinement steps kept as coarse levels
   int    stride = 1;   //!< Keep every this many levels, if none are listed
   bool   galerkin = false; //!< Let PETSc form the coarse operators
+  int    lineDir = 0;      //!< Direction mesh lines run along, 0 for no lines
+  //! Topology set of the patches the lines are taken from, empty for all
+  std::string lineSet;
 
   std::vector<std::unique_ptr<MultigridProvider>> levels; //!< The kept levels
   std::vector<T1*> sims; //!< The kept levels, as simulators

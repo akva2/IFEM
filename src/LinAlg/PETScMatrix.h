@@ -321,7 +321,8 @@ public:
   //! object, so the caller is free to discard its own copies afterwards.
   bool setMGHierarchy(size_t block,
                       const std::vector<const SparseMatrix*>& prolong,
-                      const std::vector<const SystemMatrix*>& levels = {});
+                      const std::vector<const SystemMatrix*>& levels = {},
+                      const std::vector<std::vector<std::vector<int>>>& subdomains = {});
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }

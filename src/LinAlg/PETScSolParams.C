@@ -98,7 +98,8 @@ void PETScSolParams::setupPC(PC& pc,
     if (params.getBlock(block).hasValue("multigrid_coarse_solver"))
       setupCoarseSolver(pc, prefix, params.getBlock(block));
     // TODO: dir smoothers
-    setupSmoothers(pc, block, ISMat(), blockEqs, setup);
+    setupSmoothers(pc, block, ISMat(), blockEqs, setup,
+                   prec == "gmg" ? mg : nullptr);
   }
 }
 
@@ -327,10 +328,65 @@ bool PETScSolParams::setupGeometricMG (PC& pc, const PETScMGLevels& mg,
 }
 
 
+/*!
+  The subdomains partition the equations of one level, so the smoother they
+  define is a block Jacobi iteration with the blocks the caller asked for.
+  They have to be in place before the preconditioner is set up, which is why
+  this is called from setupSmoothers() rather than after it.
+*/
+
+void PETScSolParams::setupSubdomainSmoother (PC& pc,
+                                             const std::vector<std::vector<int>>& subdomains,
+                                             size_t iBlock, bool asmlu)
+{
+  PCSetType(pc,PCASM);
+  // The basic variant is the symmetric one, which is what a conjugate
+  // gradient solver needs of its preconditioner should an overlap arise.
+  PCASMSetType(pc,PC_ASM_BASIC);
+  PCASMSetOverlap(pc,params.getBlock(iBlock).getIntValue("asm_overlap"));
+
+  // The subdomains are given in the equation numbers of this process, which
+  // the index sets want in the global numbering of the linear system.
+  std::vector<IS> is(subdomains.size());
+  for (size_t j = 0; j < subdomains.size(); j++)
+  {
+    IntVec geqs;
+    geqs.reserve(subdomains[j].size());
+    for (int eq : subdomains[j])
+      geqs.push_back(adm.dd.getGlobalEq(eq+1,iBlock)-1);
+
+    ISCreateGeneral(PETSC_COMM_SELF,geqs.size(),geqs.data(),
+                    PETSC_COPY_VALUES,&is[j]);
+  }
+  PCASMSetLocalSubdomains(pc,is.size(),is.data(),nullptr);
+  for (IS& it : is)
+    ISDestroy(&it);
+
+  // The sub-solvers only exist once the preconditioner has been set up,
+  // and the subdomains have to be in place before that happens.
+  PCSetUp(pc);
+
+  if (!asmlu)
+    return;
+
+  KSP* subksp;
+  PetscInt first, nlocal;
+  PCASMGetSubKSP(pc,&nlocal,&first,&subksp);
+  for (PetscInt j = 0; j < nlocal; j++)
+  {
+    PC subpc;
+    KSPGetPC(subksp[j],&subpc);
+    PCSetType(subpc,PCLU);
+    KSPSetType(subksp[j],KSPPREONLY);
+  }
+}
+
+
 void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
                                     const ISMat& dirIndexSet,
                                     const std::set<int>& blockEqs,
-                                    bool setup)
+                                    bool setup,
+                                    const PETScMGLevels* mg)
 {
   PetscInt n;
   PCMGGetLevels(pc,&n);
@@ -377,11 +433,26 @@ void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
         smoother = "ilu";
     }
 
+    // Nothing bounds the largest eigenvalue of a block smoothed operator by
+    // the two an undamped Richardson iteration needs, and a mesh which mixes
+    // blocks of very different shapes tends to exceed it, so such a smoother
+    // is given a damping factor to bring it back.
+    if (params.getBlock(iBlock).hasValue("multigrid_damping"))
+      KSPRichardsonSetScale(preksp,
+                            params.getBlock(iBlock).getDoubleValue("multigrid_damping"));
     KSPSetTolerances(preksp,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT,noSmooth);
     KSPGetPC(preksp,&prepc);
 
-    if (smoother == "asm" || smoother == "asmlu")
-      setupAdditiveSchwarz(prepc, iBlock, smoother == "asmlu", true, blockEqs, setup);
+    if (smoother == "asm" || smoother == "asmlu") {
+      // A hierarchy which brought subdomains of its own has the smoother
+      // solve over those, the settings knowing nothing about them.
+      if (mg && static_cast<size_t>(i) < mg->subdomains.size() &&
+          !mg->subdomains[i].empty())
+        setupSubdomainSmoother(prepc, mg->subdomains[i], iBlock,
+                               smoother == "asmlu");
+      else
+        setupAdditiveSchwarz(prepc, iBlock, smoother == "asmlu", true, blockEqs, setup);
+    }
     else if (smoother == "compositedir" && (i==n-1)) {
       Mat mat;
       Mat Pmat;

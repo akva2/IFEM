@@ -129,6 +129,18 @@ public:
   //! invoked whenever the mesh has settled, also more than once.
   virtual bool refineProjectionBasis() { return true; }
 
+  //! \brief Groups the basis functions into lines along a parameter direction.
+  //! \param[in] dir Parameter direction the lines run along, 1-based
+  //! \param[out] lines Patch-local node numbers of each line, 1-based
+  //!
+  //! \details Two functions belong to the same line when their local knot
+  //! vectors agree in every direction but \a dir, and a line comes out
+  //! ordered along the direction it runs in. On a tensor mesh that is a mesh
+  //! line, which is what a smoother wants to solve along on an anisotropic
+  //! mesh; on a locally refined one it is what is left of a mesh line after
+  //! the refinement, so the grouping loses accuracy rather than meaning.
+  bool getLineDofs(int dir, std::vector<IntVec>& lines) const;
+
   //! \brief Checks the basis of this patch for linear independence.
   //! \return \e false if the basis is linearly dependent, or inconclusive
   bool checkLinearIndependence() const;

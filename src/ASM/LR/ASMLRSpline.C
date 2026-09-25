@@ -274,6 +274,41 @@ bool ASMLRSpline::refineMesh (const LR::RefineData& prm)
 }
 
 
+bool ASMLRSpline::getLineDofs (int dir, std::vector<IntVec>& lines) const
+{
+  if (!geomB || dir < 1 || dir > geomB->nVariate())
+    return false;
+
+  geomB->generateIDs();
+
+  // Key a function by its knot vectors in the directions the line does not
+  // run along, and order the group by the one it does.
+  std::map<RealArray,std::map<RealArray,int>> groups;
+  for (const LR::Basisfunction* b : geomB->getAllBasisfunctions())
+  {
+    RealArray key, along;
+    for (int d = 0; d < b->nVariate(); d++)
+    {
+      RealArray& add = d == dir-1 ? along : key;
+      add.insert(add.end(),(*b)[d].begin(),(*b)[d].end());
+    }
+    groups[key][along] = b->getId()+1;
+  }
+
+  lines.clear();
+  lines.reserve(groups.size());
+  for (const std::pair<const RealArray,std::map<RealArray,int>>& g : groups)
+  {
+    lines.emplace_back();
+    lines.back().reserve(g.second.size());
+    for (const std::pair<const RealArray,int>& f : g.second)
+      lines.back().push_back(f.second);
+  }
+
+  return true;
+}
+
+
 bool ASMLRSpline::checkLinearIndependence () const
 {
   std::cout <<"Testing for linear independence by overloading"<< std::endl;
