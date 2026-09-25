@@ -192,6 +192,19 @@ public:
   //! rebuilds. Keeping them would leave one copy per read in the list.
   virtual void clearProperties();
 
+  //! \brief Replaces the patches of the model with those of a geometry file.
+  //! \param[in] fileName Geometry file to read the patches from
+  //!
+  //! \details This walks a simulation through a sequence of meshes made
+  //! outside it, the way an adaptive simulation walks the meshes it refines
+  //! itself. The caller has to clear the properties and read the model again
+  //! afterwards, since the topology and the boundary conditions were
+  //! established for the patches replaced here. Reading the model again does
+  //! not bring back the geometry of the input file: a model which is already
+  //! there is kept, which is what lets an adaptive simulation keep its
+  //! refined mesh across the same sequence.
+  bool readMesh(const std::string& fileName);
+
   //! \brief Makes the meshes of connected patches conform with each other.
   //! \details Iterates the pairwise matching over the declared topological
   //! connections until no patch mesh changes any more.

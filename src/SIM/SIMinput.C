@@ -1671,6 +1671,45 @@ bool SIMinput::refine (const LR::RefineData& prm, Vector& sol)
 }
 
 
+bool SIMinput::readMesh (const std::string& fileName)
+{
+  std::ifstream isp(fileName);
+  if (!isp)
+  {
+    std::cerr <<" *** SIMinput::readMesh: Could not open \""<< fileName
+              <<"\"."<< std::endl;
+    return false;
+  }
+
+  IFEM::cout <<"\nReading mesh from "<< fileName << std::endl;
+
+  for (ASMbase* pch : myModel)
+    delete pch;
+  myModel.clear();
+  ASMbase::resetNumbering();
+
+  if (!this->readPatches(isp,"\t"))
+    return false;
+
+  if (myModel.empty())
+  {
+    std::cerr <<" *** SIMinput::readMesh: No patches read from \""<< fileName
+              <<"\"."<< std::endl;
+    return false;
+  }
+
+  if (myPatches.empty())
+    nGlPatches = myModel.size();
+
+  // The mesh is now the one in the file, not the one the input file builds,
+  // so the refine and raiseorder commands must not be applied to it again.
+  ++isRefined;
+  isSaved = false;
+
+  return true;
+}
+
+
 void SIMinput::clearProperties ()
 {
   myInterfaces.clear();

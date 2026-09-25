@@ -94,6 +94,31 @@ private:
   coarsening ratio between neighbouring levels, which usually costs multigrid
   convergence rate and wants more smoothing steps in return.
 
+  The coarse levels can also be meshes made outside the simulation, which is
+  what a mesh generator writing one file per level gives:
+  \code
+    <geometry><patchfile>square-L3.g2</patchfile></geometry>
+    <multigrid>
+      <level>square-L1.g2</level>
+      <level>square-L2.g2</level>
+    </multigrid>
+  \endcode
+  These are geometry files, not input files: everything other than the mesh
+  keeps coming from the one input file, which each level reads for itself
+  after swapping its mesh for the one in the file. The geometry of the input
+  file is the mesh being solved on, as it is in any other simulation, and the
+  levels are listed coarsest first below it. They are built before the first
+  solve and the simulator solving the problem never gives up its own mesh, so
+  a hierarchy made this way costs the simulation nothing but the memory of
+  the levels. Levels the adaptive loop keeps afterwards stack on top.
+
+  The meshes have to be nested, each in the next, since the transfer operators
+  are exact changes of basis and nothing else is meaningful. Generate them by
+  inserting nested knot sets into one and the same geometry rather than by
+  removing knots from the finest mesh, which perturbs the geometry unless the
+  knots happen to be removable. MG::prolongation checks that the spaces really
+  are nested and refuses to build an operator between meshes which are not.
+
   The operators a hierarchy is built for come from the simulator through the
   MultigridProvider interface, and are selected in the linear solver input
   with \a pc="gmg" on the matching block.
@@ -139,6 +164,9 @@ public:
                                     &this->aSim.getProjections(),
                                     &this->aSim.getEnorm());
 
+    if (!this->buildMeshLevels(infile))
+      return 5;
+
     for (int iStep = 1; this->aSim.adaptMesh(iStep); iStep++)
       if (!this->aSim.solveStep(infile,iStep))
         return 1;
@@ -165,7 +193,17 @@ protected:
     utl::getAttribute(elem,"stride",stride);
     utl::getAttribute(elem,"galerkin",galerkin);
 
+    for (const tinyxml2::XMLElement* child = elem->FirstChildElement();
+         child; child = child->NextSiblingElement())
+      if (!strcasecmp(child->Value(),"level") && child->FirstChild())
+        levelMeshes.push_back(child->FirstChild()->Value());
+
     IFEM::cout <<"\tGeometric multigrid: ";
+    if (!levelMeshes.empty()) {
+      IFEM::cout << levelMeshes.size() <<" mesh level(s)";
+      for (const std::string& f : levelMeshes) IFEM::cout <<" "<< f;
+      IFEM::cout <<", then ";
+    }
     if (coarseLevels.empty())
       IFEM::cout <<"every "<< (stride > 1 ? std::to_string(stride)+". " : "")
                  <<"level";
@@ -203,16 +241,9 @@ protected:
   */
   bool keepLevel()
   {
-    std::unique_ptr<MultigridProvider> level = this->S1.createMGLevel();
-    T1* sim = dynamic_cast<T1*>(level.get());
-    if (!sim) {
-      std::cerr <<" *** SIMSolverAdapMG: The simulator did not create a level"
-                <<" of its own type."<< std::endl;
-      return false;
-    }
-
-    sim->opt = this->S1.opt;
-    if (!sim->read(inputFile))
+    std::unique_ptr<MultigridProvider> level;
+    T1* sim = this->makeLevel(inputFile,level);
+    if (!sim)
       return false;
 
     const ASM::PatchVec& myModel = this->S1.getFEModel();
@@ -227,10 +258,72 @@ protected:
       if (!sim->getFEModel()[i]->copyMeshFrom(*myModel[i]))
         return false;
 
+    return this->addLevel(sim,level,"Keeping");
+  }
+
+  /*!
+    \brief Builds the levels whose meshes are given as geometry files.
+
+    \details A level swaps in its own mesh before it reads the input file, so
+    that the topology and the boundary conditions are established for that
+    mesh and the geometry the input file names is skipped, a model which is
+    already there being kept. This is the sequence an adaptive simulation goes
+    through after a refinement, with the refinement replaced by reading a
+    mesh, and it leaves the simulator solving the problem untouched.
+  */
+  bool buildMeshLevels(char* infile)
+  {
+    for (const std::string& mesh : levelMeshes) {
+      std::unique_ptr<MultigridProvider> level = this->S1.createMGLevel();
+      T1* sim = dynamic_cast<T1*>(level.get());
+      if (!sim) {
+        std::cerr <<" *** SIMSolverAdapMG: The simulator did not create a"
+                  <<" level of its own type."<< std::endl;
+        return false;
+      }
+
+      sim->opt = this->S1.opt;
+      if (!sim->readMesh(mesh) || !sim->read(infile))
+        return false;
+
+      if (!this->addLevel(sim,level,"Reading"))
+        return false;
+    }
+
+    return true;
+  }
+
+  //! \brief Creates a level simulator which has read the given input file.
+  //! \param[in] file The input file the level reads
+  //! \param[out] level The level, owning the simulator returned
+  T1* makeLevel(const char* file, std::unique_ptr<MultigridProvider>& level)
+  {
+    level = this->S1.createMGLevel();
+    T1* sim = dynamic_cast<T1*>(level.get());
+    if (!sim) {
+      std::cerr <<" *** SIMSolverAdapMG: The simulator did not create a level"
+                <<" of its own type."<< std::endl;
+      return nullptr;
+    }
+
+    sim->opt = this->S1.opt;
+    if (!sim->read(file))
+      return nullptr;
+
+    return sim;
+  }
+
+  //! \brief Preprocesses a level, assembles its operators and keeps it.
+  //! \param[in] sim The level simulator
+  //! \param level The level, taken over by this driver
+  //! \param[in] what What to call the level in the log
+  bool addLevel(T1* sim, std::unique_ptr<MultigridProvider>& level,
+                const char* what)
+  {
     if (!sim->preprocess())
       return false;
 
-    IFEM::cout <<"\tKeeping level "<< 1+levels.size() <<" with "
+    IFEM::cout <<"\t"<< what <<" level "<< 1+levels.size() <<" with "
                << sim->getSAM()->getNoEquations() <<" equations for multigrid"
                << std::endl;
 
@@ -305,6 +398,9 @@ protected:
   }
 
   char* inputFile = nullptr; //!< Input file, re-read when keeping a level
+
+  //! Meshes used as coarse levels, coarsest first, read from geometry files
+  std::vector<std::string> levelMeshes;
 
   IntVec coarseLevels; //!< Refinement steps kept as coarse levels
   int    stride = 1;   //!< Keep every this many levels, if none are listed

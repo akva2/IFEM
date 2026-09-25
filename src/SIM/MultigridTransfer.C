@@ -389,6 +389,49 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
     }
   }
 
+  // The coefficients above express every coarse function in the fine space,
+  // which is only possible if the coarse space really is contained in the
+  // fine one. Nothing so far would have noticed if it is not: the local
+  // systems are solved in points which are unisolvent for the fine space, so
+  // they are satisfied there whether or not the coarse function is reproduced
+  // in between. Evaluating in a point which is not one of them settles it.
+  Real maxErr = Real(0.0);
+  for (int iel = 0; iel < fB->nElements(); iel++)
+  {
+    const LR::Element* fEl = fB->getElement(iel);
+    const LR::Element* cEl = cB->getElement(parent[iel]);
+    for (int d = 0; d < nsd; d++)
+      X[d] = 0.5*(fEl->getParmin(d) + fEl->getParmax(d));
+
+    std::map<int,Real> sum;
+    for (const LR::Basisfunction* c : cEl->support())
+      sum[c->getId()] = Real(0.0);
+    for (const LR::Basisfunction* f : fEl->support())
+    {
+      const Real Nf = evalBasis(f,X);
+      for (const std::pair<const int,Real>& c : rows[f->getId()])
+        sum[c.first] += c.second*Nf;
+    }
+
+    for (const std::pair<const int,Real>& c : sum)
+      maxErr = std::max(maxErr,
+                        fabs(c.second -
+                             evalBasis(cB->getBasisfunction(c.first),X)));
+  }
+
+  // The basis functions are O(1), so an absolute tolerance is well scaled,
+  // and a coarse function which is not in the fine space misses by O(1) too.
+  if (maxErr > Real(1.0e-8))
+  {
+    std::cerr <<" *** MG::prolongation: The coarse basis is not reproduced by"
+              <<" the fine one,\n     off by "<< maxErr <<". The two meshes"
+              <<" are not nested, so there is no\n     transfer operator"
+              <<" between them. Levels have to be built by inserting"
+              <<"\n     knots into a common geometry, not by removing them"
+              <<" from the finest."<< std::endl;
+    return false;
+  }
+
   // Map the coefficients onto the equations of the two levels
   const int* cMad = cSam.getMADOF();
   const int* fMad = fSam.getMADOF();
