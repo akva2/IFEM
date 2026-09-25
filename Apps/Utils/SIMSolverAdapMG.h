@@ -229,6 +229,13 @@ protected:
   //! \brief Returns \e true if a refinement step is kept as a coarse level.
   bool isCoarseLevel(int iStep) const
   {
+    // A hierarchy whose levels are meshes of their own is built before the
+    // first step and does not grow with the refinements, so there is nothing
+    // to keep. Doing it anyway costs a simulator and a pass over the input
+    // file for a level which is never used.
+    if (!levelMeshes.empty())
+      return false;
+
     if (coarseLevels.empty())
       return (iStep-1)%stride == 0;
 
@@ -266,7 +273,23 @@ protected:
       if (!sim->getFEModel()[i]->copyMeshFrom(*myModel[i]))
         return false;
 
-    return this->addLevel(sim,level,"Keeping");
+    if (!this->addLevel(sim,level,"Keeping"))
+      return false;
+
+    // The level holds a copy of the mesh being solved on, so it has to come
+    // out the same size. It does not when the patches of a multi-patch model
+    // fail to be joined along their interfaces after the copy, and a level
+    // whose patches are loose is not the space it claims to be.
+    const int nEq = sim->getSAM()->getNoEquations();
+    const int nRef = this->S1.getSAM()->getNoEquations();
+    if (nEq != nRef) {
+      std::cerr <<" *** SIMSolverAdapMG: The level kept has "<< nEq
+                <<" equations where the mesh it copied has "<< nRef
+                <<". Its patches were not joined the same way."<< std::endl;
+      return false;
+    }
+
+    return true;
   }
 
   /*!
@@ -354,7 +377,7 @@ protected:
           sam->getNodeEqns(meqn,pch->getNodeID(inod));
           for (int eq : meqn)
             if (eq > 0)
-              eqs.insert(eq-1); // PETSc counts equations from zero
+              eqs.insert(eq-1); // The lines are zero-based within the level
         }
         if (!eqs.empty()) {
           subd.emplace_back(eqs.begin(),eqs.end());
@@ -402,11 +425,15 @@ protected:
     // strength but leaves every subdomain solvable without talking to
     // anyone. How much it costs is the number of lines the partition cut,
     // which is reported so that it can be weighed.
+    // The equations are those of this level, which has a numbering of its
+    // own, and the smoother wants the global numbers of the system it
+    // preconditions. Only this level knows how to make that translation, so
+    // it is made here rather than where the smoother is set up.
     const DomainDecomposition& dd = sim.getProcessAdm().dd;
-    auto&& owned = [&dd,block](int eq)
+    auto&& globalEq = [&dd,block](int eq)
     {
       const int geq = dd.getGlobalEq(eq+1,block);
-      return geq >= dd.getMinEq(block) && geq <= dd.getMaxEq(block);
+      return geq >= dd.getMinEq(block) && geq <= dd.getMaxEq(block) ? geq : 0;
     };
 
     size_t cut = 0;
@@ -416,11 +443,17 @@ protected:
     {
       IntVec keep;
       keep.reserve(line.size());
-      std::copy_if(line.begin(),line.end(),std::back_inserter(keep),owned);
+      for (int eq : line)
+        if (int geq = globalEq(eq); geq > 0)
+          keep.push_back(geq-1); // PETSc counts equations from zero
+      if (keep.empty())
+        continue; // the line belongs to another process entirely
+
       if (keep.size() < line.size())
-        ++cut;
-      if (!keep.empty())
-        mine.push_back(std::move(keep));
+        ++cut; // the partitioning runs through this one
+
+      std::sort(keep.begin(),keep.end());
+      mine.push_back(std::move(keep));
     }
     subd.swap(mine);
 
@@ -429,11 +462,11 @@ protected:
     // equation at a time, which is what a point smoother does anyway.
     int nOwned = 0;
     for (int eq = 0; eq < sam->getNoEquations(); eq++)
-      if (owned(eq))
+      if (int geq = globalEq(eq); geq > 0)
       {
         ++nOwned;
         if (covered.find(eq) == covered.end())
-          subd.emplace_back(1,eq);
+          subd.emplace_back(1,geq-1);
       }
 
     if (subd.empty())
@@ -527,18 +560,32 @@ protected:
 
     for (const MG::Operator& op : this->S1.getMGOperators()) {
       std::vector<std::unique_ptr<SparseMatrix>>& P = prolong[op.name];
+      std::vector<std::pair<int,int>>& L = layout[op.name];
 
-      // The operators between the kept levels only have to be built once
+      // The operators between the kept levels only have to be built once,
+      // and so is the share of each one this process owns.
       for (size_t i = P.size(); i+1 < sims.size(); i++)
-        if (!(P.emplace_back(MG::prolongation(*sims[i],*sims[i+1],op))).get())
+      {
+        int nRow = 0, nCol = 0;
+        if (!(P.emplace_back(MG::prolongation(*sims[i],*sims[i+1],op,
+                                              MG::Transfer::CHANGE_OF_BASIS,
+                                              &nRow,&nCol))).get())
           return false;
+        L.emplace_back(nRow,nCol);
+      }
       P.resize(sims.size()-1);
+      L.resize(sims.size()-1);
 
       // The one onto the mesh being solved on changes with every refinement
+      int nRow = 0, nCol = 0;
       std::unique_ptr<SparseMatrix> top =
-        MG::prolongation(*sims.back(),this->S1,op);
+        MG::prolongation(*sims.back(),this->S1,op,
+                         MG::Transfer::CHANGE_OF_BASIS,&nRow,&nCol);
       if (!top)
         return false;
+
+      std::vector<std::pair<int,int>> owned(L);
+      owned.emplace_back(nRow,nCol);
 
       std::vector<const SparseMatrix*> Pptr;
       for (const std::unique_ptr<SparseMatrix>& p : P)
@@ -560,7 +607,7 @@ protected:
       // setMGHierarchy converts the transfer operators to PETSc format, so
       // the topmost one is not needed beyond this point. The level operators
       // are not copied, and stay owned by the level simulators.
-      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd))
+      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned))
         return false;
     }
 
@@ -587,6 +634,8 @@ protected:
   std::map<std::string,std::vector<SystemMatrix*>> levelOps;
   //! Transfer operators between the kept levels, by operator name
   std::map<std::string,std::vector<std::unique_ptr<SparseMatrix>>> prolong;
+  //! Rows and columns of each kept transfer operator this process owns
+  std::map<std::string,std::vector<std::pair<int,int>>> layout;
 };
 
 

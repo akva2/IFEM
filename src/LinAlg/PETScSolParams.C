@@ -345,19 +345,12 @@ void PETScSolParams::setupSubdomainSmoother (PC& pc,
   PCASMSetType(pc,PC_ASM_BASIC);
   PCASMSetOverlap(pc,params.getBlock(iBlock).getIntValue("asm_overlap"));
 
-  // The subdomains are given in the equation numbers of this process, which
-  // the index sets want in the global numbering of the linear system.
+  // The subdomains arrive in the global equation numbers of the system, the
+  // level they belong to having translated them from its own numbering.
   std::vector<IS> is(subdomains.size());
   for (size_t j = 0; j < subdomains.size(); j++)
-  {
-    IntVec geqs;
-    geqs.reserve(subdomains[j].size());
-    for (int eq : subdomains[j])
-      geqs.push_back(adm.dd.getGlobalEq(eq+1,iBlock)-1);
-
-    ISCreateGeneral(PETSC_COMM_SELF,geqs.size(),geqs.data(),
+    ISCreateGeneral(PETSC_COMM_SELF,subdomains[j].size(),subdomains[j].data(),
                     PETSC_COPY_VALUES,&is[j]);
-  }
   PCASMSetLocalSubdomains(pc,is.size(),is.data(),nullptr);
   for (IS& it : is)
     ISDestroy(&it);
