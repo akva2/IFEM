@@ -506,7 +506,9 @@ void PETScSolParams::setupAdditiveSchwarz(PC& pc, size_t block,
       locSubdDofs.reserve(it.size());
       for (auto& it2 : it) {
         int geq = adm.dd.getGlobalEq(it2,block);
-        if (it2 >= adm.dd.getMinEq(block))
+        // The bounds are on the equations this process owns, which are the
+        // global numbers, not the local ones the subdomain is given in.
+        if (geq >= adm.dd.getMinEq(block) && geq <= adm.dd.getMaxEq(block))
           locSubdDofs.push_back(geq-1);
         subdofs.push_back(geq-1);
       }
