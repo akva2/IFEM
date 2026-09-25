@@ -428,6 +428,9 @@ void PETScSolParams::setupAdditiveSchwarz(PC& pc, size_t block,
     std::vector<IS> isSubdDofs(subdDofs.size());
     size_t i = 0;
     for (auto& it : subdDofs) {
+      if (it.empty())
+        continue; // asking for more subdomains than the mesh can be cut into
+
       IntVec subdofs, locSubdDofs;
       locSubdDofs.reserve(it.size());
       for (auto& it2 : it) {
@@ -437,14 +440,18 @@ void PETScSolParams::setupAdditiveSchwarz(PC& pc, size_t block,
         subdofs.push_back(geq-1);
       }
 
+      // The index arrays are local to this loop, so the index sets have to
+      // own their copy of them rather than point into them.
       ISCreateGeneral(PETSC_COMM_SELF,locSubdDofs.size(),
-                      &locSubdDofs[0],
-                      PETSC_USE_POINTER,&isLocSubdDofs[i]);
+                      locSubdDofs.data(),
+                      PETSC_COPY_VALUES,&isLocSubdDofs[i]);
       ISCreateGeneral(PETSC_COMM_SELF,subdofs.size(),
-                      &subdofs[0],
-                      PETSC_USE_POINTER,&isSubdDofs[i++]);
+                      subdofs.data(),
+                      PETSC_COPY_VALUES,&isSubdDofs[i++]);
     }
-    PCASMSetLocalSubdomains(pc,subdDofs.size(),isSubdDofs.data(),isLocSubdDofs.data());
+    isSubdDofs.resize(i);
+    isLocSubdDofs.resize(i);
+    PCASMSetLocalSubdomains(pc,i,isSubdDofs.data(),isLocSubdDofs.data());
   }
 
   PCSetFromOptions(pc);

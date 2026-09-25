@@ -352,7 +352,7 @@ DomainDecomposition::calcSubdomains1D (size_t nel1, size_t g1, size_t overlap)
     size_t ofs1 = 0;
     for (size_t gu = 0; gu < g1; ++gu) {
       if (gu == g1 - 1)
-        nel1_sub = nel1 - ofs1;
+        nel1_sub = ofs1 < nel1 ? nel1 - ofs1 : 0;
       subdomains[gu].reserve(nel1_sub);
       for (size_t i = 0; i < nel1_sub && ofs1 + i < nel1; ++i)
         subdomains[gu].push_back(ofs1 + i);
@@ -384,12 +384,12 @@ DomainDecomposition::calcSubdomains2D (size_t nel1, size_t nel2,
     size_t ofs2 = 0;
     for (size_t gv = 0; gv < g2; ++gv) {
       if (gv == g2 - 1)
-        nel2_sub = nel2 - ofs2;
+        nel2_sub = ofs2 < nel2 ? nel2 - ofs2 : 0;
       size_t nel1_sub = floor(double(nel1)/g1 + 1);
       size_t ofs1 = 0;
       for (size_t gu = 0; gu < g1; ++gu, ++g) {
         if (gu == g1 - 1)
-          nel1_sub = nel1-ofs1;
+          nel1_sub = ofs1 < nel1 ? nel1-ofs1 : 0;
 
         subdomains[g].reserve(nel1_sub*nel2_sub);
         for (size_t j = 0; j < nel2_sub && ofs2 + j < nel2; ++j)
@@ -426,17 +426,17 @@ DomainDecomposition::calcSubdomains3D (size_t nel1, size_t nel2, size_t nel3,
     size_t nel3_sub = floor(double(nel3)/g3+1);
     for (size_t gw = 0; gw < g3; ++gw) {
       if (gw == g3 - 1)
-        nel3_sub = nel3-ofs3;
+        nel3_sub = ofs3 < nel3 ? nel3-ofs3 : 0;
       size_t ofs2 = 0;
       size_t nel2_sub = floor(double(nel2)/g2+1);
       for (size_t gv = 0; gv < g2; ++gv) {
         if (gv == g2 - 1)
-          nel2_sub = nel2-ofs2;
+          nel2_sub = ofs2 < nel2 ? nel2-ofs2 : 0;
         size_t ofs1 = 0;
         size_t nel1_sub = floor(double(nel1)/g1+1);
         for (size_t gu = 0; gu < g1; ++gu, ++g) {
           if (gu == g1 - 1)
-            nel1_sub = nel1-ofs1;
+            nel1_sub = ofs1 < nel1 ? nel1-ofs1 : 0;
           subdomains[g].reserve(nel1_sub*nel2_sub*nel3_sub);
           for (size_t k = 0; k < nel3_sub && ofs3 + k < nel3; ++k)
             for (size_t j = 0; j < nel2_sub && ofs2 + j < nel2; ++j)
