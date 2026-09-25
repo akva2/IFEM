@@ -319,10 +319,16 @@ public:
   //! \details This is what makes a <tt>pc</tt> of \a gmg work for the given
   //! block. The matrices are copied into PETSc format and owned by this
   //! object, so the caller is free to discard its own copies afterwards.
+  //! \param[in] owned Rows and columns of each transfer operator this
+  //! process owns. The operators are built whole on every process, and this
+  //! is what lays them out over them, matching the layout of the levels they
+  //! transfer between. An empty list leaves the layout to PETSc, which is
+  //! only the same thing when there is one process.
   bool setMGHierarchy(size_t block,
                       const std::vector<const SparseMatrix*>& prolong,
                       const std::vector<const SystemMatrix*>& levels = {},
-                      const std::vector<std::vector<std::vector<int>>>& subdomains = {});
+                      const std::vector<std::vector<std::vector<int>>>& subdomains = {},
+                      const std::vector<std::pair<int,int>>& owned = {});
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }

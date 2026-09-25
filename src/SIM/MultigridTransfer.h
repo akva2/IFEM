@@ -55,6 +55,8 @@ namespace MG //! Utilities for geometric multigrid.
   //! \param[in] fine The simulator holding the fine mesh
   //! \param[in] op The operator to build the prolongation for
   //! \param[in] method The method used to compute the operator
+  //! \param[out] rowsOwned Rows of the operator this process owns
+  //! \param[out] colsOwned Columns of the operator this process owns
   //!
   //! \details The returned matrix maps the free DOFs of \a op on the coarse
   //! mesh to those on the fine mesh, with both numbered consecutively in
@@ -72,10 +74,17 @@ namespace MG //! Utilities for geometric multigrid.
   //! prolongation is the unique change-of-basis matrix between them. It is
   //! computed element by element and is exact. Transfer::L2_PROJECTION is the
   //! fallback for spaces which are not nested, where no such matrix exists.
+  //! Every process builds the whole operator, since it holds every patch,
+  //! and \a rowsOwned and \a colsOwned say how much of it belongs to this
+  //! one. Those are the leading stretches of the two numberings on the first
+  //! process and follow on from each other, the numbering being by global
+  //! equation number, so they lay the operator out over the processes the
+  //! way the matrices of the two levels are laid out.
   std::unique_ptr<SparseMatrix>
   prolongation(const SIMbase& coarse, const SIMbase& fine,
                const Operator& op,
-               Transfer method = Transfer::CHANGE_OF_BASIS);
+               Transfer method = Transfer::CHANGE_OF_BASIS,
+               int* rowsOwned = nullptr, int* colsOwned = nullptr);
 }
 
 #endif

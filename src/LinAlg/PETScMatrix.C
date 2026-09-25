@@ -1075,11 +1075,19 @@ bool PETScMatrix::setParameters (bool setup)
 bool PETScMatrix::setMGHierarchy (size_t block,
                                   const std::vector<const SparseMatrix*>& prolong,
                                   const std::vector<const SystemMatrix*>& levels,
-                                  const std::vector<std::vector<std::vector<int>>>& subdomains)
+                                  const std::vector<std::vector<std::vector<int>>>& subdomains,
+                                  const std::vector<std::pair<int,int>>& owned)
 {
   if (prolong.size() < 1) {
     std::cerr <<" *** PETScMatrix::setMGHierarchy: A hierarchy needs at least"
               <<" two levels."<< std::endl;
+    return false;
+  }
+
+  if (!owned.empty() && owned.size() != prolong.size()) {
+    std::cerr <<" *** PETScMatrix::setMGHierarchy: Got "<< owned.size()
+              <<" layouts and "<< prolong.size() <<" transfer operators,"
+              <<" expected the same number of each."<< std::endl;
     return false;
   }
 
@@ -1091,26 +1099,50 @@ bool PETScMatrix::setMGHierarchy (size_t block,
     return false;
   }
 
-  // Converts an editable sparse matrix into a PETSc matrix
-  auto&& toPETSc = [this](const SparseMatrix& S) -> Mat
+  /* Converts an editable sparse matrix into a PETSc matrix. Every process
+     holds the whole of the sparse matrix, and \a nrows and \a ncols say how
+     much of it this one owns; each then fills in the rows it owns and no
+     values travel between processes. The rows and columns the decomposition
+     hands out are what the levels of the hierarchy are laid out by, so the
+     operator has to be laid out the same way for the cycle to apply it. */
+  auto&& toPETSc = [this](const SparseMatrix& S,
+                          PetscInt nrows, PetscInt ncols) -> Mat
   {
-    std::vector<PetscInt> nnz(S.rows(),0);
-    for (const auto& [ij,v] : S.getValues())
-      ++nnz[ij.first-1];
+    // A preallocator counts the entries of each row for us, which is more
+    // trouble than it is worth to do by hand once a row can hold entries
+    // both inside and outside the columns this process owns.
+    Mat prealloc;
+    MatCreate(*adm.getCommunicator(),&prealloc);
+    MatSetType(prealloc,MATPREALLOCATOR);
+    MatSetSizes(prealloc,nrows,ncols,PETSC_DETERMINE,PETSC_DETERMINE);
+    MatSetUp(prealloc);
+
+    PetscInt rStart, rEnd;
+    MatGetOwnershipRange(prealloc,&rStart,&rEnd);
+
+    auto&& insert = [&S,rStart,rEnd](Mat M)
+    {
+      for (const auto& [ij,v] : S.getValues()) {
+        PetscInt r = ij.first-1, c = ij.second-1;
+        if (r < rStart || r >= rEnd) continue;
+
+        PetscScalar val = v;
+        MatSetValues(M,1,&r,1,&c,&val,INSERT_VALUES);
+      }
+      MatAssemblyBegin(M,MAT_FINAL_ASSEMBLY);
+      MatAssemblyEnd(M,MAT_FINAL_ASSEMBLY);
+    };
+
+    insert(prealloc);
 
     Mat M;
     MatCreate(*adm.getCommunicator(),&M);
-    MatSetSizes(M,PETSC_DECIDE,PETSC_DECIDE,S.rows(),S.cols());
     MatSetType(M,MATAIJ);
-    MatSeqAIJSetPreallocation(M,PETSC_DEFAULT,nnz.data());
-    MatMPIAIJSetPreallocation(M,PETSC_DEFAULT,nnz.data(),PETSC_DEFAULT,nullptr);
-    for (const auto& [ij,v] : S.getValues()) {
-      PetscInt r = ij.first-1, c = ij.second-1;
-      PetscScalar val = v;
-      MatSetValues(M,1,&r,1,&c,&val,INSERT_VALUES);
-    }
-    MatAssemblyBegin(M,MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(M,MAT_FINAL_ASSEMBLY);
+    MatSetSizes(M,nrows,ncols,PETSC_DETERMINE,PETSC_DETERMINE);
+    MatPreallocatorPreallocate(prealloc,PETSC_TRUE,M);
+    MatDestroy(&prealloc);
+
+    insert(M);
     myMGmats.push_back(M);
     return M;
   };
@@ -1119,15 +1151,18 @@ bool PETScMatrix::setMGHierarchy (size_t block,
   mg.A.clear();
   mg.P.clear();
 
-  for (const SparseMatrix* S : prolong) {
-    if (!S) {
+  for (size_t i = 0; i < prolong.size(); i++) {
+    if (!prolong[i]) {
       std::cerr <<" *** PETScMatrix::setMGHierarchy: Missing a transfer"
                 <<" operator."<< std::endl;
       return false;
     }
-    mg.P.push_back(toPETSc(*S));
+    mg.P.push_back(owned.empty() ? toPETSc(*prolong[i],PETSC_DECIDE,PETSC_DECIDE)
+                                 : toPETSc(*prolong[i],owned[i].first,
+                                           owned[i].second));
   }
 
+  size_t iLevel = 0;
   for (const SystemMatrix* A : levels) {
     if (const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A); pM) {
       // A level of a block hierarchy is the corresponding diagonal block of
@@ -1148,13 +1183,18 @@ bool PETScMatrix::setMGHierarchy (size_t block,
         mg.A.push_back(blk[block*nb+block]);
       }
     }
-    else if (const SparseMatrix* sM = dynamic_cast<const SparseMatrix*>(A); sM)
-      mg.A.push_back(toPETSc(*sM));
+    else if (const SparseMatrix* sM = dynamic_cast<const SparseMatrix*>(A); sM) {
+      // A level is the coarse side of the transfer operator above it, so it
+      // is laid out by that operator's columns.
+      const PetscInt n = owned.empty() ? PETSC_DECIDE : owned[iLevel].second;
+      mg.A.push_back(toPETSc(*sM,n,n));
+    }
     else {
       std::cerr <<" *** PETScMatrix::setMGHierarchy: A level operator is"
                 <<" neither a PETSc nor a sparse matrix."<< std::endl;
       return false;
     }
+    ++iLevel;
   }
 
   // The topmost transfer operator has to land on the block it preconditions,

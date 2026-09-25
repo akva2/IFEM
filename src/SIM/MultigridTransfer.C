@@ -14,10 +14,12 @@
 #include "MultigridTransfer.h"
 
 #include "ASMbase.h"
+#include "DomainDecomposition.h"
 #include "GaussQuadrature.h"
 #include "IFEM.h"
 #include "LogStream.h"
 #include "MatVec.h"
+#include "ProcessAdm.h"
 #include "SAM.h"
 #include "SIMbase.h"
 #include "SparseMatrix.h"
@@ -117,6 +119,24 @@ namespace // anonymous namespace for local helpers
     with the blocks of the system matrix.
   */
 
+  //! \brief Maps a local equation to its global number within a block.
+  //! \param[in] dd The decomposition holding the numbering
+  //! \param[in] iBlk Index of the block in the decomposition, zero for the
+  //! whole system
+  //! \param[in] eq Local equation number of the whole system
+  int globalEq (const DomainDecomposition& dd, size_t iBlk, int eq)
+  {
+    if (iBlk == 0)
+      return dd.getGlobalEq(eq);
+
+    // A block numbers its own equations, so the equation of the system has
+    // to be looked up among them before it can be made global.
+    const std::map<int,int>& g2l = dd.getG2LEQ(iBlk);
+    std::map<int,int>::const_iterator it = g2l.find(eq);
+    return it == g2l.end() ? 0 : dd.getGlobalEq(it->second,iBlk);
+  }
+
+
   class DofNumbering
   {
   public:
@@ -128,8 +148,11 @@ namespace // anonymous namespace for local helpers
       const SAM* sam = sim.getSAM();
       if (!sam) return;
 
+      const DomainDecomposition& dd = sim.getProcessAdm().dd;
+      const size_t iBlk = dd.getNoBlocks() > 0 ? op.block+1 : 0;
+
       const int* madof = sam->getMADOF();
-      std::set<int> eqs;
+      std::map<int,int> byGlobal;
       for (const ASMbase* pch : sim.getFEModel())
       {
         if (!pch || pch->empty()) continue;
@@ -143,17 +166,30 @@ namespace // anonymous namespace for local helpers
 
           for (int d : selectDofs(op.comps,madof[inod]-madof[inod-1]))
             if (int eq = sam->getEquation(inod,d); eq > 0)
-              eqs.insert(eq);
+              if (int geq = globalEq(dd,iBlk,eq); geq > 0)
+                byGlobal[geq] = eq;
         }
       }
 
+      // The DOFs are numbered in order of increasing global equation number,
+      // which is the order PETSc uses for the index set of a matrix block.
+      // The equations a process owns are a contiguous stretch of the global
+      // ones, so the DOFs it owns are a contiguous stretch of this numbering,
+      // which is what lets the operator be laid out over the processes.
       int idx = 0;
-      for (int eq : eqs)
-        index[eq] = ++idx;
+      for (const std::pair<const int,int>& dof : byGlobal)
+      {
+        index[dof.second] = ++idx;
+        if (dof.first >= dd.getMinEq(iBlk) && dof.first <= dd.getMaxEq(iBlk))
+          ++nOwned;
+      }
     }
 
     //! \brief Returns the number of free DOFs.
     size_t size() const { return index.size(); }
+
+    //! \brief Returns the number of free DOFs this process owns.
+    int owned() const { return nOwned; }
 
     //! \brief Returns the one-based index of an equation, or zero if not in.
     int operator[](int eq) const
@@ -163,7 +199,8 @@ namespace // anonymous namespace for local helpers
     }
 
   private:
-    std::map<int,int> index; //!< Maps global equation number to DOF index
+    std::map<int,int> index; //!< Maps local equation number to DOF index
+    int nOwned = 0;          //!< DOFs of \a index this process owns
   };
 }
 
@@ -478,7 +515,8 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
 std::unique_ptr<SparseMatrix> MG::prolongation (const SIMbase& coarse,
                                                 const SIMbase& fine,
                                                 const MG::Operator& op,
-                                                MG::Transfer method)
+                                                MG::Transfer method,
+                                                int* rowsOwned, int* colsOwned)
 {
   if (method == MG::Transfer::L2_PROJECTION)
   {
@@ -511,6 +549,8 @@ std::unique_ptr<SparseMatrix> MG::prolongation (const SIMbase& coarse,
   }
 
   DofNumbering cNum(coarse,op), fNum(fine,op);
+  if (rowsOwned) *rowsOwned = fNum.owned();
+  if (colsOwned) *colsOwned = cNum.owned();
 
   std::unique_ptr<SparseMatrix> P = std::make_unique<SparseMatrix>(fNum.size(),
                                                                    cNum.size());
