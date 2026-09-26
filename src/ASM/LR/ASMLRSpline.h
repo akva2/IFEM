@@ -139,7 +139,7 @@ public:
   //! line, which is what a smoother wants to solve along on an anisotropic
   //! mesh; on a locally refined one it is what is left of a mesh line after
   //! the refinement, so the grouping loses accuracy rather than meaning.
-  bool getLineDofs(int dir, std::vector<IntVec>& lines) const;
+  bool getLineDofs(int dir, std::vector<IntVec>& lines) const override;
 
   //! \brief Checks the basis of this patch for linear independence.
   //! \return \e false if the basis is linearly dependent, or inconclusive

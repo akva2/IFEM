@@ -188,6 +188,11 @@ public:
   virtual Go::SplineVolume* getBasis(int basis = 1);
   //! \brief Returns the spline volume representing a basis of this patch.
   virtual const Go::SplineVolume* getBasis(int basis = 1) const;
+
+  //! \brief Groups the basis functions into lines along a parameter direction.
+  //! \param[in] dir Parameter direction the lines run along, 1-based
+  //! \param[out] lines Patch-local node numbers of each line, 1-based
+  bool getLineDofs(int dir, std::vector<IntVec>& lines) const override;
   //! \brief Copies the parameter domain from the \a other patch.
   virtual void copyParameterDomain(const ASMbase* other);
 

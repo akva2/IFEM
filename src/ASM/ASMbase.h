@@ -140,6 +140,16 @@ public:
   //! the properties are expected to be assigned by the owning simulator.
   virtual bool copyMeshFrom(const ASMbase& that);
 
+  //! \brief Groups the basis functions into lines along a parameter direction.
+  //! \param[in] dir Parameter direction the lines run along, 1-based
+  //! \param[out] lines Patch-local node numbers of each line, 1-based
+  //!
+  //! \details A line is a set of functions a smoother solves along in one go,
+  //! which is what an anisotropic mesh needs of it where a point smoother is
+  //! left behind by the aspect ratio. A patch which has no such grouping to
+  //! offer returns \e false and is left to the point smoother.
+  virtual bool getLineDofs(int, std::vector<IntVec>&) const { return false; }
+
   //! \brief Checks if this patch is empty.
   virtual bool empty() const = 0;
 

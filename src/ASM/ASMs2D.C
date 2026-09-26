@@ -129,6 +129,28 @@ Go::SplineSurface* ASMs2D::getBasis (int basis)
 }
 
 
+bool ASMs2D::getLineDofs (int dir, std::vector<IntVec>& lines) const
+{
+  const Go::SplineSurface* geo = this->getBasis();
+  if (!geo || dir < 1 || dir > 2)
+    return false;
+
+  // On a tensor mesh a line is an index line of the coefficient grid, which
+  // the patch numbers its nodes along with the first direction running
+  // fastest. The lines come out ordered along the direction they run in.
+  const int n1 = geo->numCoefs_u();
+  const int n2 = geo->numCoefs_v();
+
+  lines.clear();
+  lines.resize(dir == 1 ? n2 : n1);
+  for (int i2 = 0; i2 < n2; i2++)
+    for (int i1 = 0; i1 < n1; i1++)
+      lines[dir == 1 ? i2 : i1].push_back(1 + i1 + i2*n1);
+
+  return true;
+}
+
+
 void ASMs2D::copyParameterDomain (const ASMbase* other)
 {
   const ASMs2D* o = dynamic_cast<const ASMs2D*>(other);

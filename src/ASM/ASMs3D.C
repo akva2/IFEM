@@ -104,6 +104,32 @@ Go::SplineVolume* ASMs3D::getBasis (int basis)
 }
 
 
+bool ASMs3D::getLineDofs (int dir, std::vector<IntVec>& lines) const
+{
+  const Go::SplineVolume* geo = this->getBasis();
+  if (!geo || dir < 1 || dir > 3)
+    return false;
+
+  // On a tensor mesh a line is an index line of the coefficient grid, which
+  // the patch numbers its nodes along with the first direction running
+  // fastest. The lines come out ordered along the direction they run in.
+  const int n1 = geo->numCoefs(0);
+  const int n2 = geo->numCoefs(1);
+  const int n3 = geo->numCoefs(2);
+
+  lines.clear();
+  lines.resize(dir == 1 ? n2*n3 : dir == 2 ? n1*n3 : n1*n2);
+  for (int i3 = 0; i3 < n3; i3++)
+    for (int i2 = 0; i2 < n2; i2++)
+      for (int i1 = 0; i1 < n1; i1++)
+        lines[dir == 1 ? i2 + i3*n2 :
+              dir == 2 ? i1 + i3*n1 : i1 + i2*n1]
+          .push_back(1 + i1 + (i2 + i3*n2)*n1);
+
+  return true;
+}
+
+
 void ASMs3D::copyParameterDomain (const ASMbase* other)
 {
   const ASMs3D* o = dynamic_cast<const ASMs3D*>(other);
