@@ -643,8 +643,11 @@ bool SIMbase::initSystem (LinAlg::MatrixType mType,
   // start of the simulation to ensure the final sparsity pattern is established
   const bool forcePA = mType == LinAlg::SPARSE && this->hasElementActivator();
 
-  return myEqSys->init(mType, mySolParams, nMats, nVec, nScl,
-                       withRF, opt.num_threads_SLU, forcePA);
+  if (!myEqSys->init(mType, mySolParams, nMats, nVec, nScl,
+                     withRF, opt.num_threads_SLU, forcePA))
+    return false;
+
+  return !preSolve || preSolve();
 }
 
 

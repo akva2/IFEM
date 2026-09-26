@@ -19,6 +19,7 @@
 #include "TimeDomain.h"
 #include "Property.h"
 #include "MatVec.h"
+#include <functional>
 #include <set>
 
 class IntegrandBase;
@@ -123,6 +124,17 @@ public:
 
   //! \brief Lets this simulator share equation system with \a that simulator.
   bool initSystem(const SIMbase* that);
+
+  //! \brief Sets a hook to run once the equation system has been allocated.
+  //! \param[in] hook What to run, returning \e false to abort the solution
+  //!
+  //! \details A driver which has to reach into the equation system between
+  //! the point where it comes into being and the point where it is solved has
+  //! nowhere else to do it, the simulator doing both within the one call.
+  //! Installing a multigrid hierarchy is such a thing: the system matrix does
+  //! not exist until initSystem() has been called, and the preconditioner is
+  //! built on the first solve after that.
+  void setPreSolveHook(const std::function<bool()>& hook) { preSolve = hook; }
 
   //! \brief Initializes left-hand-side element matrix buffers for integrand.
   void initLHSbuffers();
@@ -898,6 +910,9 @@ protected:
   SAM*          mySam;       //!< Auxiliary data for FE assembly management
   LinSolParams* mySolParams; //!< Input parameters for PETSc
   LinSolParams* myGl2Params; //!< Input parameters for PETSc, for L2 projection
+
+  //! Runs once the equation system has been allocated, if given
+  std::function<bool()> preSolve;
 
 private:
   size_t nIntGP; //!< Number of interior integration points in the whole model
