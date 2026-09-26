@@ -195,7 +195,12 @@ protected:
 
     std::string levelList;
     if (utl::getAttribute(elem,"levels",levelList))
-      utl::parseIntegers(coarseLevels,levelList.c_str());
+    {
+      if (levelList == "fixed")
+        fixedLevels = true;
+      else
+        utl::parseIntegers(coarseLevels,levelList.c_str());
+    }
     utl::getAttribute(elem,"stride",stride);
     utl::getAttribute(elem,"galerkin",galerkin);
     utl::getAttribute(elem,"lines",lineDir);
@@ -210,9 +215,12 @@ protected:
     if (!levelMeshes.empty()) {
       IFEM::cout << levelMeshes.size() <<" mesh level(s)";
       for (const std::string& f : levelMeshes) IFEM::cout <<" "<< f;
-      IFEM::cout <<", then ";
+      if (!fixedLevels)
+        IFEM::cout <<", then ";
     }
-    if (coarseLevels.empty())
+    if (fixedLevels)
+      IFEM::cout <<(levelMeshes.empty() ? "no levels" : " and no more");
+    else if (coarseLevels.empty())
       IFEM::cout <<"every "<< (stride > 1 ? std::to_string(stride)+". " : "")
                  <<"level";
     else {
@@ -229,6 +237,9 @@ protected:
   //! \brief Returns \e true if a refinement step is kept as a coarse level.
   bool isCoarseLevel(int iStep) const
   {
+    if (fixedLevels)
+      return false; // the hierarchy is what it was built as
+
     if (coarseLevels.empty())
       return (iStep-1)%stride == 0;
 
@@ -659,6 +670,11 @@ protected:
 
   IntVec coarseLevels; //!< Refinement steps kept as coarse levels
   int    stride = 1;   //!< Keep every this many levels, if none are listed
+  //! Whether the hierarchy stays as it was built, keeping no level of the
+  //! refinements. A hierarchy read from geometry files is then the whole of
+  //! it, however far the mesh being solved on is refined past the finest of
+  //! them.
+  bool   fixedLevels = false;
   bool   galerkin = false; //!< Let PETSc form the coarse operators
   int    lineDir = 0;      //!< Direction mesh lines run along, 0 for no lines
   //! Topology set of the patches the lines are taken from, empty for all
