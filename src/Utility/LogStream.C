@@ -24,6 +24,9 @@ utl::LogStream::LogStream(std::ostream& out, int ppid, int mypid) :
 
 utl::LogStream& utl::LogStream::operator<<(LogStream::StandardEndLine manip)
 {
+  if (m_mute)
+    return *this;
+
   if (m_pid == m_ppid && m_out)
     manip(*m_out);
 
@@ -40,6 +43,7 @@ utl::LogStream& utl::LogStream::operator=(const LogStream& log2)
   m_extra = log2.m_extra;
   m_ppid = log2.m_ppid;
   m_pid = log2.m_pid;
+  m_mute = log2.m_mute;
 
   return *this;
 }

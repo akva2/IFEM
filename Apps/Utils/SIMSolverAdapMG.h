@@ -271,9 +271,12 @@ protected:
     // has to be resolved once more for the mesh now in place, or the patches
     // are left unjoined. Reading the file again does that and keeps the
     // model which is there, which is how a refinement is followed up.
-    sim->clearProperties();
-    if (!sim->read(inputFile))
-      return false;
+    {
+      Quiet quiet;
+      sim->clearProperties();
+      if (!sim->read(inputFile))
+        return false;
+    }
 
     if (!this->addLevel(sim,level,"Keeping"))
       return false;
@@ -290,6 +293,10 @@ protected:
                 <<". Its patches were not joined the same way."<< std::endl;
       return false;
     }
+
+    // A level kept mid-solve is followed by the norms of the step it was
+    // kept after, which it would otherwise run straight into.
+    IFEM::cout << std::endl;
 
     return true;
   }
@@ -315,9 +322,12 @@ protected:
         return false;
       }
 
-      sim->opt = this->S1.opt;
-      if (!sim->readMesh(mesh) || !sim->read(infile))
-        return false;
+      {
+        Quiet quiet;
+        sim->opt = this->S1.opt;
+        if (!sim->readMesh(mesh) || !sim->read(infile))
+          return false;
+      }
 
       if (!this->addLevel(sim,level,"Reading"))
         return false;
@@ -491,6 +501,26 @@ protected:
     return subd;
   }
 
+  /*!
+    \brief Silences the log for as long as it is alive.
+
+    \details A level reads the input file and preprocesses a model of its
+    own, which says everything about itself that the simulation being run
+    says, and none of it was asked for. What the levels have to say about
+    themselves is said by addLevel() in one line each.
+  */
+  class Quiet
+  {
+  public:
+    //! \brief The constructor silences the log.
+    Quiet() : wasMuted(IFEM::cout.mute(true)) {}
+    //! \brief The destructor restores it.
+    ~Quiet() { IFEM::cout.mute(wasMuted); }
+
+  private:
+    bool wasMuted; //!< The setting to restore
+  };
+
   //! \brief Creates a level simulator which has read the given input file.
   //! \param[in] file The input file the level reads
   //! \param[out] level The level, owning the simulator returned
@@ -505,6 +535,8 @@ protected:
     }
 
     sim->opt = this->S1.opt;
+
+    Quiet quiet;
     if (!sim->read(file))
       return nullptr;
 
@@ -518,16 +550,22 @@ protected:
   bool addLevel(T1* sim, std::unique_ptr<MultigridProvider>& level,
                 const char* what)
   {
-    if (!sim->preprocess())
-      return false;
+    {
+      Quiet quiet;
+      if (!sim->preprocess())
+        return false;
+    }
 
     IFEM::cout <<"\t"<< what <<" level "<< 1+levels.size() <<" with "
                << sim->getSAM()->getNoEquations() <<" equations for multigrid"
                << std::endl;
 
-    // Assemble the operators on this level while the mesh is current
+    // Assemble the operators on this level while the mesh is current. That
+    // has as much to say for itself as an assembly of the system being
+    // solved, and none of it was asked for either.
     if (!galerkin)
       for (const MG::Operator& op : this->S1.getMGOperators()) {
+        Quiet quiet;
         SystemMatrix* A = level->assembleMGOperator(op);
         if (!A) {
           std::cerr <<" *** SIMSolverAdapMG: Could not assemble the operator"

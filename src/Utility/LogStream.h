@@ -17,6 +17,7 @@
 #include <iostream>
 #include <iomanip>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace utl {
@@ -41,6 +42,16 @@ public:
   //! \brief Sets PIDs for the stream.
   void setPIDs(int ppid, int mypid) { m_ppid = ppid; m_pid = mypid; }
 
+  //! \brief Suppresses or restores all output on this stream.
+  //! \param[in] yes True to suppress the output
+  //! \return The setting which was in force
+  //!
+  //! \details This is for output which is a side effect of something done
+  //! behind the scenes, such as the parsing a multigrid level does of the
+  //! input file, and which would only clutter the log of the simulation the
+  //! user asked for.
+  bool mute(bool yes) { std::swap(yes,m_mute); return yes; }
+
   //! \brief Adds an extra logging stream.
   void addExtraLog(std::ostream* extra, bool clear = false);
   //! \brief Adds an extra logging stream.
@@ -56,6 +67,9 @@ public:
   template<typename T>
   LogStream& write(const T& data)
   {
+    if (m_mute)
+      return *this;
+
     if (m_ppid == m_pid && m_out)
       *m_out << data;
     for (auto extra : m_extra)
@@ -96,6 +110,7 @@ protected:
   std::vector<std::shared_ptr<std::ostream>> m_extra; //!< Extra output streams
   int m_ppid; //!< PID to print on
   int m_pid;  //!< This process' PID
+  bool m_mute = false; //!< Suppresses all output while set
 };
 
 }
