@@ -266,7 +266,8 @@ void PETScVectors::assemble (const Vectors& vecs,
 
 
 PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar)
-  : nrow(0), ncol(0), nsp(nullptr), adm(padm), solParams(spar, adm)
+  : nrow(0), ncol(0), nsp(nullptr), adm(padm), solParams(spar, adm),
+    nblocks(spar.getNoBlocks())
 {
   // Create matrix object, by default the matrix type is AIJ
   MatCreate(*adm.getCommunicator(),&pA);
@@ -293,7 +294,8 @@ PETScMatrix::PETScMatrix (const ProcessAdm& padm, const LinSolParams& spar)
 
 
 PETScMatrix::PETScMatrix (const ProcessAdm& padm, const PETScSolParams& spar)
-  : nrow(0), ncol(0), nsp(nullptr), adm(padm), solParams(spar)
+  : nrow(0), ncol(0), nsp(nullptr), adm(padm), solParams(spar),
+    nblocks(spar.getNoBlocks())
 {
   // Create linear solver object
   KSPCreate(*adm.getCommunicator(),&ksp);
@@ -1271,7 +1273,7 @@ bool PETScMatrix::setMGHierarchy (size_t block,
       if (blk.empty())
         mg.A.push_back(pM->pA);
       else {
-        const size_t nb = pM->solParams.getNoBlocks();
+        const size_t nb = pM->nblocks;
         if (block >= nb) {
           std::cerr <<" *** PETScMatrix::setMGHierarchy: Block "<< 1+block
                     <<" is out of range, the level operator has "<< nb

@@ -425,14 +425,14 @@ protected:
     if (!galerkin)
       for (const MG::Operator& op : this->S1.getMGOperators()) {
         Quiet quiet;
-        SystemMatrix* A = level->assembleMGOperator(op);
+        std::unique_ptr<SystemMatrix> A = level->assembleMGOperator(op);
         if (!A) {
           std::cerr <<" *** SIMSolverMG: Could not assemble the operator"
                     <<" \""<< op.name <<"\" on level "<< 1+levels.size()
                     <<"."<< std::endl;
           return false;
         }
-        levelOps[op.name].push_back(A);
+        levelOps[op.name].push_back(std::move(A));
       }
 
     levels.push_back(std::move(level));
@@ -466,9 +466,12 @@ protected:
           return false;
       P.resize(sims.size()-1);
 
-      // The one onto the mesh being solved on changes with every refinement
-      std::unique_ptr<MG::Prolongation> top =
-        MG::prolongation(*sims.back(),this->S1,op);
+      // The one onto the mesh being solved on changes whenever that mesh is
+      // refined, and a driver which does not refine builds it once like the
+      // others.
+      std::unique_ptr<MG::Prolongation>& top = topProlong[op.name];
+      if (!top || this->refinesMesh())
+        top = MG::prolongation(*sims.back(),this->S1,op);
       if (!top)
         return false;
 
@@ -491,8 +494,8 @@ protected:
 
       std::vector<const SystemMatrix*> Aptr;
       if (!galerkin)
-        for (const SystemMatrix* A : levelOps[op.name])
-          Aptr.push_back(A);
+        for (const std::unique_ptr<SystemMatrix>& A : levelOps[op.name])
+          Aptr.push_back(A.get());
 
       // Collecting the lines of a mesh means walking its functions, joining
       // what the patch interfaces cut and cutting again where the partition
@@ -520,7 +523,38 @@ protected:
         return false;
     }
 
+    this->releaseLevels();
+
     return true;
+  }
+
+  /*!
+    \brief Lets go of the levels nothing asks anything of any more.
+
+    \details A level is asked for its mesh while the transfer operator onto
+    the level above it is built and while its mesh lines are collected, and
+    for nothing afterwards. Both are done once, so the mesh, the assembly
+    handler and the equation numbering behind them can go, which on a locally
+    refined level is of the order of the operator itself: a basis function
+    carries its local knot vectors and the elements it supports, and an
+    element carries the functions over it.
+
+    What stays is the operator, which the driver took over when it was
+    assembled and which the cycle multiplies with on every iteration.
+
+    The topmost level is the exception under a driver which refines, since
+    the operator onto the mesh being solved on is rebuilt against it after
+    every refinement.
+  */
+  void releaseLevels()
+  {
+    const size_t keep = this->refinesMesh() && !sims.empty() ? sims.size()-1
+                                                             : sims.size();
+    for (size_t i = 0; i < keep; i++)
+      if (levels[i]) {
+        levels[i].reset();
+        sims[i] = nullptr;
+      }
   }
 
   //! Meshes used as coarse levels, coarsest first, read from geometry files
@@ -531,14 +565,19 @@ protected:
   //! Topology set of the patches the lines are taken from, empty for all
   std::string lineSet;
 
-  std::vector<std::unique_ptr<MultigridProvider>> levels; //!< The kept levels
+  //! The kept levels. A level is let go of once nothing asks anything of
+  //! its mesh any more, which leaves its entry empty; what it assembled
+  //! lives on in \ref levelOps.
+  std::vector<std::unique_ptr<MultigridProvider>> levels;
   std::vector<T1*> sims; //!< The kept levels, as simulators
 
-  //! Operators assembled on each kept level, by operator name.
-  //! They are owned by the level simulators, which \ref levels keeps alive.
-  std::map<std::string,std::vector<SystemMatrix*>> levelOps;
+  //! Operators assembled on each kept level, by operator name. They are
+  //! handed over by the level simulators and outlive them.
+  std::map<std::string,std::vector<std::unique_ptr<SystemMatrix>>> levelOps;
   //! Transfer operators between the kept levels, by operator name
   std::map<std::string,std::vector<std::unique_ptr<MG::Prolongation>>> prolong;
+  //! Transfer operator onto the mesh being solved on, by operator name
+  std::map<std::string,std::unique_ptr<MG::Prolongation>> topProlong;
 
   //! Mesh lines of each kept level, by operator name
   std::map<std::string,std::vector<std::vector<IntVec>>> levelLines;

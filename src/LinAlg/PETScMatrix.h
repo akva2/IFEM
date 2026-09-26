@@ -385,6 +385,11 @@ protected:
   MatNullSpace*       nsp;             //!< Null-space of linear operator
   const ProcessAdm&   adm;             //!< Process administrator
   PETScSolParams      solParams;       //!< Linear solver parameters
+  //! Number of blocks the matrix is split into. It is taken from the linear
+  //! solver parameters once, here, since those belong to the simulator which
+  //! set the matrix up and an operator handed to a multigrid hierarchy
+  //! outlives that simulator.
+  size_t              nblocks;
   bool                setParams;       //!< If linear solver parameters are set
   std::string         forcedKSPType;   //!< Force a KSP type ignoring the parameters
   PetscInt            ISsize;          //!< Number of index sets/elements

@@ -55,17 +55,20 @@ public:
   //! \param[in] op The operator to assemble
   //! \return The assembled operator, or null on failure
   //!
-  //! \details The operator stays owned by the simulator, which the driver
-  //! keeps alive for as long as the hierarchy is in use. It is deliberately
-  //! not copied out: a copy of a PETSc matrix loses the block structure, and
-  //! the operator of a block hierarchy is a block of the level matrix.
+  //! \details The operator is handed over rather than copied out: a copy of a
+  //! PETSc matrix loses the block structure, and the operator of a block
+  //! hierarchy is a block of the level matrix. Handing it over is also what
+  //! lets the driver drop the simulator once it has taken everything else it
+  //! needs off the mesh, the operator being the one thing which has to stay
+  //! for as long as the hierarchy is in use.
   //!
   //! Returning null makes the driver fall back on letting PETSc form the
   //! coarse operators as Galerkin products of the finest one, which needs
   //! only the transfer operators. That is an option for a hierarchy of an
   //! actual system matrix block, but not for an auxiliary operator, which has
   //! no fine level counterpart to coarsen.
-  virtual SystemMatrix* assembleMGOperator(const MG::Operator& op) = 0;
+  virtual std::unique_ptr<SystemMatrix>
+  assembleMGOperator(const MG::Operator& op) = 0;
 
   //! \brief Creates an empty simulator configured like this one.
   //!
