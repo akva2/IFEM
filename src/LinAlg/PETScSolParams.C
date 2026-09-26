@@ -13,6 +13,8 @@
 
 #include "PETScSolParams.h"
 #include "PETScPCPerm.h"
+#include "IFEM.h"
+#include "LogStream.h"
 #include "LinSolParams.h"
 #include "ProcessAdm.h"
 
@@ -340,6 +342,8 @@ bool PETScSolParams::setupGeometricMG (PC& pc, const PETScMGLevels& mg,
 //! \param[in] subdomains The equations of each subdomain, globally numbered
 //! \param[in] overlap Overlap to extend the subdomains by
 //! \param[in] reverse True to hand the subdomains over in reverse order
+//! \param[in] sweep True to solve the subdomains one after the other, false
+//! to solve them all on the same residual
 //!
 //! \details The subdomains are solved one after the other, each on what the
 //! ones before it left behind. Taking them in the reverse order is the
@@ -348,11 +352,12 @@ bool PETScSolParams::setupGeometricMG (PC& pc, const PETScMGLevels& mg,
 
 static void asmSubdomains (PC& pc,
                            const std::vector<std::vector<int>>& subdomains,
-                           int overlap, bool reverse)
+                           int overlap, bool reverse, bool sweep = true)
 {
   PCSetType(pc,PCASM);
   PCASMSetType(pc,PC_ASM_BASIC);
-  PCASMSetLocalType(pc,PC_COMPOSITE_MULTIPLICATIVE);
+  if (sweep)
+    PCASMSetLocalType(pc,PC_COMPOSITE_MULTIPLICATIVE);
   PCASMSetOverlap(pc,overlap);
 
   std::vector<IS> is(subdomains.size());
@@ -413,6 +418,37 @@ void PETScSolParams::setupSubdomainSmoother (PC& pc,
   if (outer != "cg" && outer != "minres" && outer != "cr")
   {
     asmSubdomains(pc,subdomains,overlap,false);
+    if (asmlu)
+    {
+      PCSetUp(pc);
+      asmDirectSolves(pc);
+    }
+    return;
+  }
+
+  // A sweep of the subdomains runs along the list each process holds and
+  // carries what one leaves only to the next one on that list, so what
+  // couples the subdomains of one process to those of another is not in it.
+  // Sweeping the other way is then not the adjoint of sweeping this way,
+  // however each list is ordered, and the two are not a symmetric pair. A
+  // solver which needs one is given the subdomains solved all at once, which
+  // is symmetric however they are spread.
+  if (adm.getNoProcs() > 1)
+  {
+    static bool told = false;
+    if (!told && (told = true))
+      IFEM::cout <<"  ** Solving the subdomains of the smoother one after the"
+                 <<" other is not\n     symmetric on more than one process,"
+                 <<" so it is not what a conjugate\n     gradient solver can"
+                 <<" be preconditioned with. They are solved all at\n"
+                 <<"     once here instead, which is symmetric and the weaker"
+                 <<" smoother of the\n     two, and which may need a damping"
+                 <<" factor where a sweep needs none.\n     Solving with"
+                 <<" gmres, or another method which does not ask for a\n"
+                 <<"     symmetric preconditioner, gets the sweep."
+                 << std::endl;
+
+    asmSubdomains(pc,subdomains,overlap,false,false);
     if (asmlu)
     {
       PCSetUp(pc);
