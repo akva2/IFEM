@@ -74,6 +74,10 @@ namespace MG //! Utilities for geometric multigrid.
     int rowsOwned = 0; //!< Rows of the operator this process owns
     int colsOwned = 0; //!< Columns of the operator this process owns
 
+    //! Whether what is held is this process's share of the whole, to be
+    //! added to what the others hold, or the whole of it on every process
+    bool distributed = false;
+
     //! \brief Returns whether the operator is applied rather than stored.
     bool isProjection() const { return mass != nullptr; }
     //! \brief Returns the matrix which lays the operator out, however it is

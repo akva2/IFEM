@@ -1130,7 +1130,8 @@ bool PETScMatrix::setMGHierarchy (size_t block,
                                   const std::vector<const SystemMatrix*>& levels,
                                   const std::vector<std::vector<std::vector<int>>>& subdomains,
                                   const std::vector<std::pair<int,int>>& owned,
-                                  const std::vector<const SparseMatrix*>& mass)
+                                  const std::vector<const SparseMatrix*>& mass,
+                                  const std::vector<bool>& distributed)
 {
   if (prolong.size() < 1) {
     std::cerr <<" *** PETScMatrix::setMGHierarchy: A hierarchy needs at least"
@@ -1159,8 +1160,13 @@ bool PETScMatrix::setMGHierarchy (size_t block,
      values travel between processes. The rows and columns the decomposition
      hands out are what the levels of the hierarchy are laid out by, so the
      operator has to be laid out the same way for the cycle to apply it. */
+  /* \a shared says whether every process holds the whole of \a S, in which
+     case each takes the rows it owns and leaves the rest, or holds its own
+     share of it, in which case each gives what it has and the shares are
+     added together, the rows of other processes among them. */
   auto&& toPETSc = [this](const SparseMatrix& S,
-                          PetscInt nrows, PetscInt ncols) -> Mat
+                          PetscInt nrows, PetscInt ncols,
+                          bool shared = true) -> Mat
   {
     // A preallocator counts the entries of each row for us, which is more
     // trouble than it is worth to do by hand once a row can hold entries
@@ -1174,14 +1180,14 @@ bool PETScMatrix::setMGHierarchy (size_t block,
     PetscInt rStart, rEnd;
     MatGetOwnershipRange(prealloc,&rStart,&rEnd);
 
-    auto&& insert = [&S,rStart,rEnd](Mat M)
+    auto&& insert = [&S,rStart,rEnd,shared](Mat M)
     {
       for (const auto& [ij,v] : S.getValues()) {
         PetscInt r = ij.first-1, c = ij.second-1;
-        if (r < rStart || r >= rEnd) continue;
+        if (shared && (r < rStart || r >= rEnd)) continue;
 
         PetscScalar val = v;
-        MatSetValues(M,1,&r,1,&c,&val,INSERT_VALUES);
+        MatSetValues(M,1,&r,1,&c,&val,shared ? INSERT_VALUES : ADD_VALUES);
       }
       MatAssemblyBegin(M,MAT_FINAL_ASSEMBLY);
       MatAssemblyEnd(M,MAT_FINAL_ASSEMBLY);
@@ -1214,7 +1220,8 @@ bool PETScMatrix::setMGHierarchy (size_t block,
 
     const PetscInt nRow = owned.empty() ? PETSC_DECIDE : owned[i].first;
     const PetscInt nCol = owned.empty() ? PETSC_DECIDE : owned[i].second;
-    Mat B = toPETSc(*prolong[i],nRow,nCol);
+    const bool shared = i >= distributed.size() || !distributed[i];
+    Mat B = toPETSc(*prolong[i],nRow,nCol,shared);
 
     if (i >= mass.size() || !mass[i]) {
       mg.P.push_back(B); // the transfer is the operator itself
@@ -1226,7 +1233,7 @@ bool PETScMatrix::setMGHierarchy (size_t block,
     p->B = B;
     MatCreateVecs(B,nullptr,&p->work);
 
-    Mat M = toPETSc(*mass[i],nRow,nRow);
+    Mat M = toPETSc(*mass[i],nRow,nRow,shared);
     KSPCreate(*adm.getCommunicator(),&p->mass);
     KSPSetOperators(p->mass,M,M);
     KSPSetType(p->mass,KSPPREONLY);

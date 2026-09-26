@@ -320,6 +320,9 @@ public:
   //! \details This is what makes a <tt>pc</tt> of \a gmg work for the given
   //! block. The matrices are copied into PETSc format and owned by this
   //! object, so the caller is free to discard its own copies afterwards.
+  //! \param[in] distributed Whether each transfer is this process's share of
+  //! the whole, to be added to what the others hold, rather than the whole of
+  //! it on every process
   //! \param[in] mass Mass matrix of the fine side of each transfer, where
   //! that transfer is a projection rather than an operator. Where one is
   //! given, the matrix in \a prolong is the sparse factor of the projection
@@ -335,7 +338,8 @@ public:
                       const std::vector<const SystemMatrix*>& levels = {},
                       const std::vector<std::vector<std::vector<int>>>& subdomains = {},
                       const std::vector<std::pair<int,int>>& owned = {},
-                      const std::vector<const SparseMatrix*>& mass = {});
+                      const std::vector<const SparseMatrix*>& mass = {},
+                      const std::vector<bool>& distributed = {});
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }

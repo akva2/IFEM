@@ -617,15 +617,18 @@ protected:
       // the two factors of the projection which stands in for one.
       std::vector<const SparseMatrix*> Pptr, massPtr;
       std::vector<std::pair<int,int>> owned;
+      std::vector<bool> spread;
       for (const std::unique_ptr<MG::Prolongation>& p : P)
       {
         Pptr.push_back(p->layout());
         massPtr.push_back(p->mass.get());
         owned.emplace_back(p->rowsOwned,p->colsOwned);
+        spread.push_back(p->distributed);
       }
       Pptr.push_back(top->layout());
       massPtr.push_back(top->mass.get());
       owned.emplace_back(top->rowsOwned,top->colsOwned);
+      spread.push_back(top->distributed);
 
       std::vector<const SystemMatrix*> Aptr;
       if (!galerkin)
@@ -642,7 +645,7 @@ protected:
       // setMGHierarchy converts the transfer operators to PETSc format, so
       // the topmost one is not needed beyond this point. The level operators
       // are not copied, and stay owned by the level simulators.
-      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned,massPtr))
+      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned,massPtr,spread))
         return false;
     }
 

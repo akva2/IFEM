@@ -197,6 +197,8 @@ namespace // anonymous namespace for local helpers
     against itself.
     \param[in] cB The coarse basis
     \param[in] fB The fine basis
+    \param[in] fPch The patch the fine basis belongs to
+    \param[in] mine Elements this process integrates, all of them if empty
     \param mass Mass matrix of the fine basis of the patch
     \param B The two bases of the patch against each other
     \return \e false if the two meshes do not cover each other
@@ -212,6 +214,7 @@ namespace // anonymous namespace for local helpers
   */
 
   bool integrateBases (const LR::LRSpline* cB, const LR::LRSpline* fB,
+                       const ASMbase& fPch, const std::set<int>& mine,
                        SparseMatrix& mass, SparseMatrix& B)
   {
     const int nsd = fB->nVariate();
@@ -236,6 +239,11 @@ namespace // anonymous namespace for local helpers
     RealArray X(nsd);
     for (int iel = 0; iel < fB->nElements(); iel++)
     {
+      // A partitioned mesh has each process integrate the elements it was
+      // given, and what they leave is added to what the others do.
+      if (!mine.empty() && mine.find(fPch.getElmID(1+iel)) == mine.end())
+        continue;
+
       const LR::Element* fEl = fB->getElement(iel);
       for (int d = 0; d < nsd; d++)
         X[d] = 0.5*(fEl->getParmin(d) + fEl->getParmax(d));
@@ -772,6 +780,12 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
 
   res->B = std::make_unique<SparseMatrix>(fNum.size(),cNum.size());
   res->mass = std::make_unique<SparseMatrix>(fNum.size(),fNum.size());
+  res->distributed = true;
+
+  // Each process integrates the elements of the fine level it was given, so
+  // that neither the work nor what it produces is repeated on all of them.
+  const IntVec& myElms = fine.getProcessAdm().dd.getElms();
+  const std::set<int> mine(myElms.begin(),myElms.end());
   for (size_t i = 0; i < fModel.size(); i++)
   {
     if (!cModel[i] || !fModel[i] || cModel[i]->empty() || fModel[i]->empty())
@@ -789,7 +803,7 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
 
     SparseMatrix Mp(fB->nBasisFunctions(),fB->nBasisFunctions());
     SparseMatrix Bp(fB->nBasisFunctions(),cB->nBasisFunctions());
-    if (!integrateBases(cB,fB,Mp,Bp))
+    if (!integrateBases(cB,fB,*fModel[i],mine,Mp,Bp))
       return nullptr;
 
     std::vector<IntVec> fDof, cDof;
