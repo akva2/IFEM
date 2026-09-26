@@ -24,6 +24,8 @@
 #include "DomainDecomposition.h"
 #include "LogStream.h"
 
+#include <memory>
+
 
 /*!
   \brief Class for administration of MPI processes in IFEM library.
@@ -36,7 +38,10 @@ class ProcessAdm
   bool parallel;   //!< If Processor is parallel
 
 #if defined(HAS_PETSC) || defined(HAVE_MPI)
-  MPI_Comm comm;   //!< MPI communicator
+  //! MPI communicator. It is held by whoever has taken responsibility for
+  //! it, this administrator and anything which has to outlive it, and is
+  //! released once the last of them lets go.
+  std::shared_ptr<MPI_Comm> comm;
 #endif
 
 public:
@@ -81,9 +86,21 @@ public:
 
 #if defined(HAS_PETSC) || defined(HAVE_MPI)
   //! \brief Return MPI communicator
-  MPI_Comm* getCommunicator() { return &comm; }
+  MPI_Comm* getCommunicator() { return comm.get(); }
   //! \brief Return MPI communicator
-  const MPI_Comm* getCommunicator() const { return &comm; }
+  const MPI_Comm* getCommunicator() const { return comm.get(); }
+
+  //! \brief Returns a share in the MPI communicator.
+  //!
+  //! \details Whoever holds one of these keeps the communicator alive for as
+  //! long as it does. An object which outlives the administrator that made
+  //! it needs one, since the communicator would otherwise be torn down while
+  //! the object is still using it. The operator of a multigrid level, handed
+  //! over by the simulator which assembled it, is such an object.
+  //!
+  //! The share keeps the linear algebra packages initialized as well, so a
+  //! holder which knows nothing of them is as safe as one which does.
+  std::shared_ptr<MPI_Comm> shareCommunicator() const { return comm; }
 
   //! \brief Set MPI communicator
   //! \param comm New communicator

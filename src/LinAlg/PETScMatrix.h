@@ -384,6 +384,12 @@ protected:
   KSP                 ksp;             //!< Linear equation solver
   MatNullSpace*       nsp;             //!< Null-space of linear operator
   const ProcessAdm&   adm;             //!< Process administrator
+  //! A share in the communicator of \ref adm. The matrix is created on that
+  //! communicator and PETSc goes through it for as long as the matrix lives,
+  //! which may be longer than the administrator does: an operator handed
+  //! over as a level of a multigrid hierarchy outlives the simulator which
+  //! assembled it. Holding a share keeps the communicator alive that long.
+  std::shared_ptr<MPI_Comm> myComm;
   PETScSolParams      solParams;       //!< Linear solver parameters
   //! Number of blocks the matrix is split into. It is taken from the linear
   //! solver parameters once, here, since those belong to the simulator which
