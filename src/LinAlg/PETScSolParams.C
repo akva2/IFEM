@@ -335,33 +335,48 @@ bool PETScSolParams::setupGeometricMG (PC& pc, const PETScMGLevels& mg,
   this is called from setupSmoothers() rather than after it.
 */
 
-void PETScSolParams::setupSubdomainSmoother (PC& pc,
-                                             const std::vector<std::vector<int>>& subdomains,
-                                             size_t iBlock, bool asmlu)
+//! \brief Points an additive Schwarz preconditioner at the given subdomains.
+//! \param pc The preconditioner
+//! \param[in] subdomains The equations of each subdomain, globally numbered
+//! \param[in] overlap Overlap to extend the subdomains by
+//! \param[in] reverse True to hand the subdomains over in reverse order
+//!
+//! \details The subdomains are solved one after the other, each on what the
+//! ones before it left behind. Taking them in the reverse order is the
+//! adjoint of taking them in order, so the two after each other are
+//! self-adjoint, which is how a symmetric smoother is built from them.
+
+static void asmSubdomains (PC& pc,
+                           const std::vector<std::vector<int>>& subdomains,
+                           int overlap, bool reverse)
 {
   PCSetType(pc,PCASM);
-  // The basic variant is the symmetric one, which is what a conjugate
-  // gradient solver needs of its preconditioner should an overlap arise.
   PCASMSetType(pc,PC_ASM_BASIC);
-  PCASMSetOverlap(pc,params.getBlock(iBlock).getIntValue("asm_overlap"));
+  PCASMSetLocalType(pc,PC_COMPOSITE_MULTIPLICATIVE);
+  PCASMSetOverlap(pc,overlap);
 
-  // The subdomains arrive in the global equation numbers of the system, the
-  // level they belong to having translated them from its own numbering.
   std::vector<IS> is(subdomains.size());
   for (size_t j = 0; j < subdomains.size(); j++)
-    ISCreateGeneral(PETSC_COMM_SELF,subdomains[j].size(),subdomains[j].data(),
+  {
+    const std::vector<int>& sub = subdomains[reverse ? is.size()-1-j : j];
+    ISCreateGeneral(PETSC_COMM_SELF,sub.size(),sub.data(),
                     PETSC_COPY_VALUES,&is[j]);
+  }
   PCASMSetLocalSubdomains(pc,is.size(),is.data(),nullptr);
   for (IS& it : is)
     ISDestroy(&it);
+}
 
-  // The sub-solvers only exist once the preconditioner has been set up,
-  // and the subdomains have to be in place before that happens.
-  PCSetUp(pc);
 
-  if (!asmlu)
-    return;
+//! \brief Solves each subdomain of a Schwarz preconditioner directly.
+//! \param pc The preconditioner, which has to have been set up already
+//!
+//! \details The sub-solvers only exist once the preconditioner has been set
+//! up, which for one inside a composite is when the composite is set up,
+//! since only then does it have a matrix to be set up against.
 
+static void asmDirectSolves (PC& pc)
+{
   KSP* subksp;
   PetscInt first, nlocal;
   PCASMGetSubKSP(pc,&nlocal,&first,&subksp);
@@ -371,6 +386,67 @@ void PETScSolParams::setupSubdomainSmoother (PC& pc,
     KSPGetPC(subksp[j],&subpc);
     PCSetType(subpc,PCLU);
     KSPSetType(subksp[j],KSPPREONLY);
+  }
+}
+
+
+/*!
+  Solving the subdomains one after the other, each on what the ones before it
+  left behind, is a far better smoother than solving them all on the same
+  residual, and it stays bounded without being damped, which the latter does
+  not once a subdomain has as many neighbours as it has in three dimensions.
+
+  It is not symmetric, though, and a conjugate gradient solver cannot
+  precondition with something that is not. Sweeping the subdomains once in
+  each order is symmetric, and costs twice as much. Which of the two is wanted
+  follows from the method being preconditioned, so it is settled here rather
+  than asked for.
+*/
+
+void PETScSolParams::setupSubdomainSmoother (PC& pc,
+                                             const std::vector<std::vector<int>>& subdomains,
+                                             size_t iBlock, bool asmlu)
+{
+  const int overlap = params.getBlock(iBlock).getIntValue("asm_overlap");
+
+  const std::string& outer = params.getStringValue("type");
+  if (outer != "cg" && outer != "minres" && outer != "cr")
+  {
+    asmSubdomains(pc,subdomains,overlap,false);
+    if (asmlu)
+    {
+      PCSetUp(pc);
+      asmDirectSolves(pc);
+    }
+    return;
+  }
+
+  PCSetType(pc,PCCOMPOSITE);
+  PCCompositeSetType(pc,PC_COMPOSITE_MULTIPLICATIVE);
+#if PETSC_VERSION_MINOR > 14
+  PCCompositeAddPCType(pc,PCASM);
+  PCCompositeAddPCType(pc,PCASM);
+#else
+  PCCompositeAddPC(pc,PCASM);
+  PCCompositeAddPC(pc,PCASM);
+#endif
+
+  PC forth, back;
+  PCCompositeGetPC(pc,0,&forth);
+  PCCompositeGetPC(pc,1,&back);
+  asmSubdomains(forth,subdomains,overlap,false);
+  asmSubdomains(back, subdomains,overlap,true);
+
+  // The two sweeps only get a matrix when the composite is set up, and only
+  // once they are set up against it do they have sub-solvers to point at a
+  // factorization.
+  PCSetUp(pc);
+  if (asmlu)
+  {
+    PCSetUp(forth);
+    PCSetUp(back);
+    asmDirectSolves(forth);
+    asmDirectSolves(back);
   }
 }
 
