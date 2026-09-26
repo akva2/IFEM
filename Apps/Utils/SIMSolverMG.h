@@ -45,7 +45,12 @@
 /*!
   \brief Simulator driver which solves on the finest of a mesh hierarchy.
 
-  \details The levels are meshes of one and the same geometry, each nested in
+  \details This is the machinery on its own, added to whichever driver runs
+  the simulation: SIMSolverStatMG solves once on the finest mesh, SIMSolverMG
+  steps it through time, and SIMSolverAdapMG refines it and adds the meshes it
+  walks through to the hierarchy.
+
+  The levels are meshes of one and the same geometry, each nested in
   the next, which the driver turns into the levels of a PCMG preconditioner:
   it reads them, assembles the operators on each of them, builds the transfer
   operators between them and hands the result to PETSc. The mesh the input
@@ -111,8 +116,8 @@ public:
   virtual ~SIMSolverMGImpl() {}
 
   //! \brief Reads solver data from the specified input file.
-  //! \details The hierarchy is described in the input file, which the plain
-  //! stationary driver has nothing to read from and does not open.
+  //! \details The hierarchy is described in the input file, which a driver
+  //! with nothing of its own to read there does not open.
   bool read(const char* file) override { return this->SIMadmin::read(file); }
 
   //! \brief Solves the problem on the finest level of the hierarchy.
@@ -522,6 +527,13 @@ protected:
 
 //! \brief Stationary simulator driver using geometric multigrid.
 template<class T1>
-using SIMSolverMG = SIMSolverMGImpl<T1,SIMSolverStat<T1>>;
+using SIMSolverStatMG = SIMSolverMGImpl<T1,SIMSolverStat<T1>>;
+
+//! \brief Time stepping simulator driver using geometric multigrid.
+//! \details The hierarchy is installed into each equation system the
+//! simulator allocates, which is once for a mesh it keeps through the
+//! simulation and once per step for one it does not.
+template<class T1>
+using SIMSolverMG = SIMSolverMGImpl<T1,SIMSolver<T1>>;
 
 #endif
