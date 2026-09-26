@@ -14,6 +14,8 @@
 #include "MultigridTransfer.h"
 
 #include "ASMbase.h"
+#include "ASMs2D.h"
+#include "ASMs3D.h"
 #include "DomainDecomposition.h"
 #include "GaussQuadrature.h"
 #include "IFEM.h"
@@ -24,6 +26,10 @@
 #include "SIMbase.h"
 #include "SparseMatrix.h"
 #include "Utilities.h"
+
+#include "GoTools/geometry/BsplineBasis.h"
+#include "GoTools/geometry/SplineSurface.h"
+#include "GoTools/trivariate/SplineVolume.h"
 
 #ifdef HAS_LRSPLINE
 #include "LR/ASMu2D.h"
@@ -42,6 +48,7 @@
 #include <limits>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <numeric>
 #include <set>
 #include <vector>
@@ -49,21 +56,450 @@
 
 namespace // anonymous namespace for local helpers
 {
-#ifdef HAS_LRSPLINE
-  //! \brief Returns the LR-spline basis of a patch, or null if it has none.
-  //! \param[in] pch The patch to obtain the basis from
-  //! \param[in] basis One-based index of the basis
-  const LR::LRSpline* getLRBasis (const ASMbase* pch, int basis)
-  {
-    if (const ASMu2D* p2 = dynamic_cast<const ASMu2D*>(pch); p2)
-      return p2->getBasis(basis);
-    if (const ASMu3D* p3 = dynamic_cast<const ASMu3D*>(pch); p3)
-      return p3->getBasis(basis);
+  /*!
+    \brief The two spline bases a transfer operator is built between.
 
-    return nullptr;
+    \details The coarse and the fine basis are always of the same kind, both
+    tensor product or both locally refined, and what has to be done with them
+    differs more between the two kinds than it agrees. A tensor basis is a
+    product of univariate ones and both operators factor along with it, while
+    a locally refined basis has no such structure and has to be taken function
+    by function. What they have in common is the two questions asked of them
+    here, and holding the pair rather than one basis at a time is what lets
+    the kind be settled once, where the pair is made.
+  */
+
+  class BasisPair
+  {
+  public:
+    //! \brief Empty destructor.
+    virtual ~BasisPair() = default;
+
+    //! \brief Returns the number of parameter directions.
+    virtual int nVariate() const = 0;
+    //! \brief Returns whether the two bases are of the same polynomial order.
+    virtual bool sameOrder() const = 0;
+    //! \brief Returns the number of functions in the coarse basis.
+    virtual size_t nCoarse() const = 0;
+    //! \brief Returns the number of functions in the fine basis.
+    virtual size_t nFine() const = 0;
+
+    //! \brief Expresses each coarse basis function in the fine basis.
+    //! \param[out] rows For each fine function, its coefficient against each
+    //! coarse function it takes part in
+    //! \return \e false if the coarse space is not contained in the fine one
+    virtual bool insertKnots(std::vector<std::map<int,Real>>& rows) const = 0;
+
+    /*!
+      \brief Integrates the two bases against each other and the fine one
+      against itself.
+      \param[in] fPch The patch the fine basis belongs to
+      \param[in] mine Elements this process integrates, all of them if empty
+      \param mass Mass matrix of the fine basis of the patch
+      \param B The two bases of the patch against each other
+      \return \e false if the two meshes do not cover each other
+
+      \details Both come out as sparse as the bases they belong to, which the
+      projection they define is not: it is the one solved out of the other,
+      and solving it is left to whoever applies it, so that the dense matrix
+      the two multiply to is never formed.
+
+      The integrals are over the elements of the fine mesh, each of which lies
+      within one element of the coarse one, in the inner product of the
+      parameter domain.
+    */
+    virtual bool integrate(const ASMbase& fPch, const std::set<int>& mine,
+                           SparseMatrix& mass, SparseMatrix& B) const = 0;
+  };
+
+
+  //! \brief Values of a univariate basis, and the function the first is of.
+  struct Values
+  {
+    int       first = 0; //!< Index of the function the first value belongs to
+    RealArray val;       //!< One value per function from \a first onwards
+  };
+
+
+  /*!
+    \brief A tensor product spline basis, as the transfer operators see it.
+
+    \details What they ask of it is the univariate bases it is a product of
+    and, where the patch is rational, the weight each of its functions
+    carries. The functions are numbered with the first parameter direction
+    running fastest, which is the order the patch numbers its nodes in.
+  */
+
+  struct TensorBasis
+  {
+    std::vector<const Go::BsplineBasis*> dirs; //!< The univariate bases
+    RealArray weight; //!< Weight of each function, empty if not rational
+
+    //! \brief Returns the number of functions in a direction.
+    int size(int dir) const { return dirs[dir]->numCoefs(); }
+    //! \brief Returns the polynomial order in a direction.
+    int order(int dir) const { return dirs[dir]->order(); }
+    //! \brief Returns the knot vector of a direction.
+    RealArray knots(int dir) const
+    { return RealArray(dirs[dir]->begin(),dirs[dir]->end()); }
+    //! \brief Returns one knot of a direction.
+    Real knot(int dir, int i) const { return *(dirs[dir]->begin()+i); }
+
+    //! \brief Returns the total number of functions.
+    size_t nFunctions() const
+    {
+      size_t n = 1;
+      for (const Go::BsplineBasis* b : dirs) n *= b->numCoefs();
+      return n;
+    }
+
+    //! \brief Returns the weight of a function, one where it carries none.
+    Real w(int i) const { return weight.empty() ? Real(1) : weight[i]; }
+  };
+
+
+  //! \brief Picks the univariate bases and the weights out of a spline patch.
+  //! \param[in] geo The spline surface or volume
+  //! \param[in] nsd Number of parameter directions it has
+  template<class Spline>
+  TensorBasis tensorBasis (const Spline* geo, int nsd)
+  {
+    TensorBasis basis;
+    for (int d = 0; d < nsd; d++)
+      basis.dirs.push_back(&geo->basis(d));
+
+    // A rational patch stores its coefficients scaled by their weights, with
+    // the weight last of each. The weights are what the transfer needs: the
+    // functions of a rational basis are the weighted B-splines over the one
+    // weight function, which refinement leaves as it is, so it cancels
+    // between the two levels and what remains is the two sets of weights.
+    if (geo->rational())
+    {
+      const int nsdg = geo->dimension();
+      std::vector<double>::const_iterator c = geo->rcoefs_begin();
+      basis.weight.reserve(basis.nFunctions());
+      for (size_t i = 0; i < basis.nFunctions(); i++)
+        basis.weight.push_back(c[(nsdg+1)*i + nsdg]);
+    }
+
+    return basis;
   }
 
 
+  /*!
+    \brief Multiplies univariate values out into the tensor basis.
+    \param[in] basis The basis the functions belong to
+    \param[in] dir Values of each univariate basis
+    \param[out] terms The functions reached and the value of each
+
+    \details The functions are numbered with the first direction running
+    fastest, and each is weighted as the basis weights it, so that what comes
+    out are the values of the functions the patch carries a coefficient for.
+  */
+
+  void tensorValues (const TensorBasis& basis,
+                     const std::vector<const Values*>& dir,
+                     std::vector<std::pair<int,Real>>& terms)
+  {
+    terms.assign(1,{0,Real(1)});
+
+    std::vector<std::pair<int,Real>> next;
+    int stride = 1;
+    for (size_t d = 0; d < dir.size(); d++)
+    {
+      next.clear();
+      next.reserve(terms.size()*dir[d]->val.size());
+      for (const std::pair<int,Real>& t : terms)
+        for (size_t i = 0; i < dir[d]->val.size(); i++)
+          next.emplace_back(t.first + (dir[d]->first+i)*stride,
+                            t.second*dir[d]->val[i]);
+      terms.swap(next);
+      stride *= basis.size(d);
+    }
+
+    for (std::pair<int,Real>& t : terms)
+      t.second *= basis.w(t.first);
+  }
+
+
+  /*!
+    \brief Expresses a univariate B-spline basis in a refinement of itself.
+    \param[in] s Knot vector of the coarse basis
+    \param[in] t Knot vector of the fine basis
+    \param[in] k Order of both bases
+    \param[out] rows For each fine function, the coarse functions it takes
+    part in and with which coefficient
+    \return \e false if the coarse knots are not among the fine ones
+
+    \details These are the discrete B-splines of the Oslo algorithm. The
+    recurrence computing them mirrors the one defining the B-splines
+    themselves, and its coefficients are the ones knot insertion gives: over
+    a refinement each lies between zero and one, so nothing is subtracted
+    anywhere and no precision is lost however far apart the two meshes are.
+
+    The coefficients of a fine function against the coarse ones sum to one
+    whatever the two knot vectors are, so the partition of unity the operator
+    is checked against downstream says nothing about nestedness. That is why
+    it is checked here instead, where the knots are.
+  */
+
+  bool oslo (const RealArray& s, const RealArray& t, int k,
+             std::vector<Values>& rows)
+  {
+    const Real eps = Real(1.0e-12);
+
+    // Every knot of the coarse vector has to be among the fine ones, with at
+    // least the multiplicity the coarse vector gives it, or the coarse space
+    // is not contained in the fine one and there is nothing to compute.
+    for (size_t i = 0, j = 0; i < s.size(); i++, j++)
+    {
+      while (j < t.size() && t[j] < s[i]-eps)
+        ++j;
+      if (j >= t.size() || t[j] > s[i]+eps)
+        return false;
+    }
+
+    const int nc = static_cast<int>(s.size()) - k;
+    const int nf = static_cast<int>(t.size()) - k;
+    if (nc < k || nf < k)
+      return false;
+
+    rows.assign(nf,Values());
+    for (int j = 0; j < nf; j++)
+    {
+      // The last coarse knot interval starting at or before this function
+      int mu = k-1;
+      while (mu+1 < nc && s[mu+1] <= t[j]+eps)
+        ++mu;
+
+      RealArray a(1,Real(1));
+      for (int r = 1; r < k; r++)
+      {
+        RealArray b(r+1,Real(0));
+        for (int l = 0; l <= r; l++)
+        {
+          const int i = mu-r+l;
+          if (l > 0)
+            if (Real d = s[i+r] - s[i]; d > eps)
+              b[l] += (t[j+r] - s[i])/d * a[l-1];
+          if (l < r)
+            if (Real d = s[i+r+1] - s[i+1]; d > eps)
+              b[l] += (s[i+r+1] - t[j+r])/d * a[l];
+        }
+        a.swap(b);
+      }
+
+      rows[j].first = mu-k+1;
+      rows[j].val.swap(a);
+    }
+
+    return true;
+  }
+
+
+  /*!
+    \brief The transfer between two tensor product spline bases.
+
+    \details Both operators factor along the parameter directions, which is
+    what makes this cheaper than the same thing on a locally refined mesh
+    rather than merely a special case of it. The change of basis between two
+    nested spaces is the tensor product of the univariate ones, each of which
+    the Oslo algorithm gives directly from the two knot vectors.
+  */
+
+  class TensorPair : public BasisPair
+  {
+  public:
+    //! \brief The constructor takes over the two bases.
+    TensorPair(TensorBasis&& c, TensorBasis&& f)
+      : coarse(std::move(c)), fine(std::move(f)) {}
+
+    //! \brief Returns the number of parameter directions.
+    int nVariate() const override { return fine.dirs.size(); }
+    //! \brief Returns the number of functions in the coarse basis.
+    size_t nCoarse() const override { return coarse.nFunctions(); }
+    //! \brief Returns the number of functions in the fine basis.
+    size_t nFine() const override { return fine.nFunctions(); }
+
+    //! \brief Returns whether the two bases are of the same polynomial order.
+    bool sameOrder() const override
+    {
+      for (int d = 0; d < this->nVariate(); d++)
+        if (coarse.order(d) != fine.order(d))
+          return false;
+
+      return true;
+    }
+
+    //! \brief Expresses each coarse basis function in the fine basis.
+    bool insertKnots(std::vector<std::map<int,Real>>& rows) const override;
+    //! \brief Integrates the two bases against each other and itself.
+    bool integrate(const ASMbase& fPch, const std::set<int>& mine,
+                   SparseMatrix& mass, SparseMatrix& B) const override;
+
+  private:
+    //! \brief Evaluates the univariate bases of one of the two in a point.
+    //! \param[in] basis The basis to evaluate
+    //! \param[in] X The parameter point
+    //! \param[out] val Values of each univariate basis
+    static void evaluate(const TensorBasis& basis, const RealArray& X,
+                         std::vector<Values>& val)
+    {
+      for (size_t d = 0; d < basis.dirs.size(); d++)
+      {
+        val[d].val.resize(basis.order(d));
+        val[d].first = basis.dirs[d]->knotInterval(X[d]) - basis.order(d) + 1;
+        basis.dirs[d]->computeBasisValues(X[d],val[d].val.data());
+      }
+    }
+
+    TensorBasis coarse; //!< The coarse basis
+    TensorBasis fine;   //!< The fine basis
+  };
+
+
+  bool TensorPair::insertKnots (std::vector<std::map<int,Real>>& rows) const
+  {
+    const int nsd = this->nVariate();
+
+    // The change of basis of each direction on its own
+    std::vector<std::vector<Values>> along(nsd);
+    for (int d = 0; d < nsd; d++)
+      if (!oslo(coarse.knots(d),fine.knots(d),fine.order(d),along[d]))
+        return false;
+
+    // Coefficients below this are roundoff rather than structure
+    const Real dropTol = Real(1.0e-12);
+
+    std::vector<const Values*> dir(nsd);
+    std::vector<std::pair<int,Real>> terms;
+    IntVec jd(nsd,0);
+    for (size_t j = 0; j < fine.nFunctions(); j++)
+    {
+      for (int d = 0; d < nsd; d++)
+        dir[d] = &along[d][jd[d]];
+
+      // The coefficients come out scaled by the weights of the coarse basis,
+      // and the fine functions they belong to carry their own.
+      tensorValues(coarse,dir,terms);
+      for (const std::pair<int,Real>& t : terms)
+        if (fabs(t.second) > dropTol)
+          rows[j][t.first] += t.second/fine.w(j);
+
+      for (int d = 0; d < nsd; d++)
+        if (++jd[d] < fine.size(d) || d == nsd-1)
+          break;
+        else
+          jd[d] = 0;
+    }
+
+    return true;
+  }
+
+
+  bool TensorPair::integrate (const ASMbase& fPch, const std::set<int>& mine,
+                              SparseMatrix& mass, SparseMatrix& B) const
+  {
+    const int nsd = this->nVariate();
+
+    // A rule which integrates the product of the two bases exactly
+    IntVec nG(nsd);
+    int nGP = 1;
+    for (int d = 0; d < nsd; d++)
+    {
+      nG[d] = (fine.order(d) + coarse.order(d))/2 + 1;
+      if (!GaussQuadrature::getCoord(nG[d]))
+      {
+        std::cerr <<" *** MG::prolongation: No Gauss rule with "<< nG[d]
+                  <<" points, needed to integrate an order "<< fine.order(d)
+                  <<" basis against an order "<< coarse.order(d) <<" one."
+                  << std::endl;
+        return false;
+      }
+      nGP *= nG[d];
+    }
+
+    // The elements are the knot spans, counted the way the patch counts them
+    // so that the ones this process was given can be told apart. Those of
+    // zero measure are counted as well and integrate to nothing.
+    IntVec nElm(nsd);
+    int nel = 1;
+    for (int d = 0; d < nsd; d++)
+      nel *= nElm[d] = fine.size(d) - fine.order(d) + 1;
+
+    std::vector<Values> fVal(nsd), cVal(nsd);
+    std::vector<const Values*> fDir(nsd), cDir(nsd);
+    for (int d = 0; d < nsd; d++)
+    {
+      fDir[d] = &fVal[d];
+      cDir[d] = &cVal[d];
+    }
+
+    std::vector<std::pair<int,Real>> fTerm, cTerm;
+    RealArray X(nsd), x0(nsd), x1(nsd);
+    IntVec ed(nsd,0);
+    for (int iel = 0; iel < nel; iel++)
+    {
+      Real vol = Real(1);
+      for (int d = 0; d < nsd; d++)
+      {
+        const int mu = ed[d] + fine.order(d) - 1;
+        x0[d] = fine.knot(d,mu);
+        x1[d] = fine.knot(d,mu+1);
+        vol *= Real(0.5)*(x1[d] - x0[d]);
+      }
+
+      // A partitioned mesh has each process integrate the elements it was
+      // given, and what they leave is added to what the others do.
+      if (vol > Real(0) &&
+          (mine.empty() || mine.find(fPch.getElmID(1+iel)) != mine.end()))
+      {
+        IntVec ig(nsd,0);
+        for (int ip = 0; ip < nGP; ip++)
+        {
+          Real w = vol;
+          for (int d = 0; d < nsd; d++)
+          {
+            const double* xg = GaussQuadrature::getCoord(nG[d]);
+            const double* wg = GaussQuadrature::getWeight(nG[d]);
+            X[d] = Real(0.5)*((x1[d]-x0[d])*xg[ig[d]] + x1[d] + x0[d]);
+            w *= wg[ig[d]];
+          }
+
+          this->evaluate(fine,X,fVal);
+          this->evaluate(coarse,X,cVal);
+          tensorValues(fine,fDir,fTerm);
+          tensorValues(coarse,cDir,cTerm);
+
+          for (const std::pair<int,Real>& fi : fTerm)
+          {
+            const Real Ni = w*fi.second;
+            for (const std::pair<int,Real>& fj : fTerm)
+              mass(1+fi.first,1+fj.first) += Ni*fj.second;
+            for (const std::pair<int,Real>& cj : cTerm)
+              B(1+fi.first,1+cj.first) += Ni*cj.second;
+          }
+
+          for (int d = 0; d < nsd; d++)
+            if (++ig[d] < nG[d] || d == nsd-1)
+              break;
+            else
+              ig[d] = 0;
+        }
+      }
+
+      for (int d = 0; d < nsd; d++)
+        if (++ed[d] < nElm[d] || d == nsd-1)
+          break;
+        else
+          ed[d] = 0;
+    }
+
+    return true;
+  }
+
+
+#ifdef HAS_LRSPLINE
   //! \brief A knot line of a mesh, over the part of the mesh it covers.
   struct KnotLine
   {
@@ -192,30 +628,143 @@ namespace // anonymous namespace for local helpers
   }
 
 
+  //! \brief Keys a B-spline by its local knot vectors.
+  RealArray knotKey (const std::vector<RealArray>& knots)
+  {
+    RealArray key;
+    for (const RealArray& k : knots)
+      key.insert(key.end(),k.begin(),k.end());
+    return key;
+  }
+
+
   /*!
-    \brief Integrates the two bases against each other and the fine one
-    against itself.
-    \param[in] cB The coarse basis
-    \param[in] fB The fine basis
-    \param[in] fPch The patch the fine basis belongs to
-    \param[in] mine Elements this process integrates, all of them if empty
-    \param mass Mass matrix of the fine basis of the patch
-    \param B The two bases of the patch against each other
-    \return \e false if the two meshes do not cover each other
+    \brief The transfer between two locally refined spline bases.
 
-    \details Both come out as sparse as the bases they belong to, which the
-    projection they define is not: it is the one solved out of the other, and
-    solving it is left to whoever applies it, so that the dense matrix the
-    two multiply to is never formed.
-
-    The integrals are over the elements of the fine mesh, each of which lies
-    within one element of the coarse one, in the inner product of the
-    parameter domain.
+    \details Neither operator factors here, so both are taken function by
+    function and element by element over meshes which have no structure to
+    lean on.
   */
 
-  bool integrateBases (const LR::LRSpline* cB, const LR::LRSpline* fB,
-                       const ASMbase& fPch, const std::set<int>& mine,
-                       SparseMatrix& mass, SparseMatrix& B)
+  class LRPair : public BasisPair
+  {
+  public:
+    //! \brief The constructor holds on to the two bases.
+    LRPair(const LR::LRSpline* c, const LR::LRSpline* f) : cB(c), fB(f) {}
+
+    //! \brief Returns the number of parameter directions.
+    int nVariate() const override { return fB->nVariate(); }
+    //! \brief Returns the number of functions in the coarse basis.
+    size_t nCoarse() const override { return cB->nBasisFunctions(); }
+    //! \brief Returns the number of functions in the fine basis.
+    size_t nFine() const override { return fB->nBasisFunctions(); }
+
+    //! \brief Returns whether the two bases are of the same polynomial order.
+    bool sameOrder() const override
+    {
+      for (int d = 0; d < this->nVariate(); d++)
+        if (cB->order(d) != fB->order(d))
+          return false;
+
+      return true;
+    }
+
+    //! \brief Expresses each coarse basis function in the fine basis.
+    bool insertKnots(std::vector<std::map<int,Real>>& rows) const override;
+    //! \brief Integrates the two bases against each other and itself.
+    bool integrate(const ASMbase& fPch, const std::set<int>& mine,
+                   SparseMatrix& mass, SparseMatrix& B) const override;
+
+  private:
+    const LR::LRSpline* cB; //!< The coarse basis
+    const LR::LRSpline* fB; //!< The fine basis
+  };
+
+
+  /*!
+    A coarse function is a B-spline on its own local knot vectors, and the
+    fine mesh cuts its support with knot lines the coarse mesh does not have.
+    Inserting one of those splits it in two B-splines whose knot vectors have
+    the knot, weighted so that the two together are what was split. Repeating
+    until every piece is a function of the fine basis expresses the coarse
+    function in that basis.
+
+    The weights are the ones knot insertion gives, each between zero and one
+    and summing to one over a split. Nothing is subtracted anywhere, so no
+    precision is lost however deep the refinement goes; this is what the
+    alternative of solving for the coefficients on each element cannot do,
+    the systems there conditioning like the Bernstein basis of the order and
+    passing that on from element to element.
+  */
+
+  bool LRPair::insertKnots (std::vector<std::map<int,Real>>& rows) const
+  {
+    std::vector<KnotLine> lines;
+    if (!knotLines(fB,lines))
+      return false;
+
+    // The functions of the fine basis, looked up by their knot vectors
+    std::map<RealArray,const LR::Basisfunction*> fine;
+    for (const LR::Basisfunction* f : fB->getAllBasisfunctions())
+    {
+      std::vector<RealArray> knots(f->nVariate());
+      for (int d = 0; d < f->nVariate(); d++)
+        knots[d] = (*f)[d];
+      fine[knotKey(knots)] = f;
+    }
+
+    // Coefficients below this are roundoff rather than structure
+    const Real dropTol = Real(1.0e-12);
+
+    typedef std::pair<std::vector<RealArray>,Real> Term;
+    std::vector<Term> todo, split(2);
+    for (const LR::Basisfunction* c : cB->getAllBasisfunctions())
+    {
+      todo.clear();
+      Term& first = todo.emplace_back();
+      first.first.resize(c->nVariate());
+      for (int d = 0; d < c->nVariate(); d++)
+        first.first[d] = (*c)[d];
+      first.second = c->w();
+
+      while (!todo.empty())
+      {
+        const Term term = todo.back();
+        todo.pop_back();
+        if (fabs(term.second) < dropTol)
+          continue;
+
+        std::map<RealArray,const LR::Basisfunction*>::const_iterator it =
+          fine.find(knotKey(term.first));
+        if (it != fine.end())
+        {
+          // The weights scale the B-splines into the functions of the basis
+          rows[it->second->getId()][c->getId()] += term.second/it->second->w();
+          continue;
+        }
+
+        const std::vector<KnotLine>::const_iterator line =
+          std::find_if(lines.begin(),lines.end(),
+                       [&term](const KnotLine& l)
+                       { return splits(l,term.first); });
+        if (line == lines.end())
+          return false; // the two meshes are not nested
+
+        splitBspline(term.first,*line,split[0],split[1]);
+        for (Term& half : split)
+        {
+          half.second *= term.second;
+          todo.push_back(half);
+        }
+      }
+    }
+
+    return true;
+  }
+
+
+  bool LRPair::integrate (const ASMbase& fPch, const std::set<int>& mine,
+                          SparseMatrix& mass, SparseMatrix& B) const
   {
     const int nsd = fB->nVariate();
 
@@ -296,105 +845,54 @@ namespace // anonymous namespace for local helpers
   }
 
 
-  //! \brief Keys a B-spline by its local knot vectors.
-  RealArray knotKey (const std::vector<RealArray>& knots)
+  //! \brief Returns the LR-spline basis of a patch, or null if it has none.
+  //! \param[in] pch The patch to obtain the basis from
+  //! \param[in] basis One-based index of the basis
+  const LR::LRSpline* getLRBasis (const ASMbase* pch, int basis)
   {
-    RealArray key;
-    for (const RealArray& k : knots)
-      key.insert(key.end(),k.begin(),k.end());
-    return key;
-  }
+    if (const ASMu2D* p2 = dynamic_cast<const ASMu2D*>(pch); p2)
+      return p2->getBasis(basis);
+    if (const ASMu3D* p3 = dynamic_cast<const ASMu3D*>(pch); p3)
+      return p3->getBasis(basis);
 
-
-  /*!
-    \brief Expresses each coarse basis function in the fine basis.
-    \param[in] cB The coarse basis
-    \param[in] fB The fine basis
-    \param[out] rows For each fine function, its coefficient against each
-    coarse function it takes part in
-    \return \e false if a coarse function was not reached
-
-    \details A coarse function is a B-spline on its own local knot vectors,
-    and the fine mesh cuts its support with knot lines the coarse mesh does
-    not have. Inserting one of those splits it in two B-splines whose knot
-    vectors have the knot, weighted so that the two together are what was
-    split. Repeating until every piece is a function of the fine basis
-    expresses the coarse function in that basis.
-
-    The weights are the ones knot insertion gives, each between zero and one
-    and summing to one over a split. Nothing is subtracted anywhere, so no
-    precision is lost however deep the refinement goes; this is what the
-    alternative of solving for the coefficients on each element cannot do,
-    the systems there conditioning like the Bernstein basis of the order and
-    passing that on from element to element.
-  */
-
-  bool insertKnots (const LR::LRSpline* cB, const LR::LRSpline* fB,
-                    std::vector<std::map<int,Real>>& rows)
-  {
-    std::vector<KnotLine> lines;
-    if (!knotLines(fB,lines))
-      return false;
-
-    // The functions of the fine basis, looked up by their knot vectors
-    std::map<RealArray,const LR::Basisfunction*> fine;
-    for (const LR::Basisfunction* f : fB->getAllBasisfunctions())
-    {
-      std::vector<RealArray> knots(f->nVariate());
-      for (int d = 0; d < f->nVariate(); d++)
-        knots[d] = (*f)[d];
-      fine[knotKey(knots)] = f;
-    }
-
-    // Coefficients below this are roundoff rather than structure
-    const Real dropTol = Real(1.0e-12);
-
-    typedef std::pair<std::vector<RealArray>,Real> Term;
-    std::vector<Term> todo, split(2);
-    for (const LR::Basisfunction* c : cB->getAllBasisfunctions())
-    {
-      todo.clear();
-      Term& first = todo.emplace_back();
-      first.first.resize(c->nVariate());
-      for (int d = 0; d < c->nVariate(); d++)
-        first.first[d] = (*c)[d];
-      first.second = c->w();
-
-      while (!todo.empty())
-      {
-        const Term term = todo.back();
-        todo.pop_back();
-        if (fabs(term.second) < dropTol)
-          continue;
-
-        std::map<RealArray,const LR::Basisfunction*>::const_iterator it =
-          fine.find(knotKey(term.first));
-        if (it != fine.end())
-        {
-          // The weights scale the B-splines into the functions of the basis
-          rows[it->second->getId()][c->getId()] += term.second/it->second->w();
-          continue;
-        }
-
-        const std::vector<KnotLine>::const_iterator line =
-          std::find_if(lines.begin(),lines.end(),
-                       [&term](const KnotLine& l)
-                       { return splits(l,term.first); });
-        if (line == lines.end())
-          return false; // no line reaches it, so leave this to the fallback
-
-        splitBspline(term.first,*line,split[0],split[1]);
-        for (Term& half : split)
-        {
-          half.second *= term.second;
-          todo.push_back(half);
-        }
-      }
-    }
-
-    return true;
+    return nullptr;
   }
 #endif
+
+
+  //! \brief Pairs up the bases of a coarse and a fine patch.
+  //! \param[in] cPch The coarse patch
+  //! \param[in] fPch The fine patch
+  //! \param[in] basis One-based index of the basis
+  //! \return The pair, or null if the patches carry no basis of that kind
+  std::unique_ptr<BasisPair> basisPair (const ASMbase* cPch,
+                                        const ASMbase* fPch, int basis)
+  {
+#ifdef HAS_LRSPLINE
+    if (const LR::LRSpline* cL = getLRBasis(cPch,basis); cL)
+      if (const LR::LRSpline* fL = getLRBasis(fPch,basis); fL)
+        return std::make_unique<LRPair>(cL,fL);
+#endif
+
+    if (const ASMs2D* c2 = dynamic_cast<const ASMs2D*>(cPch); c2)
+      if (const ASMs2D* f2 = dynamic_cast<const ASMs2D*>(fPch); f2)
+        if (const Go::SplineSurface* cs = c2->getBasis(basis); cs)
+          if (const Go::SplineSurface* fs = f2->getBasis(basis); fs)
+            return std::make_unique<TensorPair>(tensorBasis(cs,2),
+                                                tensorBasis(fs,2));
+
+    if (const ASMs3D* c3 = dynamic_cast<const ASMs3D*>(cPch); c3)
+      if (const ASMs3D* f3 = dynamic_cast<const ASMs3D*>(fPch); f3)
+        if (const Go::SplineVolume* cv = c3->getBasis(basis); cv)
+          if (const Go::SplineVolume* fv = f3->getBasis(basis); fv)
+            return std::make_unique<TensorPair>(tensorBasis(cv,3),
+                                                tensorBasis(fv,3));
+
+    std::cerr <<" *** MG::prolongation: The two patches carry no spline basis "
+              << basis <<" the transfer operators can be built between."
+              << std::endl;
+    return nullptr;
+  }
 
 
   //! \brief Returns the local DOF indices selected by a component mask.
@@ -531,7 +1029,6 @@ namespace // anonymous namespace for local helpers
 }
 
 
-#ifdef HAS_LRSPLINE
 //! \brief Maps the basis functions of a patch onto the DOFs of its level.
 //! \param[in] pch The patch
 //! \param[in] sam Assembly handler of the level
@@ -643,44 +1140,33 @@ static bool mapOntoEquations (const ASMbase& cPch, const ASMbase& fPch,
 
 
 /*!
-  Adaptive refinement only inserts knot lines, so the coarse spline space is
-  contained in the fine one and every coarse basis function has a unique
-  representation in the fine basis. The operator holding those coefficients is
-  what a multigrid cycle prolongates with.
+  Refinement only inserts knot lines, so the coarse spline space is contained
+  in the fine one and every coarse basis function has a unique representation
+  in the fine basis. The operator holding those coefficients is what a
+  multigrid cycle prolongates with.
 
-  Knot insertion gives those coefficients directly. A coarse function is a
-  B-spline on its own local knot vectors, and each knot line of the fine mesh
-  cutting its support splits it into two B-splines which carry that knot,
-  weighted so that the two together are what was split. Repeating until every
-  piece is a function of the fine basis expresses the coarse function in it.
+  Knot insertion gives those coefficients directly, and how it is carried out
+  is up to the pair of bases: a tensor product basis has the change of basis
+  of each parameter direction multiply out into the one of the patch, while a
+  locally refined one is taken function by function.
 
-  Both weights of a split lie between zero and one and sum to one, so nothing
-  is ever subtracted and no precision is lost however deep the refinement
-  goes. That the rows of the operator sum to one is what the two bases summing
-  to one leaves behind, and it is checked below.
+  The weights of an insertion lie between zero and one and sum to one, so
+  nothing is ever subtracted and no precision is lost however deep the
+  refinement goes. That the rows of the operator sum to one is what the two
+  bases summing to one leaves behind, and it is checked below.
 */
 
 static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
                            const SAM& cSam, const SAM& fSam,
-                           const MG::Operator& op,
+                           const MG::Operator& op, const BasisPair& bases,
                            const DofNumbering& cNum, const DofNumbering& fNum,
                            SparseMatrix& P)
 {
-  const LR::LRSpline* cB = getLRBasis(&cPch,op.basis);
-  const LR::LRSpline* fB = getLRBasis(&fPch,op.basis);
-  if (!cB || !fB)
-  {
-    std::cerr <<" *** MG::prolongation: Patch has no LR-spline basis "
-              << op.basis <<". Geometric multigrid needs an adaptive"
-              <<" discretization."<< std::endl;
-    return false;
-  }
-
   // Coefficients of the coarse functions, indexed by fine function. They are
   // kept in basis function numbering here, and mapped onto equations below.
-  std::vector<std::map<int,Real>> rows(fB->nBasisFunctions());
+  std::vector<std::map<int,Real>> rows(bases.nFine());
 
-  if (!insertKnots(cB,fB,rows))
+  if (!bases.insertKnots(rows))
   {
     std::cerr <<" *** MG::prolongation: A piece of a coarse basis function is"
               <<" neither a function\n     of the fine basis nor split by any"
@@ -714,7 +1200,6 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
 
   return mapOntoEquations(cPch,fPch,cSam,fSam,op,cNum,fNum,rows,P);
 }
-#endif
 
 
 std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
@@ -722,7 +1207,6 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
                                                     const MG::Operator& op,
                                                     MG::Transfer method)
 {
-#ifdef HAS_LRSPLINE
   const SAM* cSam = coarse.getSAM();
   const SAM* fSam = fine.getSAM();
   if (!cSam || !fSam)
@@ -742,6 +1226,13 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
     return nullptr;
   }
 
+  // The bases of each patch, paired up coarse with fine
+  std::vector<std::unique_ptr<BasisPair>> bases(fModel.size());
+  for (size_t i = 0; i < fModel.size(); i++)
+    if (cModel[i] && fModel[i] && !cModel[i]->empty() && !fModel[i]->empty())
+      if (!(bases[i] = basisPair(cModel[i],fModel[i],op.basis)))
+        return nullptr;
+
   DofNumbering cNum(coarse,op), fNum(fine,op);
 
   std::unique_ptr<Prolongation> res = std::make_unique<Prolongation>();
@@ -753,23 +1244,17 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
   // projected onto the fine one instead, and the two factors of that
   // projection are what is kept, the projection itself being dense.
   bool project = method == MG::Transfer::L2_PROJECTION;
-  for (size_t i = 0; i < fModel.size() && !project; i++)
-    if (cModel[i] && fModel[i] && !cModel[i]->empty() && !fModel[i]->empty())
-    {
-      const LR::LRSpline* cB = getLRBasis(cModel[i],op.basis);
-      const LR::LRSpline* fB = getLRBasis(fModel[i],op.basis);
-      for (int d = 0; cB && fB && d < fB->nVariate(); d++)
-        if (cB->order(d) != fB->order(d))
-          project = true;
-    }
+  for (size_t i = 0; i < bases.size() && !project; i++)
+    if (bases[i] && !bases[i]->sameOrder())
+      project = true;
 
   if (!project)
   {
     res->P = std::make_unique<SparseMatrix>(fNum.size(),cNum.size());
-    for (size_t i = 0; i < fModel.size(); i++)
-      if (cModel[i] && fModel[i] && !cModel[i]->empty() && !fModel[i]->empty())
-        if (!addPatchTerms(*cModel[i],*fModel[i],*cSam,*fSam,op,cNum,fNum,
-                           *res->P))
+    for (size_t i = 0; i < bases.size(); i++)
+      if (bases[i])
+        if (!addPatchTerms(*cModel[i],*fModel[i],*cSam,*fSam,op,*bases[i],
+                           cNum,fNum,*res->P))
           return nullptr;
 
     IFEM::cout <<"\tProlongation for \""<< op.name <<"\": "<< res->P->rows()
@@ -786,24 +1271,14 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
   // that neither the work nor what it produces is repeated on all of them.
   const IntVec& myElms = fine.getProcessAdm().dd.getElms();
   const std::set<int> mine(myElms.begin(),myElms.end());
-  for (size_t i = 0; i < fModel.size(); i++)
+  for (size_t i = 0; i < bases.size(); i++)
   {
-    if (!cModel[i] || !fModel[i] || cModel[i]->empty() || fModel[i]->empty())
+    if (!bases[i])
       continue;
 
-    const LR::LRSpline* cB = getLRBasis(cModel[i],op.basis);
-    const LR::LRSpline* fB = getLRBasis(fModel[i],op.basis);
-    if (!cB || !fB)
-    {
-      std::cerr <<" *** MG::prolongation: Patch has no LR-spline basis "
-                << op.basis <<". Geometric multigrid needs an adaptive"
-                <<" discretization."<< std::endl;
-      return nullptr;
-    }
-
-    SparseMatrix Mp(fB->nBasisFunctions(),fB->nBasisFunctions());
-    SparseMatrix Bp(fB->nBasisFunctions(),cB->nBasisFunctions());
-    if (!integrateBases(cB,fB,*fModel[i],mine,Mp,Bp))
+    SparseMatrix Mp(bases[i]->nFine(),bases[i]->nFine());
+    SparseMatrix Bp(bases[i]->nFine(),bases[i]->nCoarse());
+    if (!bases[i]->integrate(*fModel[i],mine,Mp,Bp))
       return nullptr;
 
     std::vector<IntVec> fDof, cDof;
@@ -817,9 +1292,4 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
              << res->B->size() <<" and "<< res->mass->size()
              <<" non-zeroes"<< std::endl;
   return res;
-#else
-  std::cerr <<" *** MG::prolongation: Built without LR-spline support."
-            << std::endl;
-  return nullptr;
-#endif
 }

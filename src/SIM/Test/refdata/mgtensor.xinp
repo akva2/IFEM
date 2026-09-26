@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+
+<!-- Unit square with a quadratic tensor product basis, used by
+     TestMultigridTransfer. No boundary conditions are specified, so that
+     every DOF is free and the prolongation operator can be compared against
+     the control points of the geometry directly. !-->
+
+<simulation>
+
+  <geometry>
+    <raiseorder patch="1" u="1" v="1"/>
+    <refine patch="1" u="3" v="3"/>
+  </geometry>
+
+</simulation>

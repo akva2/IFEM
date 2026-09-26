@@ -30,7 +30,7 @@ namespace MG //! Utilities for geometric multigrid.
 
   enum class Transfer
   {
-    CHANGE_OF_BASIS, //!< Element-local change of basis
+    CHANGE_OF_BASIS, //!< Change of basis by knot insertion
     L2_PROJECTION    //!< Global L2 projection
   };
 
@@ -102,11 +102,16 @@ namespace MG //! Utilities for geometric multigrid.
   //! The restriction operator is the transpose of the returned matrix, which
   //! is what PETSc uses by default, so it is not built separately.
   //!
-  //! Transfer::CHANGE_OF_BASIS exploits that adaptive refinement only inserts
-  //! knot lines, so that the coarse space is contained in the fine one and the
-  //! prolongation is the unique change-of-basis matrix between them. It is
-  //! computed element by element and is exact. Transfer::L2_PROJECTION is the
-  //! fallback for spaces which are not nested, where no such matrix exists.
+  //! Transfer::CHANGE_OF_BASIS exploits that refinement only inserts knot
+  //! lines, so that the coarse space is contained in the fine one and the
+  //! prolongation is the unique change-of-basis matrix between them. Knot
+  //! insertion gives it exactly: the Oslo algorithm along each parameter
+  //! direction where the patches are tensor product splines, and function by
+  //! function where they are locally refined. Transfer::L2_PROJECTION is for
+  //! spaces which are not nested, such as two of a different polynomial
+  //! order, where no such matrix exists; it is used of its own accord where
+  //! the orders differ, whatever is asked for here.
+  //!
   //! Every process builds the whole operator, since it holds every patch,
   //! and \a rowsOwned and \a colsOwned say how much of it belongs to this
   //! one. Those are the leading stretches of the two numberings on the first
