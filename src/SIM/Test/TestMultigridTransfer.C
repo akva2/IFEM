@@ -107,7 +107,9 @@ TEST_CASE("TestMultigridTransfer.Identity")
   const size_t neq = coarse.getSAM()->getNoEquations();
   REQUIRE(fine.getSAM()->getNoEquations() == neq);
 
-  std::unique_ptr<SparseMatrix> P = MG::prolongation(coarse,fine,{"A",1,0});
+  std::unique_ptr<MG::Prolongation> res = MG::prolongation(coarse,fine,{"A",1,0});
+  REQUIRE(res != nullptr);
+  const SparseMatrix* P = res->P.get();
   REQUIRE(P != nullptr);
   REQUIRE(P->rows() == neq);
   REQUIRE(P->cols() == neq);
@@ -153,7 +155,9 @@ TEST_CASE("TestMultigridTransfer.Exactness")
   REQUIRE(fine.getSAM()->getNoEquations() >
           coarse.getSAM()->getNoEquations());
 
-  std::unique_ptr<SparseMatrix> P = MG::prolongation(coarse,fine,{"A",1,0});
+  std::unique_ptr<MG::Prolongation> res = MG::prolongation(coarse,fine,{"A",1,0});
+  REQUIRE(res != nullptr);
+  const SparseMatrix* P = res->P.get();
   REQUIRE(P != nullptr);
   REQUIRE(P->rows() == (size_t)fine.getSAM()->getNoEquations());
   REQUIRE(P->cols() == (size_t)coarse.getSAM()->getNoEquations());

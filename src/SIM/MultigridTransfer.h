@@ -50,14 +50,43 @@ namespace MG //! Utilities for geometric multigrid.
     size_t      block = 0; //!< Linear solver block the hierarchy applies to
   };
 
+  /*!
+    \brief What a multigrid cycle prolongates a correction with.
+
+    \details Between nested spaces this is a matrix, and \a P holds it. It
+    is not one between spaces of different polynomial order, where a coarse
+    function is represented by its projection onto the fine space, which is
+    \f${\bf M}^{-1}{\bf B}\f$ and is dense however sparse its two factors
+    are. Those factors are kept instead, in \a mass and \a B, for an
+    operator which applies them rather than a matrix which stores what they
+    multiply to.
+  */
+
+  struct Prolongation
+  {
+    //! The operator, where the two spaces are nested
+    std::unique_ptr<SparseMatrix> P;
+    //! The two bases integrated against each other, where they are not
+    std::unique_ptr<SparseMatrix> B;
+    //! Mass matrix of the fine basis, where they are not
+    std::unique_ptr<SparseMatrix> mass;
+
+    int rowsOwned = 0; //!< Rows of the operator this process owns
+    int colsOwned = 0; //!< Columns of the operator this process owns
+
+    //! \brief Returns whether the operator is applied rather than stored.
+    bool isProjection() const { return mass != nullptr; }
+    //! \brief Returns the matrix which lays the operator out, however it is
+    //! applied: the operator itself, or the sparse factor of a projection.
+    const SparseMatrix* layout() const { return P ? P.get() : B.get(); }
+  };
+
+
   //! \brief Builds the prolongation operator between two FE spaces.
   //! \param[in] coarse The simulator holding the coarse mesh
   //! \param[in] fine The simulator holding the fine mesh
   //! \param[in] op The operator to build the prolongation for
   //! \param[in] method The method used to compute the operator
-  //! \param[out] rowsOwned Rows of the operator this process owns
-  //! \param[out] colsOwned Columns of the operator this process owns
-  //!
   //! \details The returned matrix maps the free DOFs of \a op on the coarse
   //! mesh to those on the fine mesh, with both numbered consecutively in
   //! order of increasing global equation number. Constrained DOFs are left
@@ -80,11 +109,10 @@ namespace MG //! Utilities for geometric multigrid.
   //! process and follow on from each other, the numbering being by global
   //! equation number, so they lay the operator out over the processes the
   //! way the matrices of the two levels are laid out.
-  std::unique_ptr<SparseMatrix>
+  std::unique_ptr<Prolongation>
   prolongation(const SIMbase& coarse, const SIMbase& fine,
                const Operator& op,
-               Transfer method = Transfer::CHANGE_OF_BASIS,
-               int* rowsOwned = nullptr, int* colsOwned = nullptr);
+               Transfer method = Transfer::CHANGE_OF_BASIS);
 }
 
 #endif

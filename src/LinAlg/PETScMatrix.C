@@ -1074,11 +1074,63 @@ bool PETScMatrix::setParameters (bool setup)
   the block they are installed for without any renumbering here.
 */
 
+/*!
+  A projection is not a matrix worth storing. It is \f${\bf M}^{-1}{\bf B}\f$,
+  and while both factors are as sparse as the bases they come from, the
+  inverse between them is dense and so is the product. What is kept is the
+  factors, and what is applied is a multiplication by one and a solve with
+  the other, the factorization being taken once and held here.
+*/
+
+//! \brief What a projection between two levels is applied with.
+struct PETScProjection
+{
+  //! The two bases integrated against each other, owned by the matrix which
+  //! holds the hierarchy along with every other matrix of it
+  Mat B    = nullptr;
+  KSP mass = nullptr; //!< Solver for the mass matrix of the fine basis
+  Vec work = nullptr; //!< Room for one side of the application
+
+  //! \brief The destructor frees what the projection owns.
+  ~PETScProjection()
+  {
+    if (work) VecDestroy(&work);
+    if (mass) KSPDestroy(&mass);
+  }
+};
+
+
+namespace {
+  //! \brief Prolongates a correction from the coarse level to the fine one.
+  PetscErrorCode projectionMult (Mat P, Vec x, Vec y)
+  {
+    PETScProjection* p = nullptr;
+    MatShellGetContext(P,&p);
+    MatMult(p->B,x,p->work);
+    return KSPSolve(p->mass,p->work,y);
+  }
+
+
+  //! \brief Restricts a residual from the fine level to the coarse one.
+  //! \details The mass matrix is symmetric, so the solve is its own adjoint
+  //! and the restriction is the multiplication and the solve the other way
+  //! around, which is what makes the cycle symmetric.
+  PetscErrorCode projectionMultTranspose (Mat P, Vec x, Vec y)
+  {
+    PETScProjection* p = nullptr;
+    MatShellGetContext(P,&p);
+    KSPSolve(p->mass,x,p->work);
+    return MatMultTranspose(p->B,p->work,y);
+  }
+}
+
+
 bool PETScMatrix::setMGHierarchy (size_t block,
                                   const std::vector<const SparseMatrix*>& prolong,
                                   const std::vector<const SystemMatrix*>& levels,
                                   const std::vector<std::vector<std::vector<int>>>& subdomains,
-                                  const std::vector<std::pair<int,int>>& owned)
+                                  const std::vector<std::pair<int,int>>& owned,
+                                  const std::vector<const SparseMatrix*>& mass)
 {
   if (prolong.size() < 1) {
     std::cerr <<" *** PETScMatrix::setMGHierarchy: A hierarchy needs at least"
@@ -1159,9 +1211,46 @@ bool PETScMatrix::setMGHierarchy (size_t block,
                 <<" operator."<< std::endl;
       return false;
     }
-    mg.P.push_back(owned.empty() ? toPETSc(*prolong[i],PETSC_DECIDE,PETSC_DECIDE)
-                                 : toPETSc(*prolong[i],owned[i].first,
-                                           owned[i].second));
+
+    const PetscInt nRow = owned.empty() ? PETSC_DECIDE : owned[i].first;
+    const PetscInt nCol = owned.empty() ? PETSC_DECIDE : owned[i].second;
+    Mat B = toPETSc(*prolong[i],nRow,nCol);
+
+    if (i >= mass.size() || !mass[i]) {
+      mg.P.push_back(B); // the transfer is the operator itself
+      continue;
+    }
+
+    // The transfer is a projection, which is applied rather than stored
+    PETScProjection* p = new PETScProjection;
+    p->B = B;
+    MatCreateVecs(B,nullptr,&p->work);
+
+    Mat M = toPETSc(*mass[i],nRow,nRow);
+    KSPCreate(*adm.getCommunicator(),&p->mass);
+    KSPSetOperators(p->mass,M,M);
+    KSPSetType(p->mass,KSPPREONLY);
+    PC massPC;
+    KSPGetPC(p->mass,&massPC);
+    PCSetType(massPC,PCCHOLESKY);
+#if PETSC_HAVE_MUMPS
+    if (adm.getNoProcs() > 1)
+      PCFactorSetMatSolverType(massPC,MATSOLVERMUMPS);
+#endif
+    KSPSetUp(p->mass);
+
+    PetscInt m, n;
+    MatGetLocalSize(B,&m,&n);
+    Mat P;
+    MatCreateShell(*adm.getCommunicator(),m,n,PETSC_DETERMINE,PETSC_DETERMINE,
+                   p,&P);
+    MatShellSetOperation(P,MATOP_MULT,
+                         reinterpret_cast<void(*)(void)>(projectionMult));
+    MatShellSetOperation(P,MATOP_MULT_TRANSPOSE,
+                         reinterpret_cast<void(*)(void)>(projectionMultTranspose));
+    myMGmats.push_back(P);
+    myProjections.emplace_back(p);
+    mg.P.push_back(P);
   }
 
   size_t iLevel = 0;

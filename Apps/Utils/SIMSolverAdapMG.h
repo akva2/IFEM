@@ -599,38 +599,33 @@ protected:
       return true; // not solving with PETSc, nothing to install
 
     for (const MG::Operator& op : this->S1.getMGOperators()) {
-      std::vector<std::unique_ptr<SparseMatrix>>& P = prolong[op.name];
-      std::vector<std::pair<int,int>>& L = layout[op.name];
+      std::vector<std::unique_ptr<MG::Prolongation>>& P = prolong[op.name];
 
-      // The operators between the kept levels only have to be built once,
-      // and so is the share of each one this process owns.
+      // The operators between the kept levels only have to be built once
       for (size_t i = P.size(); i+1 < sims.size(); i++)
-      {
-        int nRow = 0, nCol = 0;
-        if (!(P.emplace_back(MG::prolongation(*sims[i],*sims[i+1],op,
-                                              MG::Transfer::CHANGE_OF_BASIS,
-                                              &nRow,&nCol))).get())
+        if (!(P.emplace_back(MG::prolongation(*sims[i],*sims[i+1],op))).get())
           return false;
-        L.emplace_back(nRow,nCol);
-      }
       P.resize(sims.size()-1);
-      L.resize(sims.size()-1);
 
       // The one onto the mesh being solved on changes with every refinement
-      int nRow = 0, nCol = 0;
-      std::unique_ptr<SparseMatrix> top =
-        MG::prolongation(*sims.back(),this->S1,op,
-                         MG::Transfer::CHANGE_OF_BASIS,&nRow,&nCol);
+      std::unique_ptr<MG::Prolongation> top =
+        MG::prolongation(*sims.back(),this->S1,op);
       if (!top)
         return false;
 
-      std::vector<std::pair<int,int>> owned(L);
-      owned.emplace_back(nRow,nCol);
-
-      std::vector<const SparseMatrix*> Pptr;
-      for (const std::unique_ptr<SparseMatrix>& p : P)
-        Pptr.push_back(p.get());
-      Pptr.push_back(top.get());
+      // A level which lowers the order has no operator to hand over, only
+      // the two factors of the projection which stands in for one.
+      std::vector<const SparseMatrix*> Pptr, massPtr;
+      std::vector<std::pair<int,int>> owned;
+      for (const std::unique_ptr<MG::Prolongation>& p : P)
+      {
+        Pptr.push_back(p->layout());
+        massPtr.push_back(p->mass.get());
+        owned.emplace_back(p->rowsOwned,p->colsOwned);
+      }
+      Pptr.push_back(top->layout());
+      massPtr.push_back(top->mass.get());
+      owned.emplace_back(top->rowsOwned,top->colsOwned);
 
       std::vector<const SystemMatrix*> Aptr;
       if (!galerkin)
@@ -647,7 +642,7 @@ protected:
       // setMGHierarchy converts the transfer operators to PETSc format, so
       // the topmost one is not needed beyond this point. The level operators
       // are not copied, and stay owned by the level simulators.
-      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned))
+      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned,massPtr))
         return false;
     }
 
@@ -673,9 +668,7 @@ protected:
   //! They are owned by the level simulators, which \ref levels keeps alive.
   std::map<std::string,std::vector<SystemMatrix*>> levelOps;
   //! Transfer operators between the kept levels, by operator name
-  std::map<std::string,std::vector<std::unique_ptr<SparseMatrix>>> prolong;
-  //! Rows and columns of each kept transfer operator this process owns
-  std::map<std::string,std::vector<std::pair<int,int>>> layout;
+  std::map<std::string,std::vector<std::unique_ptr<MG::Prolongation>>> prolong;
 };
 
 

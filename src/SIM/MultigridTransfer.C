@@ -193,34 +193,28 @@ namespace // anonymous namespace for local helpers
 
 
   /*!
-    \brief Projects each coarse basis function onto the fine basis.
+    \brief Integrates the two bases against each other and the fine one
+    against itself.
     \param[in] cB The coarse basis
     \param[in] fB The fine basis
-    \param[out] rows For each fine function, its coefficient against each
-    coarse function it takes part in
-    \return \e false if the projection could not be formed
+    \param mass Mass matrix of the fine basis of the patch
+    \param B The two bases of the patch against each other
+    \return \e false if the two meshes do not cover each other
 
-    \details Two spline spaces of different polynomial order on the same
-    knots are not nested, whatever their meshes: a function of the lower
-    order is continuous where one of the higher order is differentiable, so
-    it is not among them. There is then no change of basis to be had, and the
-    coarse function is instead represented by the function of the fine space
-    closest to it, which is its projection.
+    \details Both come out as sparse as the bases they belong to, which the
+    projection they define is not: it is the one solved out of the other, and
+    solving it is left to whoever applies it, so that the dense matrix the
+    two multiply to is never formed.
 
-    That is \f${\bf M}_f{\bf P}={\bf B}\f$, with \f${\bf M}_f\f$ the mass
-    matrix of the fine basis and \f$B_{ij}=\int\phi^f_i\phi^c_j\f$, both
-    integrated over the elements of the fine mesh, each of which lies within
-    one element of the coarse one. The inner product is the one of the
-    parameter domain rather than of the physical one, which is a projection
-    all the same, and a cheaper one to form.
+    The integrals are over the elements of the fine mesh, each of which lies
+    within one element of the coarse one, in the inner product of the
+    parameter domain.
   */
 
-  bool projectOntoFine (const LR::LRSpline* cB, const LR::LRSpline* fB,
-                        std::vector<std::map<int,Real>>& rows)
+  bool integrateBases (const LR::LRSpline* cB, const LR::LRSpline* fB,
+                       SparseMatrix& mass, SparseMatrix& B)
   {
     const int nsd = fB->nVariate();
-    const size_t nF = fB->nBasisFunctions();
-    const size_t nC = cB->nBasisFunctions();
 
     // A rule which integrates the product of the two bases exactly
     IntVec nG(nsd);
@@ -239,7 +233,6 @@ namespace // anonymous namespace for local helpers
       nGP *= nG[d];
     }
 
-    Matrix M(nF,nF), B(nF,nC);
     RealArray X(nsd);
     for (int iel = 0; iel < fB->nElements(); iel++)
     {
@@ -276,10 +269,11 @@ namespace // anonymous namespace for local helpers
         for (const LR::Basisfunction* fi : fEl->support())
         {
           const Real Ni = w*evalBasis(fi,X);
+          const size_t ri = 1 + fi->getId();
           for (const LR::Basisfunction* fj : fEl->support())
-            M(1+fi->getId(),1+fj->getId()) += Ni*evalBasis(fj,X);
+            mass(ri,1+fj->getId()) += Ni*evalBasis(fj,X);
           for (const LR::Basisfunction* cj : cEl->support())
-            B(1+fi->getId(),1+cj->getId()) += Ni*evalBasis(cj,X);
+            B(ri,1+cj->getId()) += Ni*evalBasis(cj,X);
         }
 
         for (int d = 0; d < nsd; d++)
@@ -289,23 +283,6 @@ namespace // anonymous namespace for local helpers
             ig[d] = 0;
       }
     }
-
-    // The mass matrix is factorized once and every coarse function solved
-    // against it, they being right-hand sides of the one system.
-    RealArray rhs(nF*nC);
-    for (size_t j = 0; j < nC; j++)
-      for (size_t i = 0; i < nF; i++)
-        rhs[j*nF+i] = B(1+i,1+j);
-
-    std::vector<int> pivot(nF,0);
-    if (!utl::solve(M,rhs,&pivot))
-      return false;
-
-    const Real dropTol = Real(1.0e-12);
-    for (size_t j = 0; j < nC; j++)
-      for (size_t i = 0; i < nF; i++)
-        if (Real v = rhs[j*nF+i]; fabs(v) > dropTol)
-          rows[i][j] = v;
 
     return true;
   }
@@ -547,6 +524,69 @@ namespace // anonymous namespace for local helpers
 
 
 #ifdef HAS_LRSPLINE
+//! \brief Maps the basis functions of a patch onto the DOFs of its level.
+//! \param[in] pch The patch
+//! \param[in] sam Assembly handler of the level
+//! \param[in] op The operator the hierarchy is built for
+//! \param[in] num DOF numbering of the level
+//! \param[out] dofs For each basis function, the DOFs it carries
+//!
+//! \details A basis function carries one DOF for each component the operator
+//! takes, and the operator acts on each of them the same way, so what is
+//! built once over the functions is laid out over the DOFs this gives.
+
+static void mapBasisToDofs (const ASMbase& pch, const SAM& sam,
+                            const MG::Operator& op, const DofNumbering& num,
+                            std::vector<IntVec>& dofs)
+{
+  const int* madof = sam.getMADOF();
+  const size_t ofs = nodeOffset(pch,op.basis);
+  dofs.resize(pch.getNoNodes(op.basis));
+  for (size_t i = 0; i < dofs.size(); i++)
+  {
+    dofs[i].clear();
+    const int inod = pch.getNodeID(ofs+1+i);
+    if (inod < 1) continue;
+
+    for (int d : selectDofs(op.comps,madof[inod]-madof[inod-1]))
+      dofs[i].push_back(num[sam.getEquation(inod,d)]);
+  }
+}
+
+
+//! \brief Adds the factors of a patch into those of its level.
+//! \param[in] Mp Mass matrix of the patch
+//! \param[in] Bp The two bases of the patch against each other
+//! \param[in] fDof DOFs of the fine basis functions
+//! \param[in] cDof DOFs of the coarse basis functions
+//! \param mass Mass matrix of the level, added to
+//! \param B The two bases of the level against each other, added to
+
+static void scatterFactors (const SparseMatrix& Mp, const SparseMatrix& Bp,
+                            const std::vector<IntVec>& fDof,
+                            const std::vector<IntVec>& cDof,
+                            SparseMatrix& mass, SparseMatrix& B)
+{
+  for (const auto& [ij,v] : Mp.getValues())
+  {
+    const IntVec& ri = fDof[ij.first-1];
+    const IntVec& ci = fDof[ij.second-1];
+    for (size_t d = 0; d < ri.size() && d < ci.size(); d++)
+      if (ri[d] > 0 && ci[d] > 0)
+        mass(ri[d],ci[d]) += v;
+  }
+
+  for (const auto& [ij,v] : Bp.getValues())
+  {
+    const IntVec& ri = fDof[ij.first-1];
+    const IntVec& ci = cDof[ij.second-1];
+    for (size_t d = 0; d < ri.size() && d < ci.size(); d++)
+      if (ri[d] > 0 && ci[d] > 0)
+        B(ri[d],ci[d]) += v;
+  }
+}
+
+
 //! \brief Maps coefficients in basis function numbering onto the equations.
 //! \param[in] cPch The coarse patch
 //! \param[in] fPch The fine patch
@@ -632,21 +672,6 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
   // kept in basis function numbering here, and mapped onto equations below.
   std::vector<std::map<int,Real>> rows(fB->nBasisFunctions());
 
-  // Spaces of a different polynomial order are not nested, whatever their
-  // meshes, so there is nothing to insert knots into and the coarse basis is
-  // projected onto the fine one instead.
-  bool sameOrder = true;
-  for (int d = 0; d < fB->nVariate() && sameOrder; d++)
-    sameOrder = cB->order(d) == fB->order(d);
-
-  if (!sameOrder)
-  {
-    if (!projectOntoFine(cB,fB,rows))
-      return false;
-
-    return mapOntoEquations(cPch,fPch,cSam,fSam,op,cNum,fNum,rows,P);
-  }
-
   if (!insertKnots(cB,fB,rows))
   {
     std::cerr <<" *** MG::prolongation: A piece of a coarse basis function is"
@@ -684,22 +709,11 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
 #endif
 
 
-std::unique_ptr<SparseMatrix> MG::prolongation (const SIMbase& coarse,
-                                                const SIMbase& fine,
-                                                const MG::Operator& op,
-                                                MG::Transfer method,
-                                                int* rowsOwned, int* colsOwned)
+std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
+                                                    const SIMbase& fine,
+                                                    const MG::Operator& op,
+                                                    MG::Transfer method)
 {
-  if (method == MG::Transfer::L2_PROJECTION)
-  {
-    std::cerr <<" *** MG::prolongation: The L2-projection transfer operator"
-              <<" is not implemented yet.\n     It is only needed for spaces"
-              <<" which are not nested, whereas adaptive refinement always"
-              <<"\n     gives nested spaces, where the change of basis is"
-              <<" both exact and cheaper."<< std::endl;
-    return nullptr;
-  }
-
 #ifdef HAS_LRSPLINE
   const SAM* cSam = coarse.getSAM();
   const SAM* fSam = fine.getSAM();
@@ -721,21 +735,74 @@ std::unique_ptr<SparseMatrix> MG::prolongation (const SIMbase& coarse,
   }
 
   DofNumbering cNum(coarse,op), fNum(fine,op);
-  if (rowsOwned) *rowsOwned = fNum.owned();
-  if (colsOwned) *colsOwned = cNum.owned();
 
-  std::unique_ptr<SparseMatrix> P = std::make_unique<SparseMatrix>(fNum.size(),
-                                                                   cNum.size());
-  for (size_t i = 0; i < fModel.size(); i++)
+  std::unique_ptr<Prolongation> res = std::make_unique<Prolongation>();
+  res->rowsOwned = fNum.owned();
+  res->colsOwned = cNum.owned();
+
+  // Spaces of a different polynomial order are not nested, whatever their
+  // meshes, so there is nothing to insert knots into. The coarse basis is
+  // projected onto the fine one instead, and the two factors of that
+  // projection are what is kept, the projection itself being dense.
+  bool project = method == MG::Transfer::L2_PROJECTION;
+  for (size_t i = 0; i < fModel.size() && !project; i++)
     if (cModel[i] && fModel[i] && !cModel[i]->empty() && !fModel[i]->empty())
-      if (!addPatchTerms(*cModel[i],*fModel[i],*cSam,*fSam,op,cNum,fNum,*P))
-        return nullptr;
+    {
+      const LR::LRSpline* cB = getLRBasis(cModel[i],op.basis);
+      const LR::LRSpline* fB = getLRBasis(fModel[i],op.basis);
+      for (int d = 0; cB && fB && d < fB->nVariate(); d++)
+        if (cB->order(d) != fB->order(d))
+          project = true;
+    }
 
-  IFEM::cout <<"\tProlongation for \""<< op.name <<"\": "<< P->rows()
-             <<" x "<< P->cols() <<", "<< P->size() <<" non-zeroes"
-             << std::endl;
+  if (!project)
+  {
+    res->P = std::make_unique<SparseMatrix>(fNum.size(),cNum.size());
+    for (size_t i = 0; i < fModel.size(); i++)
+      if (cModel[i] && fModel[i] && !cModel[i]->empty() && !fModel[i]->empty())
+        if (!addPatchTerms(*cModel[i],*fModel[i],*cSam,*fSam,op,cNum,fNum,
+                           *res->P))
+          return nullptr;
 
-  return P;
+    IFEM::cout <<"\tProlongation for \""<< op.name <<"\": "<< res->P->rows()
+               <<" x "<< res->P->cols() <<", "<< res->P->size()
+               <<" non-zeroes"<< std::endl;
+    return res;
+  }
+
+  res->B = std::make_unique<SparseMatrix>(fNum.size(),cNum.size());
+  res->mass = std::make_unique<SparseMatrix>(fNum.size(),fNum.size());
+  for (size_t i = 0; i < fModel.size(); i++)
+  {
+    if (!cModel[i] || !fModel[i] || cModel[i]->empty() || fModel[i]->empty())
+      continue;
+
+    const LR::LRSpline* cB = getLRBasis(cModel[i],op.basis);
+    const LR::LRSpline* fB = getLRBasis(fModel[i],op.basis);
+    if (!cB || !fB)
+    {
+      std::cerr <<" *** MG::prolongation: Patch has no LR-spline basis "
+                << op.basis <<". Geometric multigrid needs an adaptive"
+                <<" discretization."<< std::endl;
+      return nullptr;
+    }
+
+    SparseMatrix Mp(fB->nBasisFunctions(),fB->nBasisFunctions());
+    SparseMatrix Bp(fB->nBasisFunctions(),cB->nBasisFunctions());
+    if (!integrateBases(cB,fB,Mp,Bp))
+      return nullptr;
+
+    std::vector<IntVec> fDof, cDof;
+    mapBasisToDofs(*fModel[i],*fSam,op,fNum,fDof);
+    mapBasisToDofs(*cModel[i],*cSam,op,cNum,cDof);
+    scatterFactors(Mp,Bp,fDof,cDof,*res->mass,*res->B);
+  }
+
+  IFEM::cout <<"\tProlongation for \""<< op.name <<"\": "<< res->B->rows()
+             <<" x "<< res->B->cols() <<", projected through "
+             << res->B->size() <<" and "<< res->mass->size()
+             <<" non-zeroes"<< std::endl;
+  return res;
 #else
   std::cerr <<" *** MG::prolongation: Built without LR-spline support."
             << std::endl;

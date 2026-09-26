@@ -92,6 +92,7 @@ protected:
 
 
 class PETScMatrix;
+struct PETScProjection;
 
 /*!
   \brief Class for representing a set of system vectors in PETSc format.
@@ -319,6 +320,11 @@ public:
   //! \details This is what makes a <tt>pc</tt> of \a gmg work for the given
   //! block. The matrices are copied into PETSc format and owned by this
   //! object, so the caller is free to discard its own copies afterwards.
+  //! \param[in] mass Mass matrix of the fine side of each transfer, where
+  //! that transfer is a projection rather than an operator. Where one is
+  //! given, the matrix in \a prolong is the sparse factor of the projection
+  //! rather than the projection itself, which is dense and is applied rather
+  //! than formed. A null entry means the transfer is an operator.
   //! \param[in] owned Rows and columns of each transfer operator this
   //! process owns. The operators are built whole on every process, and this
   //! is what lays them out over them, matching the layout of the levels they
@@ -328,7 +334,8 @@ public:
                       const std::vector<const SparseMatrix*>& prolong,
                       const std::vector<const SystemMatrix*>& levels = {},
                       const std::vector<std::vector<std::vector<int>>>& subdomains = {},
-                      const std::vector<std::pair<int,int>>& owned = {});
+                      const std::vector<std::pair<int,int>>& owned = {},
+                      const std::vector<const SparseMatrix*>& mass = {});
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
@@ -393,6 +400,8 @@ protected:
   //! Geometric multigrid hierarchies, keyed by block index
   std::map<size_t,PETScMGLevels> mgLevels;
   std::vector<Mat> myMGmats; //!< Matrices created for \ref mgLevels
+  //! Projections standing in for a transfer operator, and what applies them
+  std::vector<std::unique_ptr<PETScProjection>> myProjections;
   std::unique_ptr<DomainDecomposition> m_dd{}; //!< Internal partitioning information
 };
 
