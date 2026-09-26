@@ -529,7 +529,42 @@ protected:
         return false;
     }
 
+    this->releaseLevels();
+
     return true;
+  }
+
+  /*!
+    \brief Lets go of the levels nothing asks anything of any more.
+
+    \details A level is asked for its mesh while the transfer operator onto
+    the level above it is built and while its mesh lines are collected, and
+    for nothing afterwards. Both are done once, so the mesh, the assembly
+    handler and the equation numbering behind them can go, which on a locally
+    refined level is of the order of the operator itself: a basis function
+    carries its local knot vectors and the elements it supports, and an
+    element carries the functions over it.
+
+    What stays is the operator, which the driver took over when it was
+    assembled and which the cycle multiplies with on every iteration. It
+    carries a share in the communicator it was created on, so that goes on
+    standing after the administrator which made it has gone; without that
+    share, letting go of a level costs an invalid communicator the next time
+    the preconditioner is set up.
+
+    The topmost level is the exception under a driver which refines, since
+    the operator onto the mesh being solved on is rebuilt against it after
+    every refinement.
+  */
+  void releaseLevels()
+  {
+    const size_t keep = this->refinesMesh() && !sims.empty() ? sims.size()-1
+                                                             : sims.size();
+    for (size_t i = 0; i < keep; i++)
+      if (levels[i]) {
+        levels[i].reset();
+        sims[i] = nullptr;
+      }
   }
 
   //! Meshes used as coarse levels, coarsest first, read from geometry files
@@ -540,20 +575,9 @@ protected:
   //! Topology set of the patches the lines are taken from, empty for all
   std::string lineSet;
 
-  /*! The kept levels. A level is asked for its mesh only while the transfer
-      operator onto the level above it is built and while its mesh lines are
-      collected, both of which happen once, so there is a good deal of it
-      which could be let go of afterwards: on a locally refined level the
-      mesh is of the order of the operator itself.
-
-      It is kept all the same, because an operator handed over by a level
-      still points back at it. A PETScMatrix holds a reference to the
-      ProcessAdm of the simulator which made it, and that destructor frees
-      the communicator the operator was created on, which PETSc goes through
-      whenever the preconditioner is set up. Letting go of a level therefore
-      costs an invalid communicator on the next cycle. Making a matrix own
-      its process administrator and solver parameters rather than refer to
-      them is what this waits on. */
+  //! The kept levels. A level is let go of once nothing asks anything of
+  //! its mesh any more, which leaves its entry empty; what it assembled
+  //! lives on in \ref levelOps.
   std::vector<std::unique_ptr<MultigridProvider>> levels;
   std::vector<T1*> sims; //!< The kept levels, as simulators
 
