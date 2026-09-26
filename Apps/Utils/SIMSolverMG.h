@@ -121,9 +121,15 @@ public:
   bool read(const char* file) override { return this->SIMadmin::read(file); }
 
   //! \brief Solves the problem on the finest level of the hierarchy.
+  //!
+  //! \details The hierarchy is installed here as well as from the hook,
+  //! since a simulator may have allocated its equation system while it was
+  //! being configured, which is before this driver existed and before there
+  //! was a hierarchy to install. Installing twice costs nothing: everything
+  //! the second one hands over has been built by the first.
   int solveProblem(char* infile, const char* heading = nullptr) override
   {
-    if (!this->buildMeshLevels(infile))
+    if (!this->buildMeshLevels(infile) || !this->installHierarchy())
       return 5;
 
     return this->Base::solveProblem(infile,heading);
