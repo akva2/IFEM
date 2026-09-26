@@ -355,34 +355,42 @@ protected:
     }
     subd.swap(mine);
 
-    // The subdomains have to span the whole system, or the smoother they
-    // define is singular. Whatever the lines did not reach is smoothed one
-    // equation at a time, which is what a point smoother does anyway.
-    int nOwned = 0;
-    for (int eq = 0; eq < sam->getNoEquations(); eq++)
-      if (int geq = globalEq(eq); geq > 0)
-      {
-        ++nOwned;
-        if (covered.find(eq) == covered.end())
-          subd.emplace_back(1,geq-1);
-      }
-
-    if (subd.empty())
-      return subd;
-
     // The counts are of this process, whose stream they are written to.
-    size_t mn = subd.front().size(), mx = mn, tot = 0;
+    size_t mn = subd.empty() ? 0 : subd.front().size(), mx = mn, tot = 0;
     for (const IntVec& d : subd) {
       mn = std::min(mn,d.size());
       mx = std::max(mx,d.size());
       tot += d.size();
     }
+
+    // The subdomains have to span the whole system, or the smoother they
+    // define is singular. What the lines did not reach is one subdomain
+    // rather than one for each of its equations: a Schwarz smoother whose
+    // subdomains hold a single equation apiece is Jacobi, which is weaker
+    // than the point smoother the lines were brought in to better, so
+    // taking lines from a few patches would cost more everywhere else than
+    // it gained on them.
+    int nOwned = 0;
+    IntVec rest;
+    for (int eq = 0; eq < sam->getNoEquations(); eq++)
+      if (int geq = globalEq(eq); geq > 0)
+      {
+        ++nOwned;
+        if (covered.find(eq) == covered.end())
+          rest.push_back(geq-1);
+      }
+
     IFEM::cout <<"\tMesh lines: "<< subd.size() <<" subdomains of "<< mn
                <<" to "<< mx <<" equations, covering "<< tot <<" of "
                << nOwned;
     if (cut > 0)
       IFEM::cout <<", "<< cut <<" cut by the partitioning";
+    if (!rest.empty())
+      IFEM::cout <<", the remaining "<< rest.size() <<" in one";
     IFEM::cout << std::endl;
+
+    if (!rest.empty())
+      subd.push_back(std::move(rest));
 
     return subd;
   }
