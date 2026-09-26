@@ -177,6 +177,11 @@ protected:
   //! leaves it at, makes the log say that the hierarchy is the whole of it.
   virtual std::string moreLevels() const { return ""; }
 
+  //! \brief Returns whether the mesh being solved on changes as it is.
+  //! \details It does not unless something refines it, and what is collected
+  //! from a mesh which stays as it is need only be collected once.
+  virtual bool refinesMesh() const { return false; }
+
   /*!
     \brief Builds the levels whose meshes are given as geometry files.
 
@@ -489,11 +494,23 @@ protected:
         for (const SystemMatrix* A : levelOps[op.name])
           Aptr.push_back(A);
 
+      // Collecting the lines of a mesh means walking its functions, joining
+      // what the patch interfaces cut and cutting again where the partition
+      // does, which is worth doing once per mesh rather than once per solve.
+      // A level never changes after it has been added, and the mesh being
+      // solved on only changes under a driver which refines it.
       std::vector<std::vector<IntVec>> subd;
       if (lineDir > 0) {
-        for (const T1* sim : sims)
-          subd.push_back(this->lineSubdomains(*sim,op.block));
-        subd.push_back(this->lineSubdomains(this->S1,op.block));
+        std::vector<std::vector<IntVec>>& kept = levelLines[op.name];
+        for (size_t i = kept.size(); i < sims.size(); i++)
+          kept.push_back(this->lineSubdomains(*sims[i],op.block));
+
+        std::vector<IntVec>& top = fineLines[op.name];
+        if (top.empty() || this->refinesMesh())
+          top = this->lineSubdomains(this->S1,op.block);
+
+        subd = kept;
+        subd.push_back(top);
       }
 
       // setMGHierarchy converts the transfer operators to PETSc format, so
@@ -522,6 +539,11 @@ protected:
   std::map<std::string,std::vector<SystemMatrix*>> levelOps;
   //! Transfer operators between the kept levels, by operator name
   std::map<std::string,std::vector<std::unique_ptr<MG::Prolongation>>> prolong;
+
+  //! Mesh lines of each kept level, by operator name
+  std::map<std::string,std::vector<std::vector<IntVec>>> levelLines;
+  //! Mesh lines of the mesh being solved on, by operator name
+  std::map<std::string,std::vector<IntVec>> fineLines;
 };
 
 

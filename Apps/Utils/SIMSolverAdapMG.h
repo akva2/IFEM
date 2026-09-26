@@ -140,6 +140,9 @@ protected:
     return what;
   }
 
+  //! \brief Returns that the mesh being solved on is refined as it goes.
+  bool refinesMesh() const override { return true; }
+
   //! \brief Returns \e true if a refinement step is kept as a coarse level.
   bool isCoarseLevel(int iStep) const
   {
