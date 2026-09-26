@@ -317,17 +317,28 @@ PETScMatrix::~PETScMatrix ()
 
   // Deallocation of matrix object.
   MatDestroy(&pA);
-  LinAlgInit::decrefs();
+
   for (Mat& m : matvec)
     MatDestroy(&m);
+  matvec.clear();
 
   for (IS& v : isvec)
     ISDestroy(&v);
+  isvec.clear();
 
   for (Mat& m : myMGmats)
     MatDestroy(&m);
+  myMGmats.clear();
 
-  matvec.clear();
+  // A projection holds a solver and a vector of its own, and the members of
+  // this class are destroyed after this body has run, which is after the
+  // reference given up below may have shut PETSc down. They have to go while
+  // it is still up.
+  myProjections.clear();
+
+  // Last of all, since this may be the reference which shuts PETSc down and
+  // nothing above may be done once it has.
+  LinAlgInit::decrefs();
 }
 
 
@@ -467,6 +478,11 @@ void PETScMatrix::initAssembly (const SAM& sam, char)
       this->setupBlockSparsity(elms, sam);
     }
 
+    // The matrix this was given by the constructor is not the one a block
+    // system is assembled into; the blocks are, and what stands for the whole
+    // of it is a nest of them. Letting go of the one it replaces is what
+    // keeps a block system from leaving a matrix behind.
+    MatDestroy(&pA);
     MatCreateNest(*adm.getCommunicator(),solParams.getNoBlocks(),isvec.data(),
                   solParams.getNoBlocks(),isvec.data(),matvec.data(),&pA);
 
