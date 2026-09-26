@@ -99,10 +99,15 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   KSPSetType(outer_ksp, type.c_str());
   KSPSetTolerances(outer_ksp, rtol, atol, dtol, maxits);
 
+  // The Schur complement operator is laid out over the processes the way the
+  // block it acts on is, so it is the local sizes of that block which say how
+  // much of it belongs here. Taking the global ones instead makes every
+  // process claim the whole of it, which is the same thing on one process
+  // and a matrix as many times too large as there are processes on more.
   MatCreate(*adm.getCommunicator(), &outer_mat);
-  PetscInt r;
-  MatGetSize(blocks[3], &r, &r);
-  MatSetSizes(outer_mat, r, r, PETSC_DETERMINE, PETSC_DETERMINE);
+  PetscInt m, n;
+  MatGetLocalSize(blocks[3], &m, &n);
+  MatSetSizes(outer_mat, m, n, PETSC_DETERMINE, PETSC_DETERMINE);
   MatSetFromOptions(outer_mat);
   MatSetType(outer_mat, MATSHELL);
   MatShellSetContext(outer_mat, this);
@@ -117,11 +122,10 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
     KSPView(outer_ksp, PETSC_VIEWER_STDOUT_WORLD);
   PCSetUp(pc_init);
 
-  VecCreate(*adm.getCommunicator(), &tmp);
-  VecSetFromOptions(tmp);
-  MatGetSize(blocks[0], &r, &r);
-  VecSetSizes(tmp, r, PETSC_DETERMINE);
-  VecSetUp(tmp);
+  // The inner solve works on the rows of the momentum operator, so the vector
+  // it passes through takes its layout from that operator rather than being
+  // sized by hand.
+  MatCreateVecs(blocks[0], nullptr, &tmp);
 }
 
 
