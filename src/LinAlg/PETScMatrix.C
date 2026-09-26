@@ -1049,7 +1049,7 @@ bool PETScMatrix::setParameters (bool setup)
         // inverse of matvec[0], so the hierarchy it can use is the one built
         // for the first block, whichever block the preconditioner sits on.
         new PETScSchurPC(subpc[m], matvec, solParams.getBlock(m), adm,
-                         mgFor(0));
+                         mgFor(0), solParams.getIntValue("verbosity"));
       else
         solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup,
                           mgFor(m));

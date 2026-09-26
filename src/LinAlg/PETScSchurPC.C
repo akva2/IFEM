@@ -20,7 +20,7 @@
 
 PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
                             const LinSolParams::BlockParams& params, const ProcessAdm& adm,
-                            const PETScMGLevels* mg)
+                            const PETScMGLevels* mg, int verbosity)
   : m_blocks(&blocks)
 {
   PCSetType(pc_init, PCSHELL);
@@ -65,7 +65,8 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
 
   KSPSetFromOptions(inner_ksp);
   KSPSetUp(inner_ksp);
-  KSPView(inner_ksp, PETSC_VIEWER_STDOUT_WORLD);
+  if (verbosity > 1)
+    KSPView(inner_ksp, PETSC_VIEWER_STDOUT_WORLD);
 
   KSPCreate(*adm.getCommunicator(), &outer_ksp);
   KSPGetPC(outer_ksp, &pc);
@@ -112,7 +113,8 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   KSPSetOperators(outer_ksp, outer_mat, outer_mat);
   KSPSetFromOptions(outer_ksp);
   KSPSetUp(outer_ksp);
-  KSPView(outer_ksp, PETSC_VIEWER_STDOUT_WORLD);
+  if (verbosity > 1)
+    KSPView(outer_ksp, PETSC_VIEWER_STDOUT_WORLD);
   PCSetUp(pc_init);
 
   VecCreate(*adm.getCommunicator(), &tmp);
