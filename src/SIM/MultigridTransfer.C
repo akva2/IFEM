@@ -15,7 +15,6 @@
 
 #include "ASMbase.h"
 #include "DomainDecomposition.h"
-#include "GaussQuadrature.h"
 #include "IFEM.h"
 #include "LogStream.h"
 #include "MatVec.h"
@@ -33,10 +32,13 @@
 #include "LRSpline/LRSpline.h"
 #include "LRSpline/LRSplineSurface.h"
 #include "LRSpline/LRSplineVolume.h"
+#include "LRSpline/MeshRectangle.h"
+#include "LRSpline/Meshline.h"
 #endif
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <iostream>
 #include <map>
 #include <numeric>
@@ -61,12 +63,222 @@ namespace // anonymous namespace for local helpers
   }
 
 
-  //! \brief Evaluates an LR-spline basis function in a point.
-  //! \param[in] f The basis function to evaluate
-  //! \param[in] X The parameter point
-  double evalBasis (const LR::Basisfunction* f, const RealArray& X)
+  //! \brief A knot line of a mesh, over the part of the mesh it covers.
+  struct KnotLine
   {
-    return X.size() == 2 ? f->evaluate(X[0],X[1]) : f->evaluate(X[0],X[1],X[2]);
+    int       dir  = 0;   //!< Direction the knot is inserted in
+    Real      par  = 0.0; //!< Value of the knot
+    int       mult = 1;   //!< Multiplicity the mesh gives it
+    RealArray start;      //!< Lower corner of what it covers, other directions
+    RealArray stop;       //!< Upper corner of what it covers, other directions
+  };
+
+
+  //! \brief Collects the knot lines of a mesh.
+  //! \param[in] basis The mesh to collect the lines of
+  //! \param[out] lines The knot lines of that mesh
+  //! \return \e false if the mesh is of a kind not covered here
+  bool knotLines (const LR::LRSpline* basis, std::vector<KnotLine>& lines)
+  {
+    if (const LR::LRSplineSurface* srf =
+        dynamic_cast<const LR::LRSplineSurface*>(basis); srf)
+    {
+      for (const LR::Meshline* m : srf->getAllMeshlines())
+      {
+        KnotLine& line = lines.emplace_back();
+        // A line spanning u is a line of constant v, so it is a knot in v
+        line.dir   = m->is_spanning_u() ? 1 : 0;
+        line.par   = m->const_par_;
+        line.mult  = m->multiplicity();
+        line.start = { m->start_ };
+        line.stop  = { m->stop_ };
+      }
+      return true;
+    }
+
+    if (const LR::LRSplineVolume* vol =
+        dynamic_cast<const LR::LRSplineVolume*>(basis); vol)
+    {
+      for (const LR::MeshRectangle* m : vol->getAllMeshRectangles())
+      {
+        KnotLine& line = lines.emplace_back();
+        line.dir  = m->constDirection();
+        line.par  = m->constParameter();
+        line.mult = m->multiplicity();
+        for (int d = 0; d < 3; d++)
+          if (d != line.dir)
+          {
+            line.start.push_back(m->start_[d]);
+            line.stop.push_back(m->stop_[d]);
+          }
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+
+  //! \brief Checks whether a knot line splits the support of a B-spline.
+  //! \param[in] line The knot line
+  //! \param[in] knots Local knot vectors of the B-spline
+  bool splits (const KnotLine& line, const std::vector<RealArray>& knots)
+  {
+    const Real eps = Real(1.0e-12);
+    const RealArray& x = knots[line.dir];
+    if (line.par <= x.front()+eps || line.par >= x.back()-eps)
+      return false; // the knot lies outside the support
+
+    int have = 0;
+    for (Real k : x)
+      if (fabs(k-line.par) < eps)
+        ++have;
+    if (have >= line.mult)
+      return false; // the knot is there as many times as the mesh has it
+
+    // The line has to cover the support in the directions it spans, or it
+    // stops short of the function and leaves it whole.
+    for (size_t d = 0, k = 0; d < knots.size(); d++)
+      if (static_cast<int>(d) != line.dir)
+      {
+        if (knots[d].front() < line.start[k]-eps ||
+            knots[d].back()  > line.stop[k]+eps)
+          return false;
+        ++k;
+      }
+
+    return true;
+  }
+
+
+  //! \brief Splits a B-spline in two by inserting a knot in one direction.
+  //! \param[in] knots Local knot vectors of the B-spline
+  //! \param[in] line The knot line to insert
+  //! \param[out] lo The B-spline covering the lower part, and its coefficient
+  //! \param[out] hi The B-spline covering the upper part, and its coefficient
+  //!
+  //! \details Both coefficients lie between zero and one and they sum to one,
+  //! which is what makes this stable where solving for them is not: nothing
+  //! cancels, so no precision is lost however many times it is done.
+  void splitBspline (const std::vector<RealArray>& knots, const KnotLine& line,
+                     std::pair<std::vector<RealArray>,Real>& lo,
+                     std::pair<std::vector<RealArray>,Real>& hi)
+  {
+    const RealArray& x = knots[line.dir];
+    const size_t n = x.size()-1; // index of the last knot, the order
+
+    RealArray a(x.begin(),x.end()-1);
+    a.insert(std::upper_bound(a.begin(),a.end(),line.par),line.par);
+    RealArray b(x.begin()+1,x.end());
+    b.insert(std::upper_bound(b.begin(),b.end(),line.par),line.par);
+
+    lo.first = knots; lo.first[line.dir] = a;
+    hi.first = knots; hi.first[line.dir] = b;
+
+    lo.second = line.par >= x[n-1] ? Real(1)
+                                   : (line.par - x[0])/(x[n-1] - x[0]);
+    hi.second = line.par <= x[1]   ? Real(1)
+                                   : (x[n] - line.par)/(x[n] - x[1]);
+  }
+
+
+  //! \brief Keys a B-spline by its local knot vectors.
+  RealArray knotKey (const std::vector<RealArray>& knots)
+  {
+    RealArray key;
+    for (const RealArray& k : knots)
+      key.insert(key.end(),k.begin(),k.end());
+    return key;
+  }
+
+
+  /*!
+    \brief Expresses each coarse basis function in the fine basis.
+    \param[in] cB The coarse basis
+    \param[in] fB The fine basis
+    \param[out] rows For each fine function, its coefficient against each
+    coarse function it takes part in
+    \return \e false if a coarse function was not reached
+
+    \details A coarse function is a B-spline on its own local knot vectors,
+    and the fine mesh cuts its support with knot lines the coarse mesh does
+    not have. Inserting one of those splits it in two B-splines whose knot
+    vectors have the knot, weighted so that the two together are what was
+    split. Repeating until every piece is a function of the fine basis
+    expresses the coarse function in that basis.
+
+    The weights are the ones knot insertion gives, each between zero and one
+    and summing to one over a split. Nothing is subtracted anywhere, so no
+    precision is lost however deep the refinement goes; this is what the
+    alternative of solving for the coefficients on each element cannot do,
+    the systems there conditioning like the Bernstein basis of the order and
+    passing that on from element to element.
+  */
+
+  bool insertKnots (const LR::LRSpline* cB, const LR::LRSpline* fB,
+                    std::vector<std::map<int,Real>>& rows)
+  {
+    std::vector<KnotLine> lines;
+    if (!knotLines(fB,lines))
+      return false;
+
+    // The functions of the fine basis, looked up by their knot vectors
+    std::map<RealArray,const LR::Basisfunction*> fine;
+    for (const LR::Basisfunction* f : fB->getAllBasisfunctions())
+    {
+      std::vector<RealArray> knots(f->nVariate());
+      for (int d = 0; d < f->nVariate(); d++)
+        knots[d] = (*f)[d];
+      fine[knotKey(knots)] = f;
+    }
+
+    // Coefficients below this are roundoff rather than structure
+    const Real dropTol = Real(1.0e-12);
+
+    typedef std::pair<std::vector<RealArray>,Real> Term;
+    std::vector<Term> todo, split(2);
+    for (const LR::Basisfunction* c : cB->getAllBasisfunctions())
+    {
+      todo.clear();
+      Term& first = todo.emplace_back();
+      first.first.resize(c->nVariate());
+      for (int d = 0; d < c->nVariate(); d++)
+        first.first[d] = (*c)[d];
+      first.second = c->w();
+
+      while (!todo.empty())
+      {
+        const Term term = todo.back();
+        todo.pop_back();
+        if (fabs(term.second) < dropTol)
+          continue;
+
+        std::map<RealArray,const LR::Basisfunction*>::const_iterator it =
+          fine.find(knotKey(term.first));
+        if (it != fine.end())
+        {
+          // The weights scale the B-splines into the functions of the basis
+          rows[it->second->getId()][c->getId()] += term.second/it->second->w();
+          continue;
+        }
+
+        const std::vector<KnotLine>::const_iterator line =
+          std::find_if(lines.begin(),lines.end(),
+                       [&term](const KnotLine& l)
+                       { return splits(l,term.first); });
+        if (line == lines.end())
+          return false; // no line reaches it, so leave this to the fallback
+
+        splitBspline(term.first,*line,split[0],split[1]);
+        for (Term& half : split)
+        {
+          half.second *= term.second;
+          todo.push_back(half);
+        }
+      }
+    }
+
+    return true;
   }
 #endif
 
@@ -206,283 +418,25 @@ namespace // anonymous namespace for local helpers
 
 
 #ifdef HAS_LRSPLINE
-/*!
-  Adaptive refinement only inserts knot lines, so the coarse spline space is
-  contained in the fine one and every coarse basis function has a unique
-  representation in the fine basis. The operator holding those coefficients is
-  what a multigrid cycle prolongates with.
+//! \brief Maps coefficients in basis function numbering onto the equations.
+//! \param[in] cPch The coarse patch
+//! \param[in] fPch The fine patch
+//! \param[in] cSam Assembly handler of the coarse level
+//! \param[in] fSam Assembly handler of the fine level
+//! \param[in] op The operator the hierarchy is built for
+//! \param[in] cNum DOF numbering of the coarse level
+//! \param[in] fNum DOF numbering of the fine level
+//! \param[in] rows Coefficient of each coarse function in each fine function
+//! \param P The operator to fill in
 
-  A fine element lies entirely within one coarse element, and both bases
-  restrict to polynomials of the same degree there. Evaluating them in a set of
-  points which is unisolvent for that polynomial space therefore gives
-  \f${\bf A}_f{\bf P} = {\bf A}_c\f$ for the rows of \b P belonging to the
-  functions on the element. When the element carries exactly \a p+1 functions
-  per parameter direction, \f${\bf A}_f\f$ is square and invertible, and the
-  rows come straight out.
-
-  LR-spline meshes may however be \e overloaded: an element can carry more
-  functions than that, in which case their restrictions to it are linearly
-  dependent and \f${\bf A}_f\f$ is singular. Structured mesh refinement does
-  not prevent this. It only guarantees that the mesh as a whole is linearly
-  independent, which is the weaker property tested by
-  LRSplineSurface::isLinearIndepByOverloading. Overloaded elements do occur in
-  practice, roughly a quarter of them after a few rounds of local refinement.
-
-  The way out uses the locality of knot insertion: a fine function contributing
-  to a coarse one has its support contained in the support of that coarse
-  function. A single element of \f$\mbox{supp}(N^f_i)\f$ which is not
-  overloaded therefore determines the whole of row \a i, and since every row
-  found this way is a row of the unique global operator, rows found on
-  different elements never disagree.
-
-  So the rows are peeled off: the elements which are not overloaded are
-  resolved first, and the overloaded ones are then revisited with the rows
-  already known moved to the right-hand side, which removes the functions
-  causing the dependency. This is the same argument the overloading test itself
-  makes, so it terminates on exactly those meshes the test accepts.
-*/
-
-static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
-                           const SAM& cSam, const SAM& fSam,
-                           const MG::Operator& op,
-                           const DofNumbering& cNum, const DofNumbering& fNum,
-                           SparseMatrix& P)
+static bool mapOntoEquations (const ASMbase& cPch, const ASMbase& fPch,
+                              const SAM& cSam, const SAM& fSam,
+                              const MG::Operator& op,
+                              const DofNumbering& cNum,
+                              const DofNumbering& fNum,
+                              const std::vector<std::map<int,Real>>& rows,
+                              SparseMatrix& P)
 {
-  const LR::LRSpline* cB = getLRBasis(&cPch,op.basis);
-  const LR::LRSpline* fB = getLRBasis(&fPch,op.basis);
-  if (!cB || !fB)
-  {
-    std::cerr <<" *** MG::prolongation: Patch has no LR-spline basis "
-              << op.basis <<". Geometric multigrid needs an adaptive"
-              <<" discretization."<< std::endl;
-    return false;
-  }
-
-  const int nsd = fB->nVariate();
-
-  // Coefficients below this are roundoff, not structure. Dropping them keeps
-  // the sparsity pattern of the operator, and of the Galerkin products formed
-  // from it, down to the entries which are really there. The coefficients of
-  // a prolongation between spline spaces are O(1) and its rows sum to one, so
-  // an absolute tolerance is well scaled here.
-  const Real dropTol = Real(1.0e-12);
-
-  // One Gauss point per polynomial order in each direction. This is unisolvent
-  // for the polynomials living on the element, and keeps the evaluation points
-  // well inside it.
-  int nGP = 1;
-  IntVec nG(nsd);
-  for (int d = 0; d < nsd; d++)
-  {
-    if (!GaussQuadrature::getCoord(nG[d] = fB->order(d)))
-    {
-      std::cerr <<" *** MG::prolongation: No Gauss rule with "<< nG[d]
-                <<" points, needed for a basis of order "<< nG[d] <<"."
-                << std::endl;
-      return false;
-    }
-    nGP *= nG[d];
-  }
-
-  // Locate the coarse element containing each fine element. Since the fine
-  // mesh refines the coarse one, the element midpoint identifies it.
-  RealArray X(nsd);
-  IntVec parent(fB->nElements(),-1);
-  for (int iel = 0; iel < fB->nElements(); iel++)
-  {
-    const LR::Element* fEl = fB->getElement(iel);
-    for (int d = 0; d < nsd; d++)
-      X[d] = 0.5*(fEl->getParmin(d) + fEl->getParmax(d));
-
-    if ((parent[iel] = cB->getElementContaining(X)) < 0)
-    {
-      std::cerr <<" *** MG::prolongation: No coarse element contains the"
-                <<" midpoint of fine element "<< 1+iel <<"."<< std::endl;
-      return false;
-    }
-  }
-
-  // Coefficients of the coarse functions, indexed by fine function. They are
-  // kept in basis function numbering here, and mapped onto equations below.
-  std::vector<std::map<int,Real>> rows(fB->nBasisFunctions());
-  std::vector<bool> known(fB->nBasisFunctions(),false);
-
-  size_t nLeft = rows.size();
-  // Roundoff in the coefficients is amplified by the inverse of the local
-  // system, which is the worse conditioned the more the element sizes differ.
-  // Tracking it gives the scale the reconstruction below has to be judged on.
-  Real maxAmp = Real(1.0);
-  Matrix Af, Ac, Au, AtA, AtB, B, Psub;
-  IntVec cIdx, fIdx, unknown;
-  while (nLeft > 0)
-  {
-    const size_t nLeftBefore = nLeft;
-    for (int iel = 0; iel < fB->nElements() && nLeft > 0; iel++)
-    {
-      const LR::Element* fEl = fB->getElement(iel);
-      const LR::Element* cEl = cB->getElement(parent[iel]);
-
-      fIdx.clear();
-      for (const LR::Basisfunction* f : fEl->support())
-        fIdx.push_back(f->getId());
-      cIdx.clear();
-      for (const LR::Basisfunction* f : cEl->support())
-        cIdx.push_back(f->getId());
-
-      unknown.clear();
-      for (size_t i = 0; i < fIdx.size(); i++)
-        if (!known[fIdx[i]])
-          unknown.push_back(i);
-
-      // Nothing left to gain from this element, or more unknown rows than the
-      // values sampled on it can determine. Such an element is overloaded and
-      // is revisited once some of its functions are known from elsewhere.
-      if (unknown.empty() || unknown.size() > static_cast<size_t>(nGP))
-        continue;
-
-      const size_t nLoc = fIdx.size();
-      const size_t nCo = cIdx.size();
-      Af.resize(nGP,nLoc);
-      Ac.resize(nGP,nCo);
-
-      IntVec ig(nsd,0);
-      for (int ip = 1; ip <= nGP; ip++)
-      {
-        for (int d = 0; d < nsd; d++)
-        {
-          const double* xg = GaussQuadrature::getCoord(nG[d]);
-          double x0 = fEl->getParmin(d), x1 = fEl->getParmax(d);
-          X[d] = 0.5*((x1-x0)*xg[ig[d]] + x1 + x0);
-        }
-
-        int i = 0;
-        for (const LR::Basisfunction* f : fEl->support())
-          Af(ip,++i) = evalBasis(f,X);
-        i = 0;
-        for (const LR::Basisfunction* f : cEl->support())
-          Ac(ip,++i) = evalBasis(f,X);
-
-        // Advance the tensorial Gauss point counter
-        for (int d = 0; d < nsd; d++)
-          if (++ig[d] < nG[d] || d == nsd-1)
-            break;
-          else
-            ig[d] = 0;
-      }
-
-      // Move the contributions of the rows already known over to the
-      // right-hand side, leaving a system in the unknown rows only
-      B = Ac;
-      for (size_t i = 0; i < nLoc; i++)
-        if (known[fIdx[i]])
-          for (const auto& [j,v] : rows[fIdx[i]])
-          {
-            int jc = utl::findIndex(cIdx,j);
-            if (jc < 0) continue;
-
-            for (int ip = 1; ip <= nGP; ip++)
-              B(ip,1+jc) -= Af(ip,1+i)*v;
-          }
-
-      Au.resize(nGP,unknown.size());
-      for (size_t i = 0; i < unknown.size(); i++)
-        for (int ip = 1; ip <= nGP; ip++)
-          Au(ip,1+i) = Af(ip,1+unknown[i]);
-
-      if (unknown.size() == static_cast<size_t>(nGP))
-      {
-        // Square system, solved directly rather than through the normal
-        // equations, which would square the conditioning
-        if (!utl::invert(Au))
-          continue; // singular, so the element is overloaded after all
-        maxAmp = std::max(maxAmp,Au.norm2()*std::sqrt(Real(nGP)));
-        Psub.multiply(Au,B);
-      }
-      else
-      {
-        // Overdetermined, but consistent since the coarse space is contained
-        // in the fine one, so the normal equations give the exact solution
-        AtA.multiply(Au,Au,true,false);
-        if (!utl::invert(AtA))
-          continue;
-        maxAmp = std::max(maxAmp,AtA.norm2()*std::sqrt(Real(nGP)));
-        AtB.multiply(Au,B,true,false);
-        Psub.multiply(AtA,AtB);
-      }
-
-      for (size_t i = 0; i < unknown.size(); i++)
-      {
-        std::map<int,Real>& row = rows[fIdx[unknown[i]]];
-        for (size_t j = 0; j < nCo; j++)
-          if (Real v = Psub(1+i,1+j); fabs(v) > dropTol)
-            row[cIdx[j]] = v;
-
-        known[fIdx[unknown[i]]] = true;
-        --nLeft;
-      }
-    }
-
-    if (nLeft == nLeftBefore)
-    {
-      std::cerr <<" *** MG::prolongation: Could not resolve "<< nLeft <<" of "
-                << rows.size() <<" basis functions.\n     The mesh is"
-                <<" overloaded beyond what peeling can resolve, which means"
-                <<" it is not\n     linearly independent either."<< std::endl;
-      return false;
-    }
-  }
-
-  // The coefficients above express every coarse function in the fine space,
-  // which is only possible if the coarse space really is contained in the
-  // fine one. Nothing so far would have noticed if it is not: the local
-  // systems are solved in points which are unisolvent for the fine space, so
-  // they are satisfied there whether or not the coarse function is reproduced
-  // in between. Evaluating in a point which is not one of them settles it.
-  Real maxErr = Real(0.0);
-  for (int iel = 0; iel < fB->nElements(); iel++)
-  {
-    const LR::Element* fEl = fB->getElement(iel);
-    const LR::Element* cEl = cB->getElement(parent[iel]);
-    for (int d = 0; d < nsd; d++)
-      X[d] = 0.5*(fEl->getParmin(d) + fEl->getParmax(d));
-
-    std::map<int,Real> sum;
-    for (const LR::Basisfunction* c : cEl->support())
-      sum[c->getId()] = Real(0.0);
-    for (const LR::Basisfunction* f : fEl->support())
-    {
-      const Real Nf = evalBasis(f,X);
-      for (const std::pair<const int,Real>& c : rows[f->getId()])
-        sum[c.first] += c.second*Nf;
-    }
-
-    for (const std::pair<const int,Real>& c : sum)
-      maxErr = std::max(maxErr,
-                        fabs(c.second -
-                             evalBasis(cB->getBasisfunction(c.first),X)));
-  }
-
-  // The coefficients are O(1) on a uniform mesh but grow with the grading,
-  // since the local systems solved for them are the worse conditioned the
-  // more the element sizes differ, and the roundoff in the reconstruction
-  // grows with them. Scaling the tolerance by their size keeps the check
-  // meaningful on a graded mesh without letting a real failure through: a
-  // coarse function which is not in the fine space misses by O(1), which is
-  // orders above anything roundoff produces here.
-  if (maxErr > Real(1.0e-10)*maxAmp)
-  {
-    std::cerr <<" *** MG::prolongation: The coarse basis is not reproduced by"
-              <<" the fine one,\n     off by "<< maxErr <<", more than the "
-              << Real(1.0e-10)*maxAmp <<" the conditioning of the local\n"
-              <<"     systems accounts for. The two meshes"
-              <<" are not nested, so there is no\n     transfer operator"
-              <<" between them. Levels have to be built by inserting"
-              <<"\n     knots into a common geometry, not by removing them"
-              <<" from the finest."<< std::endl;
-    return false;
-  }
-
-  // Map the coefficients onto the equations of the two levels
   const int* fMad = fSam.getMADOF();
   const size_t cOfs = nodeOffset(cPch,op.basis);
   const size_t fOfs = nodeOffset(fPch,op.basis);
@@ -508,6 +462,79 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
   }
 
   return true;
+}
+
+
+/*!
+  Adaptive refinement only inserts knot lines, so the coarse spline space is
+  contained in the fine one and every coarse basis function has a unique
+  representation in the fine basis. The operator holding those coefficients is
+  what a multigrid cycle prolongates with.
+
+  Knot insertion gives those coefficients directly. A coarse function is a
+  B-spline on its own local knot vectors, and each knot line of the fine mesh
+  cutting its support splits it into two B-splines which carry that knot,
+  weighted so that the two together are what was split. Repeating until every
+  piece is a function of the fine basis expresses the coarse function in it.
+
+  Both weights of a split lie between zero and one and sum to one, so nothing
+  is ever subtracted and no precision is lost however deep the refinement
+  goes. That the rows of the operator sum to one is what the two bases summing
+  to one leaves behind, and it is checked below.
+*/
+
+static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
+                           const SAM& cSam, const SAM& fSam,
+                           const MG::Operator& op,
+                           const DofNumbering& cNum, const DofNumbering& fNum,
+                           SparseMatrix& P)
+{
+  const LR::LRSpline* cB = getLRBasis(&cPch,op.basis);
+  const LR::LRSpline* fB = getLRBasis(&fPch,op.basis);
+  if (!cB || !fB)
+  {
+    std::cerr <<" *** MG::prolongation: Patch has no LR-spline basis "
+              << op.basis <<". Geometric multigrid needs an adaptive"
+              <<" discretization."<< std::endl;
+    return false;
+  }
+
+  // Coefficients of the coarse functions, indexed by fine function. They are
+  // kept in basis function numbering here, and mapped onto equations below.
+  std::vector<std::map<int,Real>> rows(fB->nBasisFunctions());
+  if (!insertKnots(cB,fB,rows))
+  {
+    std::cerr <<" *** MG::prolongation: A piece of a coarse basis function is"
+              <<" neither a function\n     of the fine basis nor split by any"
+              <<" line of the fine mesh. The two\n     meshes are not nested,"
+              <<" so there is no transfer operator between them.\n     Levels"
+              <<" have to be built by inserting knots into a common geometry,"
+              <<"\n     not by removing them from the finest."<< std::endl;
+    return false;
+  }
+
+  // Every coarse function is a sum of fine ones with weights summing to one,
+  // and the coarse functions sum to one, so the fine ones inherit it. Anything
+  // else means the pieces were not put back together as they were taken apart.
+  for (const std::map<int,Real>& row : rows)
+  {
+    if (row.empty()) continue; // a function no coarse one reaches
+
+    Real sum = Real(0);
+    for (const std::pair<const int,Real>& c : row)
+      sum += c.second;
+
+    if (fabs(sum-Real(1)) > Real(1.0e-10))
+    {
+      std::cerr <<" *** MG::prolongation: The coefficients of a fine basis"
+                <<" function sum to "<< sum <<",\n     not to one. The"
+                <<" partition of unity the two bases share is not carried"
+                <<"\n     over by the operator between them."<< std::endl;
+      return false;
+    }
+  }
+
+  return mapOntoEquations(cPch,fPch,cSam,fSam,op,cNum,fNum,rows,P);
 }
 #endif
 
