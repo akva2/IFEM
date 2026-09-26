@@ -15,6 +15,7 @@
 
 #include "ASMbase.h"
 #include "DomainDecomposition.h"
+#include "GaussQuadrature.h"
 #include "IFEM.h"
 #include "LogStream.h"
 #include "MatVec.h"
@@ -179,6 +180,134 @@ namespace // anonymous namespace for local helpers
                                    : (line.par - x[0])/(x[n-1] - x[0]);
     hi.second = line.par <= x[1]   ? Real(1)
                                    : (x[n] - line.par)/(x[n] - x[1]);
+  }
+
+
+  //! \brief Evaluates a basis function in a parameter point.
+  //! \param[in] f The basis function
+  //! \param[in] X The parameter point
+  double evalBasis (const LR::Basisfunction* f, const RealArray& X)
+  {
+    return X.size() == 2 ? f->evaluate(X[0],X[1]) : f->evaluate(X[0],X[1],X[2]);
+  }
+
+
+  /*!
+    \brief Projects each coarse basis function onto the fine basis.
+    \param[in] cB The coarse basis
+    \param[in] fB The fine basis
+    \param[out] rows For each fine function, its coefficient against each
+    coarse function it takes part in
+    \return \e false if the projection could not be formed
+
+    \details Two spline spaces of different polynomial order on the same
+    knots are not nested, whatever their meshes: a function of the lower
+    order is continuous where one of the higher order is differentiable, so
+    it is not among them. There is then no change of basis to be had, and the
+    coarse function is instead represented by the function of the fine space
+    closest to it, which is its projection.
+
+    That is \f${\bf M}_f{\bf P}={\bf B}\f$, with \f${\bf M}_f\f$ the mass
+    matrix of the fine basis and \f$B_{ij}=\int\phi^f_i\phi^c_j\f$, both
+    integrated over the elements of the fine mesh, each of which lies within
+    one element of the coarse one. The inner product is the one of the
+    parameter domain rather than of the physical one, which is a projection
+    all the same, and a cheaper one to form.
+  */
+
+  bool projectOntoFine (const LR::LRSpline* cB, const LR::LRSpline* fB,
+                        std::vector<std::map<int,Real>>& rows)
+  {
+    const int nsd = fB->nVariate();
+    const size_t nF = fB->nBasisFunctions();
+    const size_t nC = cB->nBasisFunctions();
+
+    // A rule which integrates the product of the two bases exactly
+    IntVec nG(nsd);
+    int nGP = 1;
+    for (int d = 0; d < nsd; d++)
+    {
+      nG[d] = (fB->order(d) + cB->order(d))/2 + 1;
+      if (!GaussQuadrature::getCoord(nG[d]))
+      {
+        std::cerr <<" *** MG::prolongation: No Gauss rule with "<< nG[d]
+                  <<" points, needed to integrate an order "<< fB->order(d)
+                  <<" basis against an order "<< cB->order(d) <<" one."
+                  << std::endl;
+        return false;
+      }
+      nGP *= nG[d];
+    }
+
+    Matrix M(nF,nF), B(nF,nC);
+    RealArray X(nsd);
+    for (int iel = 0; iel < fB->nElements(); iel++)
+    {
+      const LR::Element* fEl = fB->getElement(iel);
+      for (int d = 0; d < nsd; d++)
+        X[d] = 0.5*(fEl->getParmin(d) + fEl->getParmax(d));
+
+      const int cel = cB->getElementContaining(X);
+      if (cel < 0)
+      {
+        std::cerr <<" *** MG::prolongation: No coarse element contains the"
+                  <<" midpoint of fine element "<< 1+iel <<"."<< std::endl;
+        return false;
+      }
+      const LR::Element* cEl = cB->getElement(cel);
+
+      Real vol = Real(1);
+      for (int d = 0; d < nsd; d++)
+        vol *= Real(0.5)*(fEl->getParmax(d) - fEl->getParmin(d));
+
+      IntVec ig(nsd,0);
+      for (int ip = 0; ip < nGP; ip++)
+      {
+        Real w = vol;
+        for (int d = 0; d < nsd; d++)
+        {
+          const double* xg = GaussQuadrature::getCoord(nG[d]);
+          const double* wg = GaussQuadrature::getWeight(nG[d]);
+          const Real x0 = fEl->getParmin(d), x1 = fEl->getParmax(d);
+          X[d] = Real(0.5)*((x1-x0)*xg[ig[d]] + x1 + x0);
+          w *= wg[ig[d]];
+        }
+
+        for (const LR::Basisfunction* fi : fEl->support())
+        {
+          const Real Ni = w*evalBasis(fi,X);
+          for (const LR::Basisfunction* fj : fEl->support())
+            M(1+fi->getId(),1+fj->getId()) += Ni*evalBasis(fj,X);
+          for (const LR::Basisfunction* cj : cEl->support())
+            B(1+fi->getId(),1+cj->getId()) += Ni*evalBasis(cj,X);
+        }
+
+        for (int d = 0; d < nsd; d++)
+          if (++ig[d] < nG[d] || d == nsd-1)
+            break;
+          else
+            ig[d] = 0;
+      }
+    }
+
+    // The mass matrix is factorized once and every coarse function solved
+    // against it, they being right-hand sides of the one system.
+    RealArray rhs(nF*nC);
+    for (size_t j = 0; j < nC; j++)
+      for (size_t i = 0; i < nF; i++)
+        rhs[j*nF+i] = B(1+i,1+j);
+
+    std::vector<int> pivot(nF,0);
+    if (!utl::solve(M,rhs,&pivot))
+      return false;
+
+    const Real dropTol = Real(1.0e-12);
+    for (size_t j = 0; j < nC; j++)
+      for (size_t i = 0; i < nF; i++)
+        if (Real v = rhs[j*nF+i]; fabs(v) > dropTol)
+          rows[i][j] = v;
+
+    return true;
   }
 
 
@@ -502,6 +631,22 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
   // Coefficients of the coarse functions, indexed by fine function. They are
   // kept in basis function numbering here, and mapped onto equations below.
   std::vector<std::map<int,Real>> rows(fB->nBasisFunctions());
+
+  // Spaces of a different polynomial order are not nested, whatever their
+  // meshes, so there is nothing to insert knots into and the coarse basis is
+  // projected onto the fine one instead.
+  bool sameOrder = true;
+  for (int d = 0; d < fB->nVariate() && sameOrder; d++)
+    sameOrder = cB->order(d) == fB->order(d);
+
+  if (!sameOrder)
+  {
+    if (!projectOntoFine(cB,fB,rows))
+      return false;
+
+    return mapOntoEquations(cPch,fPch,cSam,fSam,op,cNum,fNum,rows,P);
+  }
+
   if (!insertKnots(cB,fB,rows))
   {
     std::cerr <<" *** MG::prolongation: A piece of a coarse basis function is"
