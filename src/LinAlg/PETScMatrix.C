@@ -822,7 +822,7 @@ bool PETScMatrix::solve (const Vec& b, Vec& x, bool knoll)
     return false;
   }
 
-  if (solParams.getIntValue("verbosity") > 1) {
+  if (solParams.getIntValue("verbosity") > 0) {
     PetscInt its;
     KSPGetIterationNumber(ksp,&its);
     adm.cout << "\n Iterations for " << solParams.getStringValue("type")
@@ -1058,7 +1058,9 @@ bool PETScMatrix::setParameters (bool setup)
   if (setup)
     KSPSetUp(ksp);
 
-  if (setup && solParams.getIntValue("verbosity") >= 1)
+  // A view of the whole solver says a great deal more than the count of the
+  // iterations it took, so it belongs above that count rather than below it.
+  if (setup && solParams.getIntValue("verbosity") > 1)
     KSPView(ksp, PETSC_VIEWER_STDOUT_(*adm.getCommunicator()));
 
   return true;

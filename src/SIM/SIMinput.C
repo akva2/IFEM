@@ -1002,6 +1002,13 @@ bool SIMinput::parse (const tinyxml2::XMLElement* elem)
       }
       else // Use regular solver parameters in the L2-projection
         myGl2Params = new LinSolParams(*mySolParams,LinAlg::SYMMETRIC);
+
+      // A projection is a step on the way to the answer rather than the
+      // answer, and its solver has as much to say for itself as the one
+      // solving the problem. None of it was asked for, so it keeps quiet
+      // unless the projection parameters ask it not to.
+      if (!l2 || !l2->Attribute("verbosity"))
+        myGl2Params->addValue("verbosity","0");
       GlbL2::SolverParams = myGl2Params;
     }
   }
