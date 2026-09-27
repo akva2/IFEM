@@ -44,6 +44,36 @@ enum SchurPrec { SIMPLE, MSIMPLER, PCD };
   them PETSc forms the coarse ones as the Galerkin products of the finest.
 */
 
+/*!
+  \brief The pressure operators a Schur complement is preconditioned with.
+
+  \details The Schur complement of a generalised Stokes system, in the
+  positive definite convention, has
+
+  \f[ {\bf S}^{-1} \approx \mu{\bf M}_p^{-1} + \alpha{\bf L}_p^{-1} \f]
+
+  with \a M the mass matrix of the pressure basis and \a L its Laplacian,
+  which is the preconditioner of Cahouet and Chabard. The steady problem is
+  the limit of it where \f$\alpha\f$, the density over the time increment,
+  is nothing, and what is left is the mass matrix alone.
+
+  The weights are not assembled into the matrices because they do not stay
+  put: the time increment may change from one step to the next, while the
+  operators are assembled once.
+*/
+
+struct SchurOperators
+{
+  Mat mass = nullptr;      //!< Mass matrix of the pressure basis
+  Mat laplacian = nullptr; //!< Laplacian of the pressure basis
+  double viscosity = 1.0;  //!< Weight of the mass matrix
+  double transient = 0.0;  //!< Weight of the Laplacian, zero when steady
+
+  //! \brief Returns whether there is anything to precondition with.
+  bool empty() const { return !mass && !laplacian; }
+};
+
+
 struct PETScMGLevels
 {
   std::vector<Mat> A; //!< Operator on each level, the finest one excluded

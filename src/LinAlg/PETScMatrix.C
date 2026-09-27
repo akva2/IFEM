@@ -1090,8 +1090,13 @@ bool PETScMatrix::setParameters (bool setup)
         // The inner solve of the Schur preconditioner approximates the
         // inverse of matvec[0], so the hierarchy it can use is the one built
         // for the first block, whichever block the preconditioner sits on.
+      {
+        std::map<size_t,SchurOperators>::const_iterator sit = schurOps.find(m);
         new PETScSchurPC(subpc[m], matvec, solParams.getBlock(m), adm,
-                         mgFor(0), solParams.getIntValue("verbosity"));
+                         mgFor(0), solParams.getIntValue("verbosity"),
+                         sit == schurOps.end() ? SchurOperators()
+                                               : sit->second);
+      }
       else
         solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup,
                           mgFor(m));
@@ -1166,6 +1171,40 @@ namespace {
     KSPSolve(p->mass,x,p->work);
     return MatMultTranspose(p->B,p->work,y);
   }
+}
+
+
+/*!
+  The block being preconditioned is the second one, and the matrix of it is
+  the diagonal block of a system laid out the same way, which is how a
+  simulator has these: it assembles them as systems of its own so that the
+  equations line up with the ones they precondition without anything having
+  to be said about the numbering.
+*/
+
+void PETScMatrix::setSchurOperators (size_t block,
+                                     const SystemMatrix* mass,
+                                     const SystemMatrix* laplacian,
+                                     Real viscosity, Real transient)
+{
+  auto&& blockOf = [block](const SystemMatrix* A) -> Mat
+  {
+    const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A);
+    if (!pM)
+      return nullptr;
+
+    if (pM->matvec.empty())
+      return pM->pA;
+
+    const size_t nb = pM->nblocks;
+    return block < nb ? pM->matvec[block*nb+block] : nullptr;
+  };
+
+  SchurOperators& ops = schurOps[block];
+  ops.mass = blockOf(mass);
+  ops.laplacian = blockOf(laplacian);
+  ops.viscosity = viscosity;
+  ops.transient = transient;
 }
 
 

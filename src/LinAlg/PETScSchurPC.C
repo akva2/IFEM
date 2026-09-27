@@ -21,8 +21,10 @@
 
 PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
                             const LinSolParams::BlockParams& params, const ProcessAdm& adm,
-                            const PETScMGLevels* mg, int verbosity)
-  : m_blocks(&blocks),
+                            const PETScMGLevels* mg, int verbosity,
+                            const SchurOperators& ops)
+  : pressure(ops),
+    m_blocks(&blocks),
     pressureCoupling(params.getIntValue("pressure_coupling") > 0)
 {
   PCSetType(pc_init, PCSHELL);
@@ -92,27 +94,54 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   // Only an assembled one is of any use: where the Schur complement is
   // preconditioned with itself, what comes back is the operator again and
   // there is nothing in it to factorize.
-  const bool preconditioned = sP && ptype &&
-                              strcmp(ptype, MATSHELL) &&
-                              strcmp(ptype, MATSCHURCOMPLEMENT);
+  const bool preconditioned = !pressure.empty() ||
+                              (sP && ptype &&
+                               strcmp(ptype, MATSHELL) &&
+                               strcmp(ptype, MATSCHURCOMPLEMENT));
 
   // What is applied above is the negative of the Schur complement, that
   // being the positive definite one of the two, while the approximation
   // left here is of the Schur complement itself. Preconditioning the one
   // with the other takes a change of sign, which an operator with a sign
   // to speak of does not survive being without.
-  if (preconditioned)
+  if (!pressure.empty())
+  {
+    // The pressure operators are what the Schur complement is like, rather
+    // than an approximation of what it is, so they are applied as a
+    // preconditioner of their own rather than factorized.
+    PCSetType(pc, PCSHELL);
+    PCShellSetContext(pc, this);
+    PCShellSetName(pc, "Cahouet-Chabard");
+    PCShellSetApply(pc, PETScSchurPC::Apply_CahouetChabard);
+
+    auto&& solverFor = [&adm](Mat A, KSP& ksp)
+    {
+      if (!A) return;
+      KSPCreate(*adm.getCommunicator(), &ksp);
+      KSPSetOperators(ksp, A, A);
+      KSPSetType(ksp, KSPPREONLY);
+      PC sub;
+      KSPGetPC(ksp, &sub);
+      PCSetType(sub, PCILU);
+      KSPSetUp(ksp);
+    };
+    solverFor(pressure.mass, massKsp);
+    solverFor(pressure.laplacian, lapKsp);
+    MatCreateVecs(pressure.mass ? pressure.mass : pressure.laplacian,
+                  nullptr, &ctmp);
+  }
+  else if (preconditioned)
   {
     MatDuplicate(sP, MAT_COPY_VALUES, &prec);
     MatScale(prec, -1.0);
-  }
-
-  PCSetType(pc, preconditioned ? PCILU : PCNONE);
-  if (preconditioned)
+    PCSetType(pc, PCILU);
     // A constraint on the integrated pressure leaves its multiplier in these
     // equations, and the row it sits in has nothing on the diagonal for a
     // factorization to work with.
     PCFactorSetShiftType(pc, MAT_SHIFT_NONZERO);
+  }
+  else
+    PCSetType(pc, PCNONE);
   int maxits = params.getIntValue("schur_maxits");
   if (maxits < 1)
     maxits = 1000;
@@ -158,7 +187,7 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   MatSetUp(outer_mat);
 
   KSPSetOperators(outer_ksp, outer_mat,
-                  preconditioned ? prec : outer_mat);
+                  prec ? prec : outer_mat);
   KSPSetFromOptions(outer_ksp);
   KSPSetUp(outer_ksp);
   if (verbosity > 1)
@@ -181,6 +210,9 @@ PETScSchurPC::~PETScSchurPC ()
   KSPDestroy(&outer_ksp);
   MatDestroy(&outer_mat);
   if (prec) MatDestroy(&prec);
+  if (massKsp) KSPDestroy(&massKsp);
+  if (lapKsp) KSPDestroy(&lapKsp);
+  if (ctmp) VecDestroy(&ctmp);
   VecDestroy(&tmp);
   if (ptmp) VecDestroy(&ptmp);
 }
@@ -219,6 +251,43 @@ PetscErrorCode PETScSchurPC::Apply_Schur (Mat A, Vec x, Vec y)
   {
     MatMult(spc->m_blocks->at(3), x, spc->ptmp);
     VecAXPY(y, -1.0, spc->ptmp);
+  }
+
+  return 0;
+}
+
+
+/*!
+  The Schur complement of a generalised Stokes system is like the pressure
+  mass matrix where the problem is steady and like the pressure Laplacian
+  where the time increment is what dominates it, and
+
+  \f[ {\bf S}^{-1} \approx \mu{\bf M}_p^{-1} + \alpha{\bf L}_p^{-1} \f]
+
+  holds across the two, which is the preconditioner of Cahouet and Chabard.
+  It is a sum of the two inverses and not the inverse of a sum: as the time
+  increment grows the second term falls away and leaves the first, which a
+  sum of the operators themselves would not do.
+*/
+
+PetscErrorCode PETScSchurPC::Apply_CahouetChabard (PC pc, Vec x, Vec y)
+{
+  void* p;
+  PCShellGetContext(pc, &p);
+  PETScSchurPC* spc = static_cast<PETScSchurPC*>(p);
+
+  VecZeroEntries(y);
+
+  if (spc->massKsp && spc->pressure.viscosity != 0.0)
+  {
+    KSPSolve(spc->massKsp, x, spc->ctmp);
+    VecAXPY(y, spc->pressure.viscosity, spc->ctmp);
+  }
+
+  if (spc->lapKsp && spc->pressure.transient != 0.0)
+  {
+    KSPSolve(spc->lapKsp, x, spc->ctmp);
+    VecAXPY(y, spc->pressure.transient, spc->ctmp);
   }
 
   return 0;
