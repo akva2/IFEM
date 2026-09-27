@@ -310,6 +310,30 @@ public:
   //! \return True on success
   bool setParameters(bool setup);
 
+  /*!
+    \brief Gives the solver the pressure operators of a Schur complement.
+    \param[in] block The block whose Schur complement they belong to
+    \param[in] mass Mass matrix of the pressure basis
+    \param[in] laplacian Laplacian of the pressure basis
+    \param[in] viscosity What the mass matrix is weighted by
+    \param[in] transient What the Laplacian is weighted by, the density over
+    the time increment, which is nothing where the problem is steady
+
+    \details The Schur complement of a generalised Stokes system is like
+    these two across the range from steady to strongly transient, and
+    preconditioning the solve against it with them is what keeps the cost of
+    that solve from growing with the mesh. They are matrices over the
+    equations of \a block and are laid out the same way, which assembling
+    them into a system of the same shape is what gives.
+
+    The two are taken as whole system matrices and the block is picked out of
+    them here, since that is the form a simulator has them in.
+  */
+  void setSchurOperators(size_t block,
+                         const SystemMatrix* mass,
+                         const SystemMatrix* laplacian,
+                         Real viscosity = 1.0, Real transient = 0.0);
+
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
 
@@ -369,6 +393,9 @@ protected:
   std::vector<IS> isvec; //!< Index sets for blocks
 
   std::vector<std::array<int,2>> glb2Blk; //!< Maps equations to block and block eq
+
+  //! Pressure operators of the Schur complement of a block, by block
+  std::map<size_t,SchurOperators> schurOps;
   std::unique_ptr<DomainDecomposition> m_dd{}; //!< Internal partitioning information
 };
 

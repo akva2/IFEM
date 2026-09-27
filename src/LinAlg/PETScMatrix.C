@@ -1142,8 +1142,13 @@ bool PETScMatrix::setParameters (bool setup)
 
       KSPGetPC(subksp[m],&subpc[m]);
       if (blockParams.getStringValue("pc") == "schur")
+      {
+        std::map<size_t,SchurOperators>::const_iterator sit = schurOps.find(m);
         new PETScSchurPC(subpc[m], matvec, blockParams, adm,
-                         solParams.getIntValue("verbosity"));
+                         solParams.getIntValue("verbosity"),
+                         sit == schurOps.end() ? SchurOperators()
+                                               : sit->second);
+      }
       else
         solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup);
 
@@ -1164,6 +1169,38 @@ bool PETScMatrix::setParameters (bool setup)
 }
 
 
+/*!
+  The block being preconditioned is the second one, and the matrix of it is
+  the diagonal block of a system laid out the same way, which is how a
+  simulator has these: it assembles them as systems of its own so that the
+  equations line up with the ones they precondition without anything having
+  to be said about the numbering.
+*/
+
+void PETScMatrix::setSchurOperators (size_t block,
+                                     const SystemMatrix* mass,
+                                     const SystemMatrix* laplacian,
+                                     Real viscosity, Real transient)
+{
+  auto&& blockOf = [block](const SystemMatrix* A) -> Mat
+  {
+    const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A);
+    if (!pM)
+      return nullptr;
+
+    if (pM->matvec.empty())
+      return pM->pA;
+
+    const size_t nb = pM->solParams.getNoBlocks();
+    return block < nb ? pM->matvec[block*nb+block] : nullptr;
+  };
+
+  SchurOperators& ops = schurOps[block];
+  ops.mass = blockOf(mass);
+  ops.laplacian = blockOf(laplacian);
+  ops.viscosity = viscosity;
+  ops.transient = transient;
+}
 const DomainDecomposition& PETScMatrix::getDD () const
 {
   return m_dd ? *m_dd : adm.dd;

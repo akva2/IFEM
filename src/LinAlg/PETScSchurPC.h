@@ -28,9 +28,11 @@ public:
   //! \param params Linear solver parameters
   //! \param adm Processes administrator
   //! \param verbosity Print the solvers that are set up if this is positive
+  //! \param[in] ops Pressure operators to precondition the Schur solve with
   PETScSchurPC(PC& pc_init, const std::vector<Mat>& blocks,
                const LinSolParams::BlockParams& params, const ProcessAdm& adm,
-               int verbosity = 0);
+               int verbosity = 0,
+               const SchurOperators& ops = SchurOperators());
 
   //! \brief The destructor frees the PETSc structures.
   ~PETScSchurPC();
@@ -40,6 +42,13 @@ public:
   //! \param x Vector to apply matrix to
   //! \param y Result of matrix-vector product
   static PetscErrorCode Apply_Schur(Mat A, Vec x, Vec y);
+
+  //! \brief PETSc compatible function applying the Cahouet-Chabard
+  //! preconditioner of the Schur complement.
+  //! \param pc Shell preconditioner to apply
+  //! \param x Vector to apply preconditioner to
+  //! \param y Result of preconditioner evaluation
+  static PetscErrorCode Apply_CahouetChabard(PC pc, Vec x, Vec y);
 
   //! \brief PETSc compatible function applying the Schur complement preconditioner.
   //! \param pc Shell preconditioner to apply
@@ -58,6 +67,11 @@ protected:
   //! What the solve against that shell is preconditioned with, which is an
   //! approximation of the Schur complement with its sign turned round
   Mat prec = nullptr;
+
+  SchurOperators pressure; //!< The pressure operators, where there are any
+  KSP massKsp = nullptr;   //!< Solver for the pressure mass matrix
+  KSP lapKsp = nullptr;    //!< Solver for the pressure Laplacian
+  Vec ctmp = nullptr;      //!< Room for one of the two terms
   Vec tmp;  //!< Temporary vector, laid out like the momentum operator
   Vec ptmp = nullptr; //!< Temporary vector, laid out like the block
   const std::vector<Mat>* m_blocks; //!< Matrix blocks in system
