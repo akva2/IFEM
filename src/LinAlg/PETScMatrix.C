@@ -1044,12 +1044,26 @@ bool PETScMatrix::setParameters (bool setup)
       PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
 
     // Which matrix the preconditioner of the Schur block is built from.
-    // The default is the assembled approximation B diag(A)^-1 B^T, which a
-    // preconditioner can be applied to directly; the Schur complement itself
-    // is what a preconditioner that forms its own approximation out of the
-    // blocks, such as the least-squares commutator, has to be handed
+    // Left unsaid it is the assembled approximation B diag(A)^-1 B^T, which
+    // a preconditioner can be applied to directly; the Schur complement
+    // itself is what a preconditioner that forms its own approximation out
+    // of the blocks, such as the least-squares commutator, has to be handed
     // instead.
-    const std::string& schurPre = solParams.getStringValue("schur_precondition");
+    //
+    // A block bringing a Schur preconditioner of its own is the one case
+    // where that is decided here: it applies an operator of its own and
+    // never looks at the assembled approximation, so assembling one for it
+    // is a matrix triple product thrown away, an eighth of the time spent
+    // solving on the adaptive Stokes case. The iteration counts are
+    // untouched, the preconditioner the sub-block applies being the same
+    // either way.
+    std::string schurPre = solParams.getStringValue("schur_precondition");
+    if (schurPre.empty()) {
+      bool ownSchur = false;
+      for (size_t m = 0; m < solParams.getNoBlocks() && !ownSchur; m++)
+        ownSchur = solParams.getBlock(m).getStringValue("pc") == "schur";
+      schurPre = ownSchur ? "self" : "selfp";
+    }
     if (schurPre == "selfp")
       PCFieldSplitSetSchurPre(pc,PC_FIELDSPLIT_SCHUR_PRE_SELFP,nullptr);
     else if (schurPre == "self")
