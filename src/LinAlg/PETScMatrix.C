@@ -1044,18 +1044,32 @@ bool PETScMatrix::setParameters (bool setup)
     else
       PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
 
-    // What the Schur complement is preconditioned with. The default is an
-    // approximation of it assembled from the diagonal of the momentum
-    // operator, which is what a block solved by an ordinary preconditioner
-    // is given to work on. A block bringing a Schur preconditioner of its
-    // own applies an operator of its own instead and never looks at that
-    // approximation, so assembling one for it is work thrown away.
-    bool ownSchur = false;
-    for (size_t m = 0; m < solParams.getNoBlocks() && !ownSchur; m++)
-      ownSchur = solParams.getBlock(m).getStringValue("pc") == "schur";
+    /* An approximation of the Schur complement, assembled from the diagonal
+       of the momentum operator, which a block solved by an ordinary
+       preconditioner works on directly.
 
-    PCFieldSplitSetSchurPre(pc,ownSchur ? PC_FIELDSPLIT_SCHUR_PRE_SELF
-                                        : PC_FIELDSPLIT_SCHUR_PRE_SELFP,
+       A block bringing a Schur preconditioner of its own applies the real
+       thing instead and has no use for the approximation, unless it is
+       asked to precondition its own solve with it, which is what
+       <schur><precondition/></schur> asks for. That is worth a great deal
+       where it works, the solve against the Schur complement being
+       otherwise unpreconditioned and far too expensive to run to
+       convergence, but it is not yet understood everywhere and so is not
+       taken unless it is asked for. */
+    bool ownSchur = false, approximate = false;
+    for (size_t m = 0; m < solParams.getNoBlocks(); m++)
+      if (solParams.getBlock(m).getStringValue("pc") == "schur")
+      {
+        ownSchur = true;
+
+        const std::string& ask =
+          solParams.getBlock(m).getStringValue("schur_precondition");
+        approximate = !ask.empty() && ask != "0" && ask != "false";
+      }
+
+    PCFieldSplitSetSchurPre(pc,ownSchur && !approximate
+                               ? PC_FIELDSPLIT_SCHUR_PRE_SELF
+                               : PC_FIELDSPLIT_SCHUR_PRE_SELFP,
                             nullptr);
 
     PCSetFromOptions(pc);
