@@ -45,7 +45,12 @@ namespace MG //! Utilities for geometric multigrid.
   struct Operator
   {
     std::string name;      //!< Name, referred to from the linear solver input
-    int         basis = 1; //!< Index of the basis the operator is defined on
+    //! Index of the basis the operator is defined on. Several may be named
+    //! at once, digit by digit as elsewhere in the input, which is what an
+    //! operator spanning more than one basis needs: the velocity of a
+    //! div-compatible discretization gives every component a basis of its
+    //! own, and 12 is the two of them in two dimensions.
+    int         basis = 1;
     size_t      comps = 0; //!< Components of that basis, 0 means all of them
     size_t      block = 0; //!< Linear solver block the hierarchy applies to
   };

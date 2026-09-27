@@ -981,17 +981,20 @@ namespace // anonymous namespace for local helpers
       {
         if (!pch || pch->empty()) continue;
 
-        size_t ofs = nodeOffset(*pch,op.basis);
-        size_t nnod = pch->getNoNodes(op.basis);
-        for (size_t i = 1; i <= nnod; i++)
+        for (int basis : utl::getDigits(op.basis))
         {
-          int inod = pch->getNodeID(ofs+i);
-          if (inod < 1) continue;
+          size_t ofs = nodeOffset(*pch,basis);
+          size_t nnod = pch->getNoNodes(basis);
+          for (size_t i = 1; i <= nnod; i++)
+          {
+            int inod = pch->getNodeID(ofs+i);
+            if (inod < 1) continue;
 
-          for (int d : selectDofs(op.comps,madof[inod]-madof[inod-1]))
-            if (int eq = sam->getEquation(inod,d); eq > 0)
-              if (int geq = globalEq(dd,iBlk,eq); geq > 0)
-                byGlobal[geq] = eq;
+            for (int d : selectDofs(op.comps,madof[inod]-madof[inod-1]))
+              if (int eq = sam->getEquation(inod,d); eq > 0)
+                if (int geq = globalEq(dd,iBlk,eq); geq > 0)
+                  byGlobal[geq] = eq;
+          }
         }
       }
 
@@ -1041,12 +1044,13 @@ namespace // anonymous namespace for local helpers
 //! built once over the functions is laid out over the DOFs this gives.
 
 static void mapBasisToDofs (const ASMbase& pch, const SAM& sam,
-                            const MG::Operator& op, const DofNumbering& num,
+                            const MG::Operator& op, int basis,
+                            const DofNumbering& num,
                             std::vector<IntVec>& dofs)
 {
   const int* madof = sam.getMADOF();
-  const size_t ofs = nodeOffset(pch,op.basis);
-  dofs.resize(pch.getNoNodes(op.basis));
+  const size_t ofs = nodeOffset(pch,basis);
+  dofs.resize(pch.getNoNodes(basis));
   for (size_t i = 0; i < dofs.size(); i++)
   {
     dofs[i].clear();
@@ -1105,15 +1109,15 @@ static void scatterFactors (const SparseMatrix& Mp, const SparseMatrix& Bp,
 
 static bool mapOntoEquations (const ASMbase& cPch, const ASMbase& fPch,
                               const SAM& cSam, const SAM& fSam,
-                              const MG::Operator& op,
+                              const MG::Operator& op, int basis,
                               const DofNumbering& cNum,
                               const DofNumbering& fNum,
                               const std::vector<std::map<int,Real>>& rows,
                               SparseMatrix& P)
 {
   const int* fMad = fSam.getMADOF();
-  const size_t cOfs = nodeOffset(cPch,op.basis);
-  const size_t fOfs = nodeOffset(fPch,op.basis);
+  const size_t cOfs = nodeOffset(cPch,basis);
+  const size_t fOfs = nodeOffset(fPch,basis);
   for (size_t i = 0; i < rows.size(); i++)
   {
     int fnod = fPch.getNodeID(fOfs+1+i);
@@ -1158,7 +1162,8 @@ static bool mapOntoEquations (const ASMbase& cPch, const ASMbase& fPch,
 
 static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
                            const SAM& cSam, const SAM& fSam,
-                           const MG::Operator& op, const BasisPair& bases,
+                           const MG::Operator& op, int basis,
+                           const BasisPair& bases,
                            const DofNumbering& cNum, const DofNumbering& fNum,
                            SparseMatrix& P)
 {
@@ -1198,7 +1203,7 @@ static bool addPatchTerms (const ASMbase& cPch, const ASMbase& fPch,
     }
   }
 
-  return mapOntoEquations(cPch,fPch,cSam,fSam,op,cNum,fNum,rows,P);
+  return mapOntoEquations(cPch,fPch,cSam,fSam,op,basis,cNum,fNum,rows,P);
 }
 
 
@@ -1226,12 +1231,21 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
     return nullptr;
   }
 
-  // The bases of each patch, paired up coarse with fine
-  std::vector<std::unique_ptr<BasisPair>> bases(fModel.size());
+  // The bases of each patch, paired up coarse with fine. An operator may
+  // live on more than one of them, as the velocity of a div-compatible
+  // discretization does, each component having a basis of its own.
+  const std::set<int> opBases = utl::getDigits(op.basis);
+  std::map<std::pair<size_t,int>,std::unique_ptr<BasisPair>> bases;
   for (size_t i = 0; i < fModel.size(); i++)
     if (cModel[i] && fModel[i] && !cModel[i]->empty() && !fModel[i]->empty())
-      if (!(bases[i] = basisPair(cModel[i],fModel[i],op.basis)))
-        return nullptr;
+      for (int basis : opBases)
+      {
+        std::unique_ptr<BasisPair> pair =
+          basisPair(cModel[i],fModel[i],basis);
+        if (!pair)
+          return nullptr;
+        bases[{i,basis}] = std::move(pair);
+      }
 
   DofNumbering cNum(coarse,op), fNum(fine,op);
 
@@ -1244,18 +1258,17 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
   // projected onto the fine one instead, and the two factors of that
   // projection are what is kept, the projection itself being dense.
   bool project = method == MG::Transfer::L2_PROJECTION;
-  for (size_t i = 0; i < bases.size() && !project; i++)
-    if (bases[i] && !bases[i]->sameOrder())
+  for (const auto& [key,pair] : bases)
+    if (!pair->sameOrder())
       project = true;
 
   if (!project)
   {
     res->P = std::make_unique<SparseMatrix>(fNum.size(),cNum.size());
-    for (size_t i = 0; i < bases.size(); i++)
-      if (bases[i])
-        if (!addPatchTerms(*cModel[i],*fModel[i],*cSam,*fSam,op,*bases[i],
-                           cNum,fNum,*res->P))
-          return nullptr;
+    for (const auto& [key,pair] : bases)
+      if (!addPatchTerms(*cModel[key.first],*fModel[key.first],*cSam,*fSam,
+                         op,key.second,*pair,cNum,fNum,*res->P))
+        return nullptr;
 
     IFEM::cout <<"\tProlongation for \""<< op.name <<"\": "<< res->P->rows()
                <<" x "<< res->P->cols() <<", "<< res->P->size()
@@ -1271,19 +1284,16 @@ std::unique_ptr<MG::Prolongation> MG::prolongation (const SIMbase& coarse,
   // that neither the work nor what it produces is repeated on all of them.
   const IntVec& myElms = fine.getProcessAdm().dd.getElms();
   const std::set<int> mine(myElms.begin(),myElms.end());
-  for (size_t i = 0; i < bases.size(); i++)
+  for (const auto& [key,pair] : bases)
   {
-    if (!bases[i])
-      continue;
-
-    SparseMatrix Mp(bases[i]->nFine(),bases[i]->nFine());
-    SparseMatrix Bp(bases[i]->nFine(),bases[i]->nCoarse());
-    if (!bases[i]->integrate(*fModel[i],mine,Mp,Bp))
+    SparseMatrix Mp(pair->nFine(),pair->nFine());
+    SparseMatrix Bp(pair->nFine(),pair->nCoarse());
+    if (!pair->integrate(*fModel[key.first],mine,Mp,Bp))
       return nullptr;
 
     std::vector<IntVec> fDof, cDof;
-    mapBasisToDofs(*fModel[i],*fSam,op,fNum,fDof);
-    mapBasisToDofs(*cModel[i],*cSam,op,cNum,cDof);
+    mapBasisToDofs(*fModel[key.first],*fSam,op,key.second,fNum,fDof);
+    mapBasisToDofs(*cModel[key.first],*cSam,op,key.second,cNum,cDof);
     scatterFactors(Mp,Bp,fDof,cDof,*res->mass,*res->B);
   }
 

@@ -147,7 +147,7 @@ TEST_CASE("TestMultigridTransfer.Identity")
   REQUIRE(setup(fine,&coarse));
 
   const size_t neq = coarse.getSAM()->getNoEquations();
-  REQUIRE(fine.getSAM()->getNoEquations() == neq);
+  REQUIRE(static_cast<size_t>(fine.getSAM()->getNoEquations()) == neq);
 
   std::unique_ptr<MG::Prolongation> res = MG::prolongation(coarse,fine,{"A",1,0});
   REQUIRE(res != nullptr);
@@ -201,8 +201,8 @@ TEST_CASE("TestMultigridTransfer.Exactness")
   REQUIRE(res != nullptr);
   const SparseMatrix* P = res->P.get();
   REQUIRE(P != nullptr);
-  REQUIRE(P->rows() == (size_t)fine.getSAM()->getNoEquations());
-  REQUIRE(P->cols() == (size_t)coarse.getSAM()->getNoEquations());
+  REQUIRE(P->rows() == static_cast<size_t>(fine.getSAM()->getNoEquations()));
+  REQUIRE(P->cols() == static_cast<size_t>(coarse.getSAM()->getNoEquations()));
 
   for (int dir = 0; dir < 2; dir++)
   {
@@ -258,7 +258,7 @@ TEST_CASE("TestMultigridTransfer.TensorIdentity")
   REQUIRE(setupTensor(fine,"src/SIM/Test/refdata/mgtensor.xinp",0));
 
   const size_t neq = coarse.getSAM()->getNoEquations();
-  REQUIRE(fine.getSAM()->getNoEquations() == neq);
+  REQUIRE(static_cast<size_t>(fine.getSAM()->getNoEquations()) == neq);
 
   std::unique_ptr<MG::Prolongation> res = MG::prolongation(coarse,fine,{"A",1,0});
   REQUIRE(res != nullptr);
@@ -307,8 +307,8 @@ TEST_CASE("TestMultigridTransfer.TensorExactness")
   REQUIRE(res != nullptr);
   const SparseMatrix* P = res->P.get();
   REQUIRE(P != nullptr);
-  REQUIRE(P->rows() == (size_t)fine->getSAM()->getNoEquations());
-  REQUIRE(P->cols() == (size_t)coarse->getSAM()->getNoEquations());
+  REQUIRE(P->rows() == static_cast<size_t>(fine->getSAM()->getNoEquations()));
+  REQUIRE(P->cols() == static_cast<size_t>(coarse->getSAM()->getNoEquations()));
 
   for (int dir = 0; dir < nsd; dir++)
   {
@@ -345,8 +345,8 @@ TEST_CASE("TestMultigridTransfer.TensorOrderReduction")
   REQUIRE(res != nullptr);
   REQUIRE(res->isProjection());
   REQUIRE(res->P == nullptr);
-  REQUIRE(res->B->rows() == (size_t)fine.getSAM()->getNoEquations());
-  REQUIRE(res->B->cols() == (size_t)coarse.getSAM()->getNoEquations());
+  REQUIRE(res->B->rows() == static_cast<size_t>(fine.getSAM()->getNoEquations()));
+  REQUIRE(res->B->cols() == static_cast<size_t>(coarse.getSAM()->getNoEquations()));
   REQUIRE(res->mass->rows() == res->B->rows());
 
   Vector rowB(res->B->rows()), rowM(res->mass->rows());
