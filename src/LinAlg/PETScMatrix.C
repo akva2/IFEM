@@ -1201,6 +1201,16 @@ void PETScMatrix::setSchurOperators (size_t block,
   ops.viscosity = viscosity;
   ops.transient = transient;
 }
+
+
+const SchurOperators& PETScMatrix::getSchurOperators (size_t block) const
+{
+  static const SchurOperators none;
+
+  std::map<size_t,SchurOperators>::const_iterator it = schurOps.find(block);
+  return it == schurOps.end() ? none : it->second;
+}
+
 const DomainDecomposition& PETScMatrix::getDD () const
 {
   return m_dd ? *m_dd : adm.dd;
