@@ -1044,7 +1044,19 @@ bool PETScMatrix::setParameters (bool setup)
     else
       PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_UPPER);
 
-    PCFieldSplitSetSchurPre(pc,PC_FIELDSPLIT_SCHUR_PRE_SELFP,nullptr);
+    // What the Schur complement is preconditioned with. The default is an
+    // approximation of it assembled from the diagonal of the momentum
+    // operator, which is what a block solved by an ordinary preconditioner
+    // is given to work on. A block bringing a Schur preconditioner of its
+    // own applies an operator of its own instead and never looks at that
+    // approximation, so assembling one for it is work thrown away.
+    bool ownSchur = false;
+    for (size_t m = 0; m < solParams.getNoBlocks() && !ownSchur; m++)
+      ownSchur = solParams.getBlock(m).getStringValue("pc") == "schur";
+
+    PCFieldSplitSetSchurPre(pc,ownSchur ? PC_FIELDSPLIT_SCHUR_PRE_SELF
+                                        : PC_FIELDSPLIT_SCHUR_PRE_SELFP,
+                            nullptr);
 
     PCSetFromOptions(pc);
     if (setup)
