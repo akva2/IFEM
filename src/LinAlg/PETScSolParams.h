@@ -58,6 +58,14 @@ struct PETScMGLevels
   //! it in one go. Empty when the levels carry no subdomains of their own.
   std::vector<std::vector<std::vector<int>>> subdomains;
 
+  //! \brief How many of the subdomains of each level are mesh lines.
+  //!
+  //! \details The lines of a level are followed by one subdomain holding
+  //! whatever they did not reach, where they did not reach everything, and
+  //! the two are not solved with the same method by default: a line is small
+  //! and the remainder need not be. Empty when every subdomain is a line.
+  std::vector<size_t> nLines;
+
   //! \brief Returns the number of levels in the hierarchy.
   size_t size() const { return P.empty() ? 0 : P.size()+1; }
 };
@@ -114,10 +122,11 @@ public:
   //! \param pc The smoother of one multigrid level
   //! \param[in] subdomains The equations of each subdomain on that level
   //! \param[in] iBlock Matrix block the smoother belongs to
-  //! \param[in] asmlu True to solve each subdomain by a direct factorization
+  //! \param[in] nLines How many of the subdomains are mesh lines, the rest
+  //! of them, if any, being the one holding what the lines did not reach
   void setupSubdomainSmoother(PC& pc,
                               const std::vector<std::vector<int>>& subdomains,
-                              size_t iBlock, bool asmlu);
+                              size_t iBlock, size_t nLines);
 
   //! \brief Obtain number of blocks
   size_t getNoBlocks() const { return params.getNoBlocks(); }

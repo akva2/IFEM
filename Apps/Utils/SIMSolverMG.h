@@ -235,10 +235,16 @@ protected:
 
     \param[in] sim The level the lines are taken from
     \param[in] block Matrix block the equations are numbered within
+    \param[out] nLines How many of the subdomains returned are mesh lines.
+    What follows them, where the lines did not reach everything, is the one
+    subdomain holding the remainder.
   */
-  std::vector<IntVec> lineSubdomains(const T1& sim, size_t block) const
+  std::vector<IntVec> lineSubdomains(const T1& sim, size_t block,
+                                     size_t& nLines) const
   {
     std::vector<IntVec> subd;
+    nLines = 0;
+
     const SAM* sam = sim.getSAM();
     if (!sam)
       return subd;
@@ -389,6 +395,7 @@ protected:
       IFEM::cout <<", the remaining "<< rest.size() <<" in one";
     IFEM::cout << std::endl;
 
+    nLines = subd.size();
     if (!rest.empty())
       subd.push_back(std::move(rest));
 
@@ -517,23 +524,32 @@ protected:
       // A level never changes after it has been added, and the mesh being
       // solved on only changes under a driver which refines it.
       std::vector<std::vector<IntVec>> subd;
+      std::vector<size_t> nLines;
       if (lineDir > 0) {
         std::vector<std::vector<IntVec>>& kept = levelLines[op.name];
-        for (size_t i = kept.size(); i < sims.size(); i++)
-          kept.push_back(this->lineSubdomains(*sims[i],op.block));
+        std::vector<size_t>& keptN = levelLineCount[op.name];
+        for (size_t i = kept.size(); i < sims.size(); i++) {
+          size_t n = 0;
+          kept.push_back(this->lineSubdomains(*sims[i],op.block,n));
+          keptN.push_back(n);
+        }
 
         std::vector<IntVec>& top = fineLines[op.name];
+        size_t& topN = fineLineCount[op.name];
         if (top.empty() || this->refinesMesh())
-          top = this->lineSubdomains(this->S1,op.block);
+          top = this->lineSubdomains(this->S1,op.block,topN);
 
         subd = kept;
         subd.push_back(top);
+        nLines = keptN;
+        nLines.push_back(topN);
       }
 
       // setMGHierarchy converts the transfer operators to PETSc format, so
       // the topmost one is not needed beyond this point. The level operators
       // are not copied, and stay owned by the level simulators.
-      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned,massPtr,spread))
+      if (!pA->setMGHierarchy(op.block,Pptr,Aptr,subd,owned,massPtr,spread,
+                              nLines))
         return false;
     }
 
@@ -601,6 +617,10 @@ protected:
   std::map<std::string,std::vector<std::vector<IntVec>>> levelLines;
   //! Mesh lines of the mesh being solved on, by operator name
   std::map<std::string,std::vector<IntVec>> fineLines;
+  //! How many of each kept level's subdomains are lines, by operator name
+  std::map<std::string,std::vector<size_t>> levelLineCount;
+  //! How many of the finest level's subdomains are lines, by operator name
+  std::map<std::string,size_t> fineLineCount;
 };
 
 

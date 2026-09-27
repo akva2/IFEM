@@ -97,6 +97,14 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
       std::string v;
       if (utl::getAttribute(child, "smoother", v))
         this->addValue("multigrid_smoother", v);
+      // What a Schwarz smoother smooths each kind of subdomain with, which
+      // is a preconditioner applied to that subdomain alone and not to be
+      // confused with the coarse solver. The smoother settles both unless
+      // one of them is named here.
+      if (utl::getAttribute(child, "line_smoother", v))
+        this->addValue("multigrid_line_smoother", v);
+      if (utl::getAttribute(child, "rest_smoother", v))
+        this->addValue("multigrid_rest_smoother", v);
       if (utl::getAttribute(child, "levels", v))
         this->addValue("multigrid_levels", v);
       if (utl::getAttribute(child, "no_smooth", v)) {

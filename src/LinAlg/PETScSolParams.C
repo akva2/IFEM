@@ -373,23 +373,43 @@ static void asmSubdomains (PC& pc,
 }
 
 
-//! \brief Solves each subdomain of a Schwarz preconditioner directly.
-//! \param pc The preconditioner, which has to have been set up already
-//!
-//! \details The sub-solvers only exist once the preconditioner has been set
-//! up, which for one inside a composite is when the composite is set up,
-//! since only then does it have a matrix to be set up against.
+/*!
+  \brief Points the sub-solves of a Schwarz preconditioner at a method.
+  \param pc The preconditioner, which has to have been set up already
+  \param[in] lines What to smooth the subdomains which are mesh lines with
+  \param[in] rest What to smooth the one holding the remainder with
+  \param[in] nLines How many of the subdomains are mesh lines
+  \param[in] reverse Whether the subdomains were handed over in reverse
 
-static void asmDirectSolves (PC& pc)
+  \details The sub-solvers only exist once the preconditioner has been set
+  up, which for one inside a composite is when the composite is set up, since
+  only then does it have a matrix to be set up against.
+
+  A mesh line is a few dozen equations along the strong coupling of the mesh
+  and is cheap to solve exactly. What the lines did not reach is a single
+  subdomain of whatever is left, which where only some patches carry lines is
+  most of the problem, and solving that exactly is a direct solve in all but
+  name. The two are therefore set separately.
+*/
+
+static void asmSubSolves (PC& pc, const std::string& lines,
+                          const std::string& rest, size_t nLines, bool reverse)
 {
   KSP* subksp;
   PetscInt first, nlocal;
   PCASMGetSubKSP(pc,&nlocal,&first,&subksp);
   for (PetscInt j = 0; j < nlocal; j++)
   {
+    // A reversed sweep was handed the same subdomains back to front, so what
+    // the list calls the last of them is the first this one holds.
+    const size_t idx = reverse ? nlocal-1-j : j;
+    const std::string& type = idx < nLines ? lines : rest;
+    if (type.empty())
+      continue;
+
     PC subpc;
     KSPGetPC(subksp[j],&subpc);
-    PCSetType(subpc,PCLU);
+    PCSetType(subpc,type.c_str());
     KSPSetType(subksp[j],KSPPREONLY);
   }
 }
@@ -410,19 +430,30 @@ static void asmDirectSolves (PC& pc)
 
 void PETScSolParams::setupSubdomainSmoother (PC& pc,
                                              const std::vector<std::vector<int>>& subdomains,
-                                             size_t iBlock, bool asmlu)
+                                             size_t iBlock, size_t nLines)
 {
-  const int overlap = params.getBlock(iBlock).getIntValue("asm_overlap");
+  const LinSolParams::BlockParams& blk = params.getBlock(iBlock);
+  const int overlap = blk.getIntValue("asm_overlap");
+
+  // What each kind of subdomain is smoothed with, which is a preconditioner
+  // applied to that subdomain alone. A mesh line is a few dozen equations
+  // along the strong coupling of the mesh and is cheap to solve exactly,
+  // which is the whole point of smoothing along it. What the lines did not
+  // reach is one subdomain of everything left over, which where only some
+  // patches carry lines is most of the problem, and an exact solve of that
+  // is a direct solve in all but name. Either can be named in the input
+  // where these are not what is wanted.
+  std::string lines = blk.getStringValue("multigrid_line_smoother");
+  std::string rest = blk.getStringValue("multigrid_rest_smoother");
+  if (lines.empty()) lines = PCLU;
+  if (rest.empty()) rest = PCILU;
 
   const std::string& outer = params.getStringValue("type");
   if (outer != "cg" && outer != "minres" && outer != "cr")
   {
     asmSubdomains(pc,subdomains,overlap,false);
-    if (asmlu)
-    {
-      PCSetUp(pc);
-      asmDirectSolves(pc);
-    }
+    PCSetUp(pc);
+    asmSubSolves(pc,lines,rest,nLines,false);
     return;
   }
 
@@ -449,11 +480,8 @@ void PETScSolParams::setupSubdomainSmoother (PC& pc,
                  << std::endl;
 
     asmSubdomains(pc,subdomains,overlap,false,false);
-    if (asmlu)
-    {
-      PCSetUp(pc);
-      asmDirectSolves(pc);
-    }
+    PCSetUp(pc);
+    asmSubSolves(pc,lines,rest,nLines,false);
     return;
   }
 
@@ -477,13 +505,10 @@ void PETScSolParams::setupSubdomainSmoother (PC& pc,
   // once they are set up against it do they have sub-solvers to point at a
   // factorization.
   PCSetUp(pc);
-  if (asmlu)
-  {
-    PCSetUp(forth);
-    PCSetUp(back);
-    asmDirectSolves(forth);
-    asmDirectSolves(back);
-  }
+  PCSetUp(forth);
+  PCSetUp(back);
+  asmSubSolves(forth,lines,rest,nLines,false);
+  asmSubSolves(back, lines,rest,nLines,true);
 }
 
 
@@ -554,7 +579,9 @@ void PETScSolParams::setupSmoothers(PC& pc, size_t iBlock,
       if (mg && static_cast<size_t>(i) < mg->subdomains.size() &&
           !mg->subdomains[i].empty())
         setupSubdomainSmoother(prepc, mg->subdomains[i], iBlock,
-                               smoother == "asmlu");
+                               static_cast<size_t>(i) < mg->nLines.size()
+                                 ? mg->nLines[i]
+                                 : mg->subdomains[i].size());
       else
         setupAdditiveSchwarz(prepc, iBlock, smoother == "asmlu", true, blockEqs, setup);
     }

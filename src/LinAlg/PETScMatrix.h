@@ -339,7 +339,8 @@ public:
                       const std::vector<std::vector<std::vector<int>>>& subdomains = {},
                       const std::vector<std::pair<int,int>>& owned = {},
                       const std::vector<const SparseMatrix*>& mass = {},
-                      const std::vector<bool>& distributed = {});
+                      const std::vector<bool>& distributed = {},
+                      const std::vector<size_t>& nLines = {});
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
