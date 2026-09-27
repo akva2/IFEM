@@ -1208,6 +1208,15 @@ void PETScMatrix::setSchurOperators (size_t block,
 }
 
 
+const SchurOperators& PETScMatrix::getSchurOperators (size_t block) const
+{
+  static const SchurOperators none;
+
+  std::map<size_t,SchurOperators>::const_iterator it = schurOps.find(block);
+  return it == schurOps.end() ? none : it->second;
+}
+
+
 bool PETScMatrix::setMGHierarchy (size_t block,
                                   const std::vector<const SparseMatrix*>& prolong,
                                   const std::vector<const SystemMatrix*>& levels,

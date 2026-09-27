@@ -366,6 +366,16 @@ public:
                          const SystemMatrix* laplacian,
                          Real viscosity = 1.0, Real transient = 0.0);
 
+  //! \brief Returns the pressure operators set for a block.
+  //! \param[in] block The block to return the operators for
+  //!
+  //! \details Empty operators are returned for a block which has had none
+  //! set, and mean that the Schur complement of that block is to be solved
+  //! against without them. A solver which is not set up from this matrix,
+  //! the Uzawa solver being the one, asks for them here rather than being
+  //! told about the simulator which assembled them.
+  const SchurOperators& getSchurOperators(size_t block) const;
+
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
 
