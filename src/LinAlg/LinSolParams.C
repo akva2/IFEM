@@ -90,6 +90,14 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
   utl::getAttribute(elem, "basis", basis);
   utl::getAttribute(elem, "components", comps);
 
+  // Whether the discretization couples the pressure to itself, which a
+  // stabilized one does and a mixed one does not. It settles what the Schur
+  // complement of this block is, and a simulator which knows its own
+  // discretization says so rather than leaving it to be asked for here.
+  bool couples = false;
+  if (utl::getAttribute(elem, "pressure_coupling", couples))
+    this->addValue(prefix + "pressure_coupling", couples ? "1" : "0");
+
   const char* value;
   const tinyxml2::XMLElement* child = elem->FirstChildElement();
   for (; child; child = child->NextSiblingElement())

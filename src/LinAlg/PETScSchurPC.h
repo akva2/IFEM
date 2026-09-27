@@ -58,6 +58,10 @@ protected:
   KSP inner_ksp; //!< The KSP for the approximation of inner matrix inverse
   KSP outer_ksp; //!< The KSP for the approximated Schur complement
   Mat outer_mat; //!< Matrix shell describing the Schur complement
-  Vec tmp; //!< Temporary vector
+  Vec tmp;  //!< Temporary vector, laid out like the momentum operator
+  Vec ptmp = nullptr; //!< Temporary vector, laid out like the block
   const std::vector<Mat>* m_blocks; //!< Matrix blocks in system
+  //! Whether the discretization couples the pressure to itself, which
+  //! settles whether that block belongs in the Schur complement
+  bool pressureCoupling;
 };

@@ -104,6 +104,10 @@ public:
 
   //! \brief Obtain settings for a given block
   const BlockParams& getBlock(size_t i) const { return blocks[i]; }
+  //! \brief Obtain settings for a given block, to be added to.
+  //! \details A simulator knows things about its own discretization which
+  //! the input file should not have to be told, and says them here.
+  BlockParams& getBlock(size_t i) { return blocks[i]; }
 
   //! \brief Returns the linear system type.
   LinAlg::LinearSystemType getLinSysType() const { return linSys; }

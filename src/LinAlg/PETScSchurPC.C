@@ -21,7 +21,8 @@
 PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
                             const LinSolParams::BlockParams& params, const ProcessAdm& adm,
                             const PETScMGLevels* mg, int verbosity)
-  : m_blocks(&blocks)
+  : m_blocks(&blocks),
+    pressureCoupling(params.getIntValue("pressure_coupling") > 0)
 {
   PCSetType(pc_init, PCSHELL);
   PCShellSetContext(pc_init, this);
@@ -122,10 +123,13 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
     KSPView(outer_ksp, PETSC_VIEWER_STDOUT_WORLD);
   PCSetUp(pc_init);
 
-  // The inner solve works on the rows of the momentum operator, so the vector
-  // it passes through takes its layout from that operator rather than being
-  // sized by hand.
+  // The inner solve works on the rows of the momentum operator, and the
+  // pressure-pressure term on those of the block being preconditioned, so
+  // the two vectors take their layout from those rather than being sized by
+  // hand.
   MatCreateVecs(blocks[0], nullptr, &tmp);
+  if (pressureCoupling)
+    MatCreateVecs(blocks[3], nullptr, &ptmp);
 }
 
 
@@ -135,8 +139,29 @@ PETScSchurPC::~PETScSchurPC ()
   KSPDestroy(&outer_ksp);
   MatDestroy(&outer_mat);
   VecDestroy(&tmp);
+  if (ptmp) VecDestroy(&ptmp);
 }
 
+
+/*!
+  The Schur complement of the block being preconditioned is
+
+  \f[ {\bf S} = {\bf A}_{11} - {\bf A}_{10}{\bf A}_{00}^{-1}{\bf A}_{01} \f]
+
+  and what is applied here is its negative, which is the positive definite
+  one of the two and so the one an outer solver asking for that can be given.
+
+  The first of the two terms is nothing for a mixed discretization, which has
+  no pressure-pressure coupling, and is the stabilization for one which is
+  stabilized. Leaving it out costs the latter the very term which makes its
+  system solvable, and the preconditioner is then not one.
+
+  It is not enough to look at whether that block holds anything, since a
+  constraint on the integrated pressure puts its multiplier there and a mixed
+  discretization is then no longer empty in the corner without coupling the
+  pressure to itself in any way that belongs in a Schur complement. Which of
+  the two it is, is asked of the discretization.
+*/
 
 PetscErrorCode PETScSchurPC::Apply_Schur (Mat A, Vec x, Vec y)
 {
@@ -146,6 +171,12 @@ PetscErrorCode PETScSchurPC::Apply_Schur (Mat A, Vec x, Vec y)
   MatMult(spc->m_blocks->at(1), x, spc->tmp);
   KSPSolve(spc->inner_ksp, spc->tmp, spc->tmp);
   MatMult(spc->m_blocks->at(2), spc->tmp, y);
+
+  if (spc->pressureCoupling)
+  {
+    MatMult(spc->m_blocks->at(3), x, spc->ptmp);
+    VecAXPY(y, -1.0, spc->ptmp);
+  }
 
   return 0;
 }
