@@ -311,48 +311,50 @@ public:
   bool setParameters(bool setup);
 
   /*!
-    \brief Gives the solver the pressure operators of a Schur complement.
-    \param[in] block The block whose Schur complement they belong to
-    \param[in] mass Mass matrix of the pressure basis
-    \param[in] laplacian Laplacian of the pressure basis
-    \param[in] viscosity What the mass matrix is weighted by
-    \param[in] transient What the Laplacian is weighted by, the density over
-    the time increment, which is nothing where the problem is steady
+    \brief Gives the solver what to precondition a Schur complement with.
+    \param[in] block The block whose Schur complement it belongs to
+    \param[in] precond The preconditioner, or nothing to solve against the
+    complement unpreconditioned
 
-    \details The Schur complement of a generalised Stokes system is like
-    these two across the range from steady to strongly transient, and
-    preconditioning the solve against it with them is what keeps the cost of
-    that solve from growing with the mesh. They are matrices over the
-    equations of \a block and are laid out the same way, which assembling
-    them into a system of the same shape is what gives.
-
-    The two are taken as whole system matrices and the block is picked out of
-    them here, since that is the form a simulator has them in.
+    \details The solve against a Schur complement is a Krylov solve whose
+    every iteration applies the inverse of the leading block, so what
+    preconditions it decides what that solve costs. What a good one is
+    follows from the equations rather than from anything visible here, so it
+    is built by the simulator and only applied here; see
+    SchurComplementPrecond. The object stays the simulator's, and has to
+    outlive the solver it is handed to.
   */
-  void setSchurOperators(size_t block,
-                         const SystemMatrix* mass,
-                         const SystemMatrix* laplacian,
-                         Real viscosity = 1.0, Real transient = 0.0);
-
-  //! \brief Returns the pressure operators set for a block.
-  //! \param[in] block The block to return the operators for
-  //!
-  //! \details Empty operators are returned for a block which has had none
-  //! set, and mean that the Schur complement of that block is to be solved
-  //! against without them. A solver which is not set up from this matrix,
-  //! the Uzawa solver being the one, asks for them here rather than being
-  //! told about the simulator which assembled them.
-  const SchurOperators& getSchurOperators(size_t block) const;
+  void setSchurPrecond(size_t block, SchurComplementPrecond* precond)
+  { schurSetup[block].precond = precond; }
 
   //! \brief Tells the matrix that a block has a diagonal block C of its own.
   //! \param[in] block The block in question
   //! \param[in] hasC Whether the discretization contributes to it
   //!
-  //! \details Kept beside the pressure operators, being the same kind of
-  //! thing: something about the block which the simulator knows and the
+  //! \details Kept beside the preconditioner, being the same kind of thing:
+  //! something about the block which the simulator knows and the
   //! preconditioner of it needs.
   void setHasC(size_t block, bool hasC)
-  { schurOps[block].hasC = hasC; }
+  { schurSetup[block].hasC = hasC; }
+
+  //! \brief Returns what has been set for the Schur complement of a block.
+  //! \param[in] block The block to ask about
+  //!
+  //! \details A block which has had nothing set answers with the defaults,
+  //! which are no preconditioner and no diagonal block. A solver which is
+  //! not set up from this matrix, the Uzawa solver being the one, asks here
+  //! rather than being told about the simulator which assembled it.
+  const SchurSetup& getSchurSetup(size_t block) const;
+
+  //! \brief Returns the diagonal block of the matrix a solver works on.
+  //! \param[in] block The block to return, counted from zero
+  //!
+  //! \details A system which is not split into blocks is its own only
+  //! block. This is how an operator assembled as a system of the shape of
+  //! the one being solved is picked apart: the block of it lines up with
+  //! the equations it belongs to without the numbering having to be said
+  //! anywhere.
+  Mat getDiagonalBlock(size_t block) const;
 
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
@@ -414,8 +416,8 @@ protected:
 
   std::vector<std::array<int,2>> glb2Blk; //!< Maps equations to block and block eq
 
-  //! Pressure operators of the Schur complement of a block, by block
-  std::map<size_t,SchurOperators> schurOps;
+  //! What the Schur complement of a block was set up with, by block
+  std::map<size_t,SchurSetup> schurSetup;
   std::unique_ptr<DomainDecomposition> m_dd{}; //!< Internal partitioning information
 };
 

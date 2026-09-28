@@ -1141,14 +1141,13 @@ bool PETScMatrix::setParameters (bool setup)
                          maxits > 0 ? maxits : PETSC_DEFAULT);
 
       KSPGetPC(subksp[m],&subpc[m]);
+      // The inner solve of the Schur preconditioner approximates the inverse
+      // of matvec[0], so the hierarchy it can use is the one built for the
+      // first block, whichever block the preconditioner sits on.
       if (blockParams.getStringValue("pc") == "schur")
-      {
-        std::map<size_t,SchurOperators>::const_iterator sit = schurOps.find(m);
         new PETScSchurPC(subpc[m], matvec, blockParams, adm,
                          solParams.getIntValue("verbosity"),
-                         sit == schurOps.end() ? SchurOperators()
-                                               : sit->second);
-      }
+                         this->getSchurSetup(m));
       else
         solParams.setupPC(subpc[m], m, prefix, adm.dd.getBlockEqs(m), setup);
 
@@ -1177,38 +1176,22 @@ bool PETScMatrix::setParameters (bool setup)
   to be said about the numbering.
 */
 
-void PETScMatrix::setSchurOperators (size_t block,
-                                     const SystemMatrix* mass,
-                                     const SystemMatrix* laplacian,
-                                     Real viscosity, Real transient)
+Mat PETScMatrix::getDiagonalBlock (size_t block) const
 {
-  auto&& blockOf = [block](const SystemMatrix* A) -> Mat
-  {
-    const PETScMatrix* pM = dynamic_cast<const PETScMatrix*>(A);
-    if (!pM)
-      return nullptr;
+  if (matvec.empty())
+    return block == 0 ? pA : nullptr;
 
-    if (pM->matvec.empty())
-      return pM->pA;
-
-    const size_t nb = pM->solParams.getNoBlocks();
-    return block < nb ? pM->matvec[block*nb+block] : nullptr;
-  };
-
-  SchurOperators& ops = schurOps[block];
-  ops.mass = blockOf(mass);
-  ops.laplacian = blockOf(laplacian);
-  ops.viscosity = viscosity;
-  ops.transient = transient;
+  const size_t nb = solParams.getNoBlocks();
+  return block < nb ? matvec[block*nb+block] : nullptr;
 }
 
 
-const SchurOperators& PETScMatrix::getSchurOperators (size_t block) const
+const SchurSetup& PETScMatrix::getSchurSetup (size_t block) const
 {
-  static const SchurOperators none;
+  static const SchurSetup none;
 
-  std::map<size_t,SchurOperators>::const_iterator it = schurOps.find(block);
-  return it == schurOps.end() ? none : it->second;
+  std::map<size_t,SchurSetup>::const_iterator it = schurSetup.find(block);
+  return it == schurSetup.end() ? none : it->second;
 }
 
 const DomainDecomposition& PETScMatrix::getDD () const

@@ -12,6 +12,8 @@
 //==============================================================================
 
 #include "PETScMatrix.h"
+#include "SchurComplementPrecond.h"
+
 #include <memory>
 
 
@@ -28,11 +30,13 @@ public:
   //! \param params Linear solver parameters
   //! \param adm Processes administrator
   //! \param verbosity Print the solvers that are set up if this is positive
-  //! \param[in] ops Pressure operators to precondition the Schur solve with
+  //! \param[in] schur What the simulator has set for this Schur complement:
+  //! the preconditioner of the solve against it, and whether the block has a
+  //! diagonal block C
   PETScSchurPC(PC& pc_init, const std::vector<Mat>& blocks,
                const LinSolParams::BlockParams& params, const ProcessAdm& adm,
                int verbosity = 0,
-               const SchurOperators& ops = SchurOperators());
+               const SchurSetup& schur = SchurSetup());
 
   //! \brief The destructor frees the PETSc structures.
   ~PETScSchurPC();
@@ -43,12 +47,15 @@ public:
   //! \param y Result of matrix-vector product
   static PetscErrorCode Apply_Schur(Mat A, Vec x, Vec y);
 
-  //! \brief PETSc compatible function applying the Cahouet-Chabard
-  //! preconditioner of the Schur complement.
+  //! \brief PETSc compatible function applying the preconditioner of the
+  //! solve against the Schur complement.
   //! \param pc Shell preconditioner to apply
   //! \param x Vector to apply preconditioner to
   //! \param y Result of preconditioner evaluation
-  static PetscErrorCode Apply_CahouetChabard(PC pc, Vec x, Vec y);
+  //!
+  //! \details The work is the simulator's, this only finds it and hands the
+  //! two vectors over.
+  static PetscErrorCode Apply_Precond(PC pc, Vec x, Vec y);
 
   //! \brief PETSc compatible function applying the Schur complement preconditioner.
   //! \param pc Shell preconditioner to apply
@@ -68,11 +75,10 @@ protected:
   //! approximation of the Schur complement with its sign turned round
   Mat prec = nullptr;
 
-  SchurOperators pressure; //!< The pressure operators, where there are any
-  KSP massKsp = nullptr;   //!< Solver for the pressure mass matrix
-  KSP lapKsp = nullptr;    //!< Solver for the pressure Laplacian
-  Vec ctmp = nullptr;      //!< Room for one of the two terms
-  Vec tmp;  //!< Temporary vector, laid out like the momentum operator
+  //! What the solve against the Schur complement is preconditioned with,
+  //! or nothing. Owned by whoever set it on the matrix.
+  SchurComplementPrecond* precond = nullptr;
+  Vec tmp;  //!< Temporary vector, laid out like the leading block
   Vec ptmp = nullptr; //!< Temporary vector, laid out like the block
   const std::vector<Mat>* m_blocks; //!< Matrix blocks in system
   //! Whether the system has a diagonal block C for the block being
