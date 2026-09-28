@@ -16,6 +16,8 @@
 
 #include "PETScSupport.h"
 
+#include <vector>
+
 class ProcessAdm;
 
 
@@ -44,7 +46,20 @@ public:
 
   //! \brief Sets up whatever the preconditioner needs to be applied.
   //! \param[in] adm The process administrator the solve lives on
-  virtual bool setUp(const ProcessAdm& adm) = 0;
+  //! \param[in] blocks The blocks of the two by two system, in the order
+  //! \code
+  //!   [ 0  1 ]
+  //!   [ 2  3 ]
+  //! \endcode
+  //! so that 0 is the leading block whose inverse the complement is taken
+  //! over, 1 and 2 are the couplings and 3 is the diagonal block of the one
+  //! being preconditioned.
+  //!
+  //! \details Called once for each linear solver the preconditioner is
+  //! handed to, which may be several over the life of one of these, so it
+  //! has to be able to run again and let go of what a previous call set up.
+  virtual bool setUp(const ProcessAdm& adm,
+                     const std::vector<Mat>& blocks) = 0;
 
   //! \brief Applies the preconditioner to a vector.
   //! \param[in] x The vector to apply it to

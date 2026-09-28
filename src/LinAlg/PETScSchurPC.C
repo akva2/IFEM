@@ -60,7 +60,7 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
                             strcmp(ptype, MATSHELL) &&
                             strcmp(ptype, MATSCHURCOMPLEMENT);
 
-  if (precond && !precond->setUp(adm))
+  if (precond && !precond->setUp(adm,blocks))
     precond = nullptr;
 
   if (precond)
