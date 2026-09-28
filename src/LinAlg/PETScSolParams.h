@@ -69,6 +69,19 @@ struct SchurOperators
   double viscosity = 1.0;  //!< Weight of the mass matrix
   double transient = 0.0;  //!< Weight of the Laplacian, zero when steady
 
+  //! \brief Whether the block has a diagonal block C of its own.
+  //!
+  //! \details For a two by two system
+  //! \code
+  //!   [ A  B^T ]
+  //!   [ B  -C  ]
+  //! \endcode
+  //! this says whether C is there, which decides whether it belongs in the
+  //! Schur complement. It is a property of the discretization rather than of
+  //! the operators beside it here, so it is set whether or not there is
+  //! anything to precondition with.
+  bool hasC = false;
+
   //! \brief Returns whether there is anything to precondition with.
   bool empty() const { return !mass && !laplacian; }
 };

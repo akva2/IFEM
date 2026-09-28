@@ -187,6 +187,22 @@ public:
   //! \brief Returns whether this integrand has explicit boundary contributions.
   virtual bool hasBoundaryTerms() const { return true; }
 
+  //! \brief Returns whether the integrand contributes a diagonal block C.
+  //!
+  //! \details For a mixed problem written as the two by two system
+  //! \code
+  //!   [ A  B^T ]
+  //!   [ B  -C  ]
+  //! \endcode
+  //! this is whether C is there at all, which a stabilized discretization
+  //! gives and a mixed one does not. It settles what the Schur complement of
+  //! the second block is, and getting it wrong is quiet: without the term the
+  //! complement is of the wrong operator, and with it where there is none it
+  //! picks up whatever else sits in the block, a Lagrange multiplier among
+  //! the possibilities. The integrand is the only one which knows, so it is
+  //! asked rather than the input file.
+  virtual bool hasC() const { return false; }
+
   //! \brief Assigns the group of active elements.
   void activateElmGroup(const std::vector<int>& elms = {}) { elmGrp = elms; }
   //! \brief Returns \e true, if the element \a iel is deactivated.

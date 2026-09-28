@@ -25,7 +25,8 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
                             const SchurOperators& ops)
   : pressure(ops),
     m_blocks(&blocks),
-    pressureCoupling(params.getIntValue("pressure_coupling") > 0)
+    hasC(params.hasValue("has_C") ? params.getIntValue("has_C") > 0
+                                  : ops.hasC)
 {
   PCSetType(pc_init, PCSHELL);
   PCShellSetContext(pc_init, this);
@@ -199,7 +200,7 @@ PETScSchurPC::PETScSchurPC (PC& pc_init, const std::vector<Mat>& blocks,
   // the two vectors take their layout from those rather than being sized by
   // hand.
   MatCreateVecs(blocks[0], nullptr, &tmp);
-  if (pressureCoupling)
+  if (hasC)
     MatCreateVecs(blocks[3], nullptr, &ptmp);
 }
 
@@ -247,7 +248,7 @@ PetscErrorCode PETScSchurPC::Apply_Schur (Mat A, Vec x, Vec y)
   KSPSolve(spc->inner_ksp, spc->tmp, spc->tmp);
   MatMult(spc->m_blocks->at(2), spc->tmp, y);
 
-  if (spc->pressureCoupling)
+  if (spc->hasC)
   {
     MatMult(spc->m_blocks->at(3), x, spc->ptmp);
     VecAXPY(y, -1.0, spc->ptmp);

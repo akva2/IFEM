@@ -78,7 +78,7 @@ protected:
   Vec tmp;  //!< Temporary vector, laid out like the momentum operator
   Vec ptmp = nullptr; //!< Temporary vector, laid out like the block
   const std::vector<Mat>* m_blocks; //!< Matrix blocks in system
-  //! Whether the discretization couples the pressure to itself, which
-  //! settles whether that block belongs in the Schur complement
-  bool pressureCoupling;
+  //! Whether the system has a diagonal block C for the block being
+  //! preconditioned, which settles whether it belongs in the complement
+  bool hasC;
 };

@@ -376,6 +376,16 @@ public:
   //! told about the simulator which assembled them.
   const SchurOperators& getSchurOperators(size_t block) const;
 
+  //! \brief Tells the matrix that a block has a diagonal block C of its own.
+  //! \param[in] block The block in question
+  //! \param[in] hasC Whether the discretization contributes to it
+  //!
+  //! \details Kept beside the pressure operators, being the same kind of
+  //! thing: something about the block which the simulator knows and the
+  //! preconditioner of it needs.
+  void setHasC(size_t block, bool hasC)
+  { schurOps[block].hasC = hasC; }
+
   //! \brief Returns a const-ref to process administrator.
   const ProcessAdm& getAdm() const { return adm; }
 

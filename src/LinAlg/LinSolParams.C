@@ -90,13 +90,19 @@ bool LinSolParams::BlockParams::read (const tinyxml2::XMLElement* elem,
   utl::getAttribute(elem, "basis", basis);
   utl::getAttribute(elem, "components", comps);
 
-  // Whether the discretization couples the pressure to itself, which a
-  // stabilized one does and a mixed one does not. It settles what the Schur
-  // complement of this block is, and a simulator which knows its own
-  // discretization says so rather than leaving it to be asked for here.
-  bool couples = false;
-  if (utl::getAttribute(elem, "pressure_coupling", couples))
-    this->addValue(prefix + "pressure_coupling", couples ? "1" : "0");
+  // Whether the system has a diagonal block C for this block, as in
+  //
+  //   [ A  B^T ]
+  //   [ B  -C  ]
+  //
+  // which a stabilized discretization gives and a mixed one does not. It
+  // settles what the Schur complement of this block is. The integrand
+  // answers this for itself through IntegrandBase::hasC, which is where it
+  // is known, so this is an override for a case which wants something else
+  // and not the way it is normally arrived at.
+  bool hasC = false;
+  if (utl::getAttribute(elem, "has_C", hasC))
+    this->addValue(prefix + "has_C", hasC ? "1" : "0");
 
   const char* value;
   const tinyxml2::XMLElement* child = elem->FirstChildElement();
