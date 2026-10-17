@@ -22,6 +22,7 @@
 #include "Utilities.h"
 #include "IFEM.h"
 #include <tinyxml2.h>
+#include <algorithm>
 
 
 /*!
@@ -100,6 +101,10 @@ public:
                         <<" resetting to default "<< omega0 << std::endl;
               omega = omega0;
             }
+            // Where successive residuals nearly cancel, the Aitken weight
+            // extrapolates far beyond the cycle, which can wreck the solution
+            else
+              omega = std::clamp(omega,omegaMin,omegaMax);
           }
 
           // Perform relaxation
@@ -187,6 +192,8 @@ private:
 
   double omega0; //!< Initial relaxation parameter
   double omega;  //!< Current relaxation parameter
+  static constexpr double omegaMin = 0.05; //!< Smallest Aitken weight
+  static constexpr double omegaMax = 2.0;  //!< Largest Aitken weight
   bool   aitken; //!< If \e true, Aitken-acceleration is enabled
 
   Vector prevSol; //!< Previous solution for relaxed field
